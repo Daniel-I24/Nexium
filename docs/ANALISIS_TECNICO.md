@@ -1,6 +1,6 @@
 # Nexium: análisis técnico
 
-Fecha: 5 de noviembre de 2026. Responde a los 10 puntos de la sección 18 de `PROMPT_MAESTRO.md`.
+Fecha: 5 de noviembre de 2026, revisado el mismo día al cambiar el proveedor de IA a Gemini por decisión del propietario. Responde a los 10 puntos de la sección 18 de `PROMPT_MAESTRO.md`.
 
 Las versiones se consultaron hoy en npm y en el índice de crates.io. "Verificado" significa ejecutado en este equipo con Windows 11. Nada se ha comprobado aún en macOS ni en Linux.
 
@@ -47,7 +47,7 @@ HistoryService → SQLite
 | `tauri-plugin-notification` | 2.8.0 | |
 | `tauri-plugin-single-instance` | 2.5.5 | Evita dos instancias que dupliquen avisos |
 | React | 19.3.1 | |
-| TypeScript | 7.0.2 | Se confirma compatibilidad con `typescript-eslint` en la Etapa 3. Si falla, se fija en la última 5.x |
+| TypeScript | 6.0.3 | La 7.0.2 se descarta: `typescript-eslint` 8.72 exige una versión menor de 6.1 |
 | Vite / plugin de React | 8.3.6 / 6.2.1 | El plugin exige Vite 8 |
 | Tailwind / plugin de Vite | 4.3.4 | Configuración en CSS |
 | Vitest | 5.1.0 | Admite Vite 8 |
@@ -72,9 +72,9 @@ HistoryService → SQLite
 | **`keyring`** | Usa Credential Manager, Keychain y Secret Service | Archivo cifrado: habría que gestionar otra clave |
 | **Whisper local para voz** | Mismo motor en los tres sistemas, sin coste por uso, sin segunda clave y sin enviar la voz fuera | Ver abajo |
 | **`cpal` para el micrófono** | Captura nativa e igual en todos los sistemas | `getUserMedia`: depende de cada vista web |
-| **Claude como proveedor inicial** | Texto y visión en una sola API, con salidas estructuradas | Cualquier otro se puede añadir tras `AiProvider` |
+| **Gemini como proveedor inicial** | Decisión del propietario: capa gratuita, texto y visión en una sola API, salidas estructuradas | Cualquier otro se puede añadir tras `AiProvider` |
 | **Open-Meteo** | Sin clave, con geocodificación y pronóstico | OpenWeather: exige clave |
-| **Sin SDK de IA en Rust** | No hay SDK oficial para Rust, así que se usa HTTP directo con `reqwest` | |
+| **Sin SDK de IA en Rust** | Google no ofrece SDK para Rust, así que se usa HTTP directo con `reqwest` | |
 
 ### Por qué no se usa la Web Speech API
 
@@ -143,41 +143,75 @@ Sin conexión o sin clave, lo resuelto por reglas sigue funcionando y lo demás 
 ```rust
 #[async_trait]
 trait AiProvider: Send + Sync {
+    fn display_name(&self) -> &str;        // "Google Gemini": aparece en el aviso de captura
+    fn data_notice(&self) -> &str;         // Aviso de privacidad propio del proveedor
     async fn interpret(&self, request: InterpretRequest) -> Result<Intent, AiError>;
     async fn analyze_image(&self, request: VisionRequest) -> Result<VisionAnswer, AiError>;
 }
 ```
 
-`AnthropicProvider` es la primera implementación. Cambiar de proveedor equivale a añadir otra y seleccionarla en la configuración.
+`GeminiProvider` es la primera implementación y nada fuera de `providers/ai/gemini.rs` conoce el formato de Gemini. `AiError` es neutro (`QuotaExhausted`, `RateLimited`, `InvalidKey`…). Cambiar de proveedor equivale a añadir otra implementación y seleccionarla en la configuración. El proveedor activo y sus modelos se guardan en la configuración de SQLite y se editan en Ajustes, sin tocar código.
+
+### Gemini: API y modelos
+
+Fuentes oficiales consultadas hoy: [modelos](https://aistudio.google.com/docs/models), [precios](https://aistudio.google.com/docs/pricing), [límites](https://aistudio.google.com/docs/rate-limits), [términos](https://aistudio.google.com/docs/terms), [Interactions API](https://aistudio.google.com/docs/interactions) y [errores](https://aistudio.google.com/docs/api-errors). Las direcciones antiguas de `ai.google.dev` redirigen ahí.
+
+**API:** `POST /v1beta/interactions`, con encabezado `Api-Revision: 2026-05-20`. La documentación presenta `generateContent` como heredado, aunque sigue funcionando.
+
+| Tarea | Modelo por defecto | Por qué |
+|---|---|---|
+| Interpretar | `gemini-3.5-flash-lite` | Estable, en capa gratuita, el más rápido y económico de la familia 3.5. Clasificar y extraer no necesita más. Pensamiento bajo |
+| Analizar pantalla | `gemini-3.6-flash` | Estable, en capa gratuita y multimodal, para leer texto pequeño y errores en una interfaz |
+
+**Por qué dos modelos:** una consulta de intención debe ser rápida y gastar poco, y una captura debe leerse con precisión. Son dos ajustes independientes.
+
+**Pendiente de prueba real con clave:** la elección es lo que indica la documentación, no un resultado medido. Si `gemini-3.5-flash-lite` bastara para capturas, un solo modelo sería más simple. Se comparan con capturas sin datos sensibles y el resultado se registra en `docs/ESTADO_DEL_PROYECTO.md`. Se descartan `gemini-3.8-flash` (marcado "New", no estable) y `gemini-2.5-flash` (deprecado: desde el 1 de diciembre de 2026 las peticiones se redirigen a otros modelos).
+
+**Límites de la capa gratuita:** Google no publica las cifras por modelo en su documentación: solo se ven en AI Studio, para cada proyecto. La cuota diaria se reinicia a medianoche, hora del Pacífico. Por eso Nexium no incluye cifras fijas y mantiene su propio límite diario configurable.
+
+### Privacidad en la capa gratuita de Gemini
+
+**Google sí puede usar estos datos.** Según sus [términos](https://aistudio.google.com/docs/terms), en los servicios no pagados:
+
+- Google usa lo enviado y las respuestas generadas para "proveer, mejorar y desarrollar" sus productos y tecnologías de aprendizaje automático.
+- Personas pueden leer, anotar y procesar las entradas y salidas, tras desvincularlas de la cuenta, la clave y el proyecto.
+- Google pide expresamente **no enviar información sensible, confidencial o personal**.
+
+En los servicios de pago, Google declara que no usa el contenido para mejorar productos.
+
+**Esto choca con el análisis de pantalla,** porque una captura puede contener cualquier cosa. Medidas de Nexium:
+
+1. El aviso previo a cada captura nombra a Google Gemini, explica este uso y pide no capturar información personal. Sin pulsar Capturar no se toma ninguna imagen.
+2. Las solicitudes de texto envían solo lo necesario. Nunca se envían rutas ni nombres de archivos encontrados, ni el historial.
+3. Se envía `store: false`, porque por defecto la API guarda cada interacción en el servidor (1 día en la capa gratuita). Esto evita ese almacenamiento, pero **no** cambia el uso descrito arriba.
+4. El aviso general aparece en Ajustes, junto a la clave, y en el README.
+
+**Otras condiciones de los términos que afectan a la distribución:**
+
+- Es necesario tener 18 años o más, y no se puede ofrecer un cliente de la API dirigido a menores.
+- Los términos describen el servicio como destinado a desarrolladores con fines profesionales o comerciales, no para uso de consumidores.
+- En el Espacio Económico Europeo, Reino Unido y Suiza, una aplicación ofrecida a usuarios solo puede usar servicios de pago.
+
+Antes de una distribución pública hay que revisar estas condiciones. Queda como decisión pendiente del propietario.
 
 ### Controles obligatorios
 
-- **Salida estructurada:** `output_config.format` con un esquema JSON. Después, Rust valida con tipos propios: una intención desconocida o una fecha inválida no se ejecutan.
+- **Salida estructurada:** `response_format` con un esquema JSON. Después, Rust valida con tipos propios: una intención desconocida o una fecha inválida no se ejecutan.
 - **Lista cerrada:** el modelo solo puede elegir entre intenciones de un `enum`. No hay herramientas ni acceso a comandos o archivos.
-- **Datos mínimos:** se envía el texto de la solicitud y la fecha y zona horaria actuales. Nunca se envían nombres de archivo encontrados, rutas ni el historial.
+- **Datos mínimos:** se envía el texto de la solicitud y la fecha y zona horaria actuales.
 - **Fechas:** el modelo devuelve la fecha resuelta y si existe ambigüedad. Rust comprueba que sea válida y futura. Si hay ambigüedad o falta la hora, se pide aclaración. El usuario confirma antes de guardar.
-- **Tiempos de espera y cancelación:** 20 s para interpretar y 60 s para visión, cancelables desde la interfaz. Reintento limitado solo ante 429 y 5xx.
-- **Respuestas rechazadas:** se comprueba `stop_reason` antes de leer el contenido.
-- **Costos:** límite diario de solicitudes configurable, contador de tokens en SQLite, `max_tokens` acotado, y captura reducida a 1568 px como máximo en el lado largo.
-
-### Modelos
-
-Se configuran por tarea en Ajustes.
-
-| Tarea | Modelo por defecto | Precio por millón de tokens (entrada / salida) |
-|---|---|---|
-| Interpretar | `claude-opus-5-5`, esfuerzo `low` | 4 $ / 20 $ |
-| Visión | `claude-opus-5-5`, esfuerzo `medium` | 4 $ / 20 $ |
-
-**Decisión del propietario, ver el informe de entrega:** `claude-haiku-5-5` cuesta 0,10 $ / 0,50 $, 40 veces menos por token, y podría bastar para interpretar. Cambiarlo es un ajuste, sin tocar código.
-
-El precio final de una captura depende de su tamaño: según la documentación, una imagen de 1456 × 819 ocupa unos 1560 tokens.
+- **Tiempos de espera y cancelación:** 20 s para interpretar y 60 s para visión, cancelables desde la interfaz.
+- **Cuota agotada:** `quota_exceeded` produce "Se agotó la cuota diaria gratuita de Google Gemini. Se renueva a medianoche, hora del Pacífico." `rate_limit_exceeded` y `too_many_requests` piden esperar un minuto. **No hay reintentos automáticos ante 429, ni cambio a un plan de pago.** Solo un 503 o 504 admite un único reintento.
+- **Sin gasto innecesario:** hora, CPU, RAM, batería, red y modo oscuro nunca llaman a la IA. Una frase que las reglas no entienden sí la usa.
+- **Costos:** límite diario de solicitudes configurable, contador de tokens en SQLite, `max_output_tokens` acotado y captura reducida a 1568 px como máximo en el lado largo.
 
 ### Claves
 
-Cada usuario pone su propia clave de API, que se guarda en el almacén del sistema y nunca llega a la interfaz. Si Secret Service no existe en un Linux, la clave se pide en cada sesión y no se guarda en claro.
+- **Aplicación distribuida:** la clave se escribe en Ajustes, se guarda en el almacén seguro del sistema y nunca vuelve a la interfaz. Si Secret Service no existe en un Linux, la clave solo se conserva durante la sesión; nunca se guarda en claro.
+- **Desarrollo:** únicamente las compilaciones de desarrollo y las pruebas en vivo leen `GEMINI_API_KEY` desde `.env`, que Git ignora. El código de lectura no existe en la compilación de distribución.
+- **Registros:** la clave nunca aparece en registros ni en mensajes de error.
 
-**Servicio intermediario: evaluado y descartado para esta versión.** Protegería una clave compartida, pero exige servidor, cuentas, límites y un coste continuo: justo la plataforma que el documento pide no construir. `AiProvider` deja abierta la opción de añadirlo después.
+**Servicio intermediario: evaluado y descartado para esta versión.** Protegería una clave compartida, pero exige servidor, cuentas, límites y un coste continuo: justo la plataforma que el documento pide no construir. Cada usuario usa su propia clave. `AiProvider` deja abierta la opción de añadirlo después.
 
 ## 6. Acceso multiplataforma al sistema
 
@@ -218,7 +252,7 @@ Salvo lo marcado en la leyenda, esta matriz es **lo que se espera según la docu
 
 | Servicio | Para qué | Clave | Coste | Datos que salen del equipo |
 |---|---|---|---|---|
-| **Anthropic API** | Interpretar y analizar imágenes | Sí, del usuario | Pago por uso | Texto de la solicitud, fecha y zona. La captura, solo con permiso |
+| **API de Gemini (Google)** | Interpretar y analizar imágenes | Sí, del usuario | Capa gratuita; Google puede usar los datos (sección 5) | Texto de la solicitud, fecha y zona. La captura, solo tras el aviso |
 | **Open-Meteo** | Clima y geocodificación | No | Gratis solo sin fines comerciales | Ciudad y coordenadas |
 | **Hugging Face** | Descarga única del modelo de voz | No | Gratis | Una petición de descarga |
 
@@ -226,7 +260,7 @@ Whisper funciona sin Internet una vez descargado.
 
 **Ubicación del clima:** usa la ciudad indicada en la solicitud o la configurada en Ajustes. No se añade geolocalización por IP.
 
-**Licencia de Open-Meteo:** sus [condiciones](https://open-meteo.com/en/terms) limitan el uso gratuito a fines no comerciales, con menos de 10 000 llamadas al día, y piden atribución CC BY 4.0. Si Nexium llega a venderse, hará falta un plan de pago. La atribución se muestra en la respuesta del clima.
+**Licencia de Open-Meteo:** sus [condiciones](https://open-meteo.com/en/terms) limitan el uso gratuito a fines no comerciales, con menos de 10 000 llamadas al día, y piden atribución CC BY 4.0. **Un uso comercial requiere un plan de pago.** La atribución se muestra en cada respuesta de clima y en Ajustes.
 
 ## 8. Riesgos técnicos y limitaciones
 
@@ -240,7 +274,7 @@ Whisper funciona sin Internet una vez descargado.
 | C4 | El módulo 6 dice "responder mediante voz o texto" y los demás hablan solo de interfaz | Texto en la interfaz cumple el "o". No se añade síntesis de voz. La entrada de texto sí se incluye, porque es la alternativa cuando no hay micrófono |
 | C5 | Registrar la respuesta en el historial frente a no almacenar información sensible | Se guarda el texto de la respuesta, pero nunca imágenes, claves ni audio. El análisis de una pantalla puede describir algo privado: se avisará y se podrá eliminar cada registro |
 | C6 | Verificar el funcionamiento en tres sistemas con un solo equipo Windows | **Inviable de forma directa.** CI verifica compilación y pruebas. Las pruebas manuales quedan documentadas como pendientes |
-| C7 | "Lista para distribuirse" sin certificados de firma | Se generan instaladores sin firmar. Sin firma, Windows mostrará SmartScreen y macOS bloqueará la apertura normal. La firma requiere certificados de pago (programa de Apple y certificado de Windows) y es decisión del propietario |
+| C7 | "Lista para distribuirse" sin certificados de firma | Se generan instaladores sin firmar. Sin firma, Windows mostrará SmartScreen y macOS bloqueará la apertura normal. **Decisión del propietario: no se compran certificados por ahora.** Queda como decisión pendiente antes de una distribución pública |
 | C8 | Notificaciones fiables frente a "no prometer" | Ver R4 |
 | C9 | `.env.example` obligatorio, pero la app no usa `.env` | Se incluye solo para pruebas en vivo durante el desarrollo |
 
@@ -259,7 +293,8 @@ Whisper funciona sin Internet una vez descargado.
 | R9 | Linux sin Secret Service | Media | Bajo | Clave solo durante la sesión |
 | R10 | Datos en claro: SQLite no está cifrado | Segura | Medio | Solo solicitudes y respuestas, con eliminación disponible. Documentado |
 | R11 | Búsqueda lenta en carpetas grandes | Media | Bajo | Proceso en segundo plano, límite de profundidad y resultados, cancelable. No sigue enlaces simbólicos |
-| R12 | Coste de IA imprevisto | Media | Medio | Límites de la sección 5 |
+| R12 | Cuota gratuita de Gemini agotada, o sus cifras cambian sin aviso | Media | Medio | Las operaciones locales no consumen cuota. Mensaje claro y sin reintentos. Límite diario propio |
+| R13 | Datos personales en una captura enviada a la capa gratuita | Media | Alto | Aviso obligatorio antes de cada captura (sección 5). El riesgo no se elimina: depende de lo que muestre la pantalla |
 
 ### Resultado de la prueba de viabilidad
 
@@ -286,7 +321,7 @@ Prueba desechable ejecutada hoy en este equipo con Windows 11, fuera del reposit
 
 **Consecuencia:** la voz sigue siendo viable, con dos requisitos de compilación en Windows: CMake (incluido en Build Tools, aunque no está en el `PATH`) y `LIBCLANG_PATH`. Se documentarán en el README, y CI los instalará en los tres sistemas. La primera compilación de estas dependencias tardó casi 5 minutos.
 
-**Sigue sin demostrarse, y se prueba al empezar el módulo de voz:** calidad y latencia de la transcripción en español en este equipo. Si no fuesen aceptables, `SpeechProvider` permite cambiar a un servicio de transcripción en la nube, lo que exigiría una clave adicional.
+**Prueba real con audio:** ver `docs/PRUEBA_VOZ.md`, realizada en la Etapa 3 a petición del propietario.
 
 ## 9. Plan de desarrollo por etapas
 
@@ -294,7 +329,7 @@ Prueba desechable ejecutada hoy en este equipo con Windows 11, fuera del reposit
 |---|---|---|
 | 1. Análisis | Este documento | Hecho |
 | 2. Diseño | `docs/DISENO_VISUAL.md` y lienzo | Aprobación del propietario |
-| 3. Configuración | Tauri, React, Tailwind, SQLite y CI | `tauri build` y CI en verde |
+| 3. Configuración | Tauri, React, Tailwind, SQLite y CI. **Prueba de Whisper con audio real antes del resto de módulos** | Compilación, CI en verde y `docs/PRUEBA_VOZ.md` |
 | 4. Módulos | Ver orden abajo | Pruebas y compilación por módulo |
 | 5. Integración | Flujos completos, permisos, errores | Lista de comprobación en Windows |
 | 6. Multiplataforma | Compilación y pruebas en GitHub Actions | CI en verde; pruebas manuales documentadas |
@@ -319,9 +354,9 @@ Prueba desechable ejecutada hoy en este equipo con Windows 11, fuera del reposit
 
 | Módulo | Pruebas automáticas | Prueba real |
 |---|---|---|
-| Interfaz | Vitest y Testing Library: estados y accesibilidad | Ver a distintos tamaños |
+| Interfaz | Vitest y Testing Library: estados y accesibilidad | Abrirla en pantalla a distintos tamaños y corregir la composición antes de seguir con los módulos |
 | Núcleo | Tabla de frases en español a intención; casos límite | |
-| IA | Respuestas simuladas solo en pruebas: válida, inválida, tiempo agotado, 429, rechazo | Prueba en vivo opcional con clave |
+| IA | Respuestas simuladas solo en pruebas: válida, inválida, tiempo agotado, cuota agotada, límite por minuto, clave inválida | Con clave: frases reales en español, incluidas fechas ambiguas, y capturas sin datos sensibles |
 | Sistema | Contratos y simulaciones de "no disponible" | Comparar con el Administrador de tareas |
 | Archivos | Carpetas temporales, rutas fuera de lo autorizado, recorrido `..` y enlaces simbólicos | Búsqueda en carpetas reales |
 | Clima | Análisis de respuestas guardadas, errores y sin conexión | Consulta real |
