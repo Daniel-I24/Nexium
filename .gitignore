@@ -1,0 +1,34 @@
+# Secretos y entorno local
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Dependencias y compilaciones
+node_modules/
+dist/
+coverage/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Datos locales de la aplicación
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Modelos de voz (se descargan aparte; pesan decenas o cientos de MB)
+*.gguf
+ggml-*.bin
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/
