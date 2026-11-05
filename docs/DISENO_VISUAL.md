@@ -1,8 +1,8 @@
 # Nexium: diseño visual
 
-**Estado:** propuesta pendiente de aprobación. Hasta que se apruebe no se construye la interfaz definitiva.
+**Estado:** dirección aprobada por el propietario el 5 de noviembre de 2026, con los ajustes ya incorporados en este documento.
 
-**Vista previa:** [lienzo con la pantalla principal, los estados y el sistema visual](https://claude.ai/artifact/FUcCdeDGmBACfRBA61EpC1). El enlace es privado. Todos los datos que aparecen son de ejemplo y no llegarán a la aplicación.
+**Vista previa:** [lienzo con la pantalla principal, los estados y el sistema visual](https://claude.ai/artifact/FUcCdeDGmBACfRBA61EpC1). El enlace es privado. Todos los datos que aparecen son de ejemplo y no llegarán a la aplicación. La maqueta carga las fuentes desde Google Fonts porque el lienzo no admite otra vía; la aplicación no lo hace (sección 3).
 
 ## 1. Identidad: "Instrumento"
 
@@ -18,7 +18,9 @@ Cada respuesta indica además su **origen** ("Lectura directa del equipo, sin IA
 
 ### Símbolo
 
-Una N de tres trazos rectos, con un nodo cuadrado amarillo en el cruce de la diagonal: el *nexo*. Es un SVG propio y también servirá de icono de la aplicación.
+Una N de tres trazos rectos, con un nodo cuadrado en el cruce de la diagonal: el *nexo*. Es un SVG propio y también sirve de icono de la aplicación.
+
+**En reposo no lleva amarillo:** el nodo es un cuadrado hueco con el color de la tinta. Dentro de la app, el nodo solo se rellena de `signal` mientras la barra está en Escuchando o Esperando permiso de captura. El icono del sistema nunca usa amarillo.
 
 ### Direcciones descartadas
 
@@ -67,7 +69,7 @@ Todo el texto supera 4,5:1. `hairline` no cumple 3:1 y por eso solo separa filas
 
 ## 3. Tipografía
 
-Las dos familias tienen licencia OFL y se incluyen dentro de la aplicación (`@fontsource-variable/instrument-sans` y `@fontsource/ibm-plex-mono`). Funcionan sin conexión y no hay peticiones a servicios de fuentes.
+Las dos familias tienen licencia OFL y **viajan dentro de la aplicación** (`@fontsource-variable/instrument-sans` y `@fontsource/ibm-plex-mono`). No se cargan desde Google Fonts en tiempo de ejecución: la política de seguridad de contenido (`font-src 'self'`) lo impediría aunque alguien lo intentara, y una prueba automática comprueba que ningún archivo de `src/` ni `index.html` apunte a un servicio de fuentes.
 
 - **Instrument Sans:** todo lo que se lee como lenguaje.
 - **IBM Plex Mono:** todo lo que es un dato exacto, como cifras, horas y rutas. La diferencia de letra le dice al usuario qué viene directamente de una medición.
@@ -107,7 +109,40 @@ Las cifras usan coma decimal (`es`), y los tamaños se definen en `rem` para res
 | **Fila de recordatorio e historial** | Misma estructura de fila, con estado escrito y acciones |
 | **Botones** | Primario (tinta), secundario (línea), destructivo (error), señal |
 
-**Estados de la barra de señal:** En espera, Escuchando, Procesando (con el paso concreto, como "Transcribiendo"), Esperando permiso y Error. Cancelar está disponible en Escuchando, Procesando y Esperando permiso.
+### Estados de la barra de señal
+
+Hay siete estados. Todos se definen en ambos temas y se escriben siempre con palabras.
+
+| Estado | Barra | Texto de estado | Acción principal | Cancelar |
+|---|---|---|---|---|
+| En espera | `base`, línea superior `line` | `muted` | Hablar | No |
+| Escuchando | `signal`, bordes `on-signal`, trazo del micrófono | `on-signal` | Terminar | Sí |
+| Procesando | `base`, progreso en movimiento y paso concreto ("Transcribiendo") | `muted` | Inactiva | Sí |
+| Respondiendo | `base`, línea de progreso llena, "Escribiendo la respuesta" | `ink` | Inactiva | Sí |
+| Esperando permiso (captura) | `signal`, aviso con el destino de la imagen | `on-signal` | Capturar | Sí |
+| Pendiente (aclaración) | `base`, línea superior `query`, pregunta y opciones | `query` | Opciones | Sí |
+| Error | `base`, línea superior `error`, causa y siguiente paso | `error` | Reintentar | No |
+
+**Aviso de captura.** El destino de la imagen se toma del proveedor configurado, nunca está escrito a mano en la interfaz. Con Gemini dice:
+
+> Se tomará una sola imagen de tu pantalla y se enviará a Google Gemini para analizarla. En la capa gratuita, Google puede usar lo que envías para mejorar sus productos, y personas pueden revisarlo. No captures información personal ni confidencial. Nexium no guarda la imagen.
+
+### Contraste medido de los estados
+
+| Par de colores | Claro | Oscuro |
+|---|---|---|
+| Escuchando y captura: `on-signal` sobre `signal` (texto, trazo, borde) | 12,15 | 12,15 |
+| Botón Terminar y Capturar: `signal` sobre `on-signal` | 12,15 | 12,15 |
+| Barra `signal` frente a `base` | 1,13, por eso lleva borde | 11,55 |
+| Procesando y Respondiendo: `ink` sobre `base` | 13,66 | 13,86 |
+| Progreso `ink` sobre `hairline` | 10,74 | 8,49 |
+| Error: `error` sobre `base` (texto y línea) | 5,72 | 7,55 |
+| Botón Reintentar: `panel` sobre `ink` | 15,57 | 12,16 |
+| Aclaración: `query` sobre `panel` | 7,55 | 7,32 |
+| Aclaración sobre `base`: `query` | 6,63 | 8,34 |
+| Opción: borde `line` sobre `panel` | 3,67 | 3,44 |
+
+Todo el texto supera 4,5:1 y los límites de control superan 3:1 en ambos temas. La única excepción medida es `signal` sobre `base` claro, resuelta con el borde obligatorio.
 
 **Iconos:** `lucide-react`, trazo 1,75 y dos tamaños (16 y 20 px), solo donde ayuden a reconocer un control. Los elementos de navegación usan texto.
 
@@ -121,6 +156,8 @@ Cada pantalla tiene una finalidad:
 | **Recordatorios** | Ver, editar y eliminar recordatorios pendientes |
 | **Historial** | Consultar, filtrar y eliminar interacciones |
 | **Ajustes** | Clave y modelos de IA, carpetas autorizadas, modelo de voz, ciudad del clima |
+
+**Atribución.** Toda respuesta de clima muestra "Datos meteorológicos de Open-Meteo (CC BY 4.0)" con enlace a su sitio, y Ajustes incluye la misma atribución.
 
 La pantalla vacía de Asistente muestra tres ejemplos de solicitudes reales que se pueden pulsar. Es la vía de descubrimiento de funciones y sustituye a una cuadrícula de módulos.
 
@@ -140,7 +177,7 @@ Se usa Tailwind CSS 4 con configuración en CSS, sin `tailwind.config.js`.
 4. **Radio y sombra restringidos:** el tema anula los valores por defecto para que `rounded-xl` y `shadow-lg` no estén disponibles.
 5. **`@apply` casi nunca:** la reutilización se hace con componentes de React.
 6. **Variantes por propiedades:** los componentes exponen `variant`, y un mapa tipado asocia cada variante con sus clases.
-7. **Comprobación automática:** `eslint-plugin-better-tailwindcss` falla en CI si aparecen clases desconocidas. Su compatibilidad se confirma en la Etapa 3. Si no es compatible, se usará un script equivalente.
+7. **Comprobación automática:** `scripts/check-tailwind.mjs` (parte de `npm run lint`) falla si aparecen colores de la paleta por defecto, valores arbitrarios, radios o sombras no permitidos, degradados o la variante `dark:`. Es la vía alternativa prevista: el script es más simple y no depende de la compatibilidad de un plugin.
 
 ## 8. Coherencia
 
