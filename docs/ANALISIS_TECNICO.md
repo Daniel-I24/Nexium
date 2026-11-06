@@ -232,7 +232,7 @@ Salvo lo marcado en la leyenda, esta matriz es **lo que se espera según la docu
 | CPU y RAM | `sysinfo` | `sysinfo` | `sysinfo` | Ninguno |
 | Batería | `starship-battery` | Igual | Igual | Equipos sin batería: "No disponible" |
 | Internet | Prueba de conexión real | Igual | Igual | Necesita red |
-| Estado Wi-Fi | WLAN API | CoreWLAN | NetworkManager por D-Bus | Linux sin NetworkManager: "No disponible" |
+| Estado Wi-Fi | WLAN API | `networksetup` e `ipconfig` | `nmcli`, de NetworkManager | Herramientas del sistema con argumentos fijos. Linux sin NetworkManager: "No disponible" |
 | Nombre de red (SSID) | Con restricción | Con restricción | Con NetworkManager | Windows 11 24H2: ubicación para apps de escritorio. macOS: Location Services |
 | Modo oscuro | API de ventana de Tauri | Igual | Igual | Depende del escritorio en Linux |
 | Archivos | Rutas conocidas | Rutas conocidas | Rutas XDG | Consentimiento en la app |
