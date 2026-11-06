@@ -1,0 +1,113 @@
+@import "tailwindcss";
+@import "@fontsource-variable/instrument-sans/wdth.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+/* Única fuente de tokens: docs/DISENO_VISUAL.md. */
+@theme {
+  --color-*: initial;
+  --color-base: var(--nx-base);
+  --color-panel: var(--nx-panel);
+  --color-ink: var(--nx-ink);
+  --color-muted: var(--nx-muted);
+  --color-line: var(--nx-line);
+  --color-hairline: var(--nx-hairline);
+  --color-signal: #ffd000;
+  --color-on-signal: #14181a;
+  --color-ok: var(--nx-ok);
+  --color-error: var(--nx-error);
+  --color-query: var(--nx-query);
+  --color-transparent: transparent;
+
+  --font-*: initial;
+  --font-sans: "Instrument Sans Variable", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --text-*: initial;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 2rem;
+  --text-reading: clamp(3rem, 7vw, 5.5rem);
+  --text-unit: clamp(1.25rem, 2.6vw, 2rem);
+
+  --radius-*: initial;
+  --radius-sm: 2px;
+
+  --shadow-*: initial;
+
+  --animate-*: initial;
+  --animate-sweep: sweep 1.2s ease-in-out infinite;
+
+  --ease-instrument: cubic-bezier(0.2, 0, 0, 1);
+
+  --breakpoint-*: initial;
+  --breakpoint-wide: 56.25rem;
+
+  --container-*: initial;
+  --container-reading: 40rem;
+  --container-content: 60rem;
+  --container-rail: 11.5rem;
+
+  --tracking-tightest: -0.07em;
+
+  @keyframes sweep {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(400%); }
+  }
+}
+
+:root {
+  color-scheme: light dark;
+  --nx-base: #dfe2dd;
+  --nx-panel: #eef0eb;
+  --nx-ink: #14181a;
+  --nx-muted: #4a5254;
+  --nx-line: #757d7e;
+  --nx-hairline: #c5cac4;
+  --nx-ok: #16623e;
+  --nx-error: #a8152c;
+  --nx-query: #1b4a8f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --nx-base: #191d1e;
+    --nx-panel: #23282a;
+    --nx-ink: #e6e9e3;
+    --nx-muted: #a4acaa;
+    --nx-line: #737b7b;
+    --nx-hairline: #3a4143;
+    --nx-ok: #62c795;
+    --nx-error: #ff8a96;
+    --nx-query: #8fb8f2;
+  }
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    font-size: 100%;
+    background: var(--nx-base);
+    color: var(--nx-ink);
+  }
+  body {
+    margin: 0;
+    font-size: var(--text-md);
+    line-height: 1.45;
+    overflow: hidden;
+  }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  :focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}

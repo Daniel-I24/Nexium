@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Nexium usa el micrófono solo mientras la barra de señal está en amarillo, para transcribir tu solicitud en este equipo.</string>
+  <key>NSLocationUsageDescription</key>
+  <string>macOS exige este permiso para mostrar el nombre de tu red Wi-Fi. Nexium no usa tu ubicación.</string>
+</dict>
+</plist>

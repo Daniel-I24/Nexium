@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Solo eventos del núcleo. Toda operación nativa pasa por comandos propios, validados en Rust.",
+  "windows": ["main"],
+  "permissions": ["core:event:default"]
+}
