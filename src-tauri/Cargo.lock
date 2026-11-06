@@ -117,6 +117,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.4.3",
  "serde",
+ "serde_repr",
  "tokio",
  "zbus 6.2.1",
 ]
@@ -3026,6 +3027,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "unicode-normalization",
+ "url",
  "walkdir",
  "whisper-rs",
  "windows",

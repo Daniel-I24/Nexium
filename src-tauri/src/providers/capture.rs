@@ -61,7 +61,7 @@ fn is_wayland() -> bool {
 async fn capture_with_portal() -> Result<DynamicImage, CaptureError> {
     let denied = || CaptureError::PermissionDenied("El escritorio no permitió capturar la pantalla.".into());
     let response = ashpd::desktop::screenshot::Screenshot::request().interactive(false).send().await.map_err(|_| denied())?.response().map_err(|_| denied())?;
-    let path = response.uri().to_file_path().map_err(|()| CaptureError::Failed("El portal devolvió una ruta no válida.".into()))?;
+    let path = url::Url::parse(response.uri().as_str()).ok().and_then(|uri| uri.to_file_path().ok()).ok_or_else(|| CaptureError::Failed("El portal devolvió una ruta no válida.".into()))?;
     // El portal siempre escribe un archivo temporal: se lee y se borra de inmediato.
     let bytes = tokio::fs::read(&path).await.map_err(|_| CaptureError::Failed("No se pudo leer la captura.".into()));
     let _ = tokio::fs::remove_file(&path).await;
