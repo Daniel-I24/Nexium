@@ -49,7 +49,17 @@ jobs:
 
       - name: Pruebas de Rust
         working-directory: src-tauri
-        run: cargo test
+        shell: bash
+        run: |
+          set +e
+          cargo test --no-fail-fast > test.log 2>&1
+          code=$?
+          tail -60 test.log
+          # Los fallos se publican como anotaciones, legibles sin iniciar sesión.
+          if [ $code -ne 0 ]; then
+            grep -E "^(error|test .*FAILED)|panicked at|could not|undefined reference|^  *--> src|left:|right:" test.log | head -30 | cut -c1-400 | sed 's/^/::error::/'
+          fi
+          exit $code
 
       - name: Compilar instaladores
         run: npx tauri build
