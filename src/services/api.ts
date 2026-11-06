@@ -47,6 +47,7 @@ export const events = {
     listen<StageEvent>("assistant://stage", (event) => handler(event.payload)),
   onLevel: (handler: (level: number) => void): Promise<UnlistenFn> =>
     listen<number>("voice://level", (event) => handler(event.payload)),
+  onVoiceLimit: (handler: () => void): Promise<UnlistenFn> => listen("voice://limit", () => handler()),
   onDownload: (handler: (progress: DownloadProgress) => void): Promise<UnlistenFn> =>
     listen<DownloadProgress>("speech://download", (event) => handler(event.payload)),
   onRemindersChanged: (handler: () => void): Promise<UnlistenFn> => listen("reminders://changed", () => handler()),

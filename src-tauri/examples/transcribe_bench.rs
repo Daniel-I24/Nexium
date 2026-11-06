@@ -1,5 +1,6 @@
 //! Mide Whisper con audio real: tiempo, precisión (WER) y memoria.
-//! Uso: cargo run --release --example transcribe_bench -- <modelo.bin> <carpeta con manifest.json> [hilos]
+//! Uso: cargo run --release --example transcribe_bench -- <modelo.bin> <carpeta con manifest.json> [hilos] [auto]
+//! Con "auto", el codificador procesa solo la duración real del audio en lugar de la ventana completa de 30 s.
 use std::{path::Path, time::Instant};
 
 use serde::Deserialize;
@@ -48,10 +49,16 @@ fn rss_mb(sys: &mut System, pid: Pid) -> f64 {
     sys.process(pid).map_or(0.0, |p| p.memory() as f64 / 1_048_576.0)
 }
 
+/// 1500 unidades equivalen a 30 s; se añade un margen para no cortar el final.
+fn audio_context(samples: usize) -> i32 {
+    i32::try_from(samples / 320 + 128).unwrap_or(1500).clamp(256, 1500)
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let (model, dir) = (&args[1], Path::new(&args[2]));
     let threads: i32 = args.get(3).and_then(|t| t.parse().ok()).unwrap_or(4);
+    let auto_context = args.get(4).is_some_and(|value| value == "auto");
     let clips: Vec<Clip> = serde_json::from_slice(&std::fs::read(dir.join("manifest.json")).expect("manifest")).expect("json");
     let pid = sysinfo::get_current_pid().expect("pid");
     let mut sys = System::new().expect("sysinfo");
@@ -69,6 +76,9 @@ fn main() {
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         params.set_language(Some("es"));
         params.set_n_threads(threads);
+        if auto_context {
+            params.set_audio_ctx(audio_context(audio.len()));
+        }
         params.set_print_progress(false);
         params.set_print_realtime(false);
         params.set_print_timestamps(false);

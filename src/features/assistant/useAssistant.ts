@@ -83,6 +83,11 @@ export function useAssistant() {
     }
   }, [fail, present]);
 
+  useEffect(() => {
+    const subscription = events.onVoiceLimit(() => void stopListening());
+    return () => void subscription.then((unlisten) => unlisten());
+  }, [stopListening]);
+
   const cancel = useCallback(async () => {
     const kind = bar.kind;
     setBar({ kind: "idle" });

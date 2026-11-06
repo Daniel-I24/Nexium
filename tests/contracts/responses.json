@@ -1,0 +1,109 @@
+{
+  "reading": {
+    "id": 1,
+    "request": "¿Cuánta RAM uso?",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "system",
+    "status": "completed",
+    "originLabel": "lectura directa del equipo, sin IA",
+    "summary": "11,4 GB de RAM en uso",
+    "body": {
+      "kind": "reading",
+      "value": "11,4",
+      "unit": "GB",
+      "context": "en uso de 16,0 GB",
+      "percent": 71.0,
+      "rows": [{ "label": "Disponible", "value": "4,6 GB", "mono": true, "unavailable": false }],
+      "attribution": null
+    }
+  },
+  "unavailable": {
+    "id": 2,
+    "request": "¿Cuánta batería tengo?",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "system",
+    "status": "completed",
+    "originLabel": "lectura directa del equipo, sin IA",
+    "summary": "Batería: no disponible",
+    "body": {
+      "kind": "rows",
+      "rows": [{ "label": "Batería", "value": "No disponible", "mono": false, "unavailable": true }],
+      "note": "Este equipo no tiene batería.",
+      "attribution": null
+    }
+  },
+  "files": {
+    "id": 3,
+    "request": "Busca mi informe",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "files",
+    "status": "completed",
+    "originLabel": "solicitud interpretada con IA (Google Gemini); datos del equipo",
+    "summary": "1 coincidencia en Documentos",
+    "body": {
+      "kind": "files",
+      "summary": "1 coincidencia en Documentos",
+      "files": [{ "name": "Informe", "extension": ".pdf", "location": "Documentos", "path": "C:\\a\\Informe.pdf", "exists": true }],
+      "note": null
+    }
+  },
+  "draft": {
+    "id": 4,
+    "request": "Recuérdame entregar el jueves",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "reminders",
+    "status": "pending",
+    "originLabel": "solicitud interpretada con IA (Google Gemini); datos del equipo",
+    "summary": "¿A qué hora quieres el aviso?",
+    "body": {
+      "kind": "reminderDraft",
+      "content": "Entregar",
+      "dueAt": null,
+      "question": "¿A qué hora quieres el aviso?",
+      "options": [{ "label": "08:00", "dueAt": "2026-11-12T08:00:00-05:00" }]
+    }
+  },
+  "quota": {
+    "id": 5,
+    "request": "Cuéntame algo",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "general",
+    "status": "failed",
+    "originLabel": "sin datos",
+    "summary": "Se agotó la cuota diaria gratuita de Google Gemini.",
+    "body": {
+      "kind": "error",
+      "code": "quotaExhausted",
+      "message": "Se agotó la cuota diaria gratuita de Google Gemini.",
+      "hint": "Las consultas de hora, sistema y red siguen funcionando."
+    }
+  },
+  "capture": {
+    "id": 6,
+    "request": "Explícame este error",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "screen",
+    "status": "pending",
+    "originLabel": "lectura directa del equipo, sin IA",
+    "summary": "Pendiente de tu permiso para capturar",
+    "body": { "kind": "captureRequest", "question": "Explícame este error" }
+  },
+  "weather": {
+    "id": 7,
+    "request": "¿Cómo está el clima?",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "weather",
+    "status": "completed",
+    "originLabel": "Open-Meteo, consultado lectura directa del equipo, sin IA",
+    "summary": "15 °C",
+    "body": {
+      "kind": "reading",
+      "value": "15",
+      "unit": "°C",
+      "context": "nublado, ahora en Bogotá, Colombia",
+      "percent": null,
+      "rows": [{ "label": "Pronóstico de hoy", "value": "9 °C a 19 °C · lluvia", "mono": true, "unavailable": false }],
+      "attribution": { "text": "Datos meteorológicos de Open-Meteo (CC BY 4.0)", "url": "https://open-meteo.com/" }
+    }
+  }
+}
