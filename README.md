@@ -81,7 +81,7 @@ No compiles dentro del directorio temporal de Windows: MSBuild falla allí.
 ```bash
 sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev \
   libayatana-appindicator3-dev librsvg2-dev libasound2-dev cmake pkg-config libclang-dev libxcb1-dev \
-  libxrandr-dev libdbus-1-dev libpipewire-0.3-dev libwayland-dev libegl-dev
+  libxrandr-dev libdbus-1-dev libpipewire-0.3-dev libwayland-dev libegl-dev libgbm-dev
 ```
 
 ## Ejecución
