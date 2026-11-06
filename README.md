@@ -76,7 +76,7 @@ No compiles dentro del directorio temporal de Windows: MSBuild falla allí.
 
 **macOS:** Xcode Command Line Tools y `brew install cmake`.
 
-**Linux (Ubuntu):**
+**Linux (Ubuntu 24.04 o superior):** Ubuntu 22.04 no compila, porque `xcap` requiere encabezados de PipeWire más recientes que los suyos. Los paquetes generados en CI tampoco están pensados para distribuciones anteriores a 24.04.
 
 ```bash
 sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev \
