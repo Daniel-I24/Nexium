@@ -51,6 +51,8 @@
   --container-rail: 11.5rem;
 
   --tracking-tightest: -0.07em;
+  /* En una fuente monoespaciada, la coma ocupa lo mismo que una cifra: a tamaño de lectura separa el número. */
+  --spacing-reading-comma: 0.16em;
 
   @keyframes sweep {
     from { transform: translateX(-100%); }

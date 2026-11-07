@@ -26,6 +26,18 @@ function AttributionLine({ attribution }: { attribution: Attribution | null }) {
   );
 }
 
+function ReadingValue({ value }: { value: string }) {
+  const [whole, decimals] = value.split(",");
+  if (decimals === undefined) return value;
+  return (
+    <>
+      {whole}
+      <span className="-mx-reading-comma">,</span>
+      {decimals}
+    </>
+  );
+}
+
 function ReminderDraft({ body, onSave }: { body: { content: string; dueAt: string | null; options: ReminderOption[] }; onSave: ResponseActions["onSaveReminder"] }) {
   const [content, setContent] = useState(body.content);
   const [due, setDue] = useState(toLocalInput(body.dueAt));
@@ -72,7 +84,7 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
         <>
           <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2">
             <span className="font-mono text-reading leading-none tracking-tightest">
-              {body.value}
+              <ReadingValue value={body.value} />
               {body.unit && <span className="ml-2 text-unit tracking-normal">{body.unit}</span>}
             </span>
             <span className="text-lg text-muted">{body.context}</span>

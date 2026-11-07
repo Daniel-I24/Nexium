@@ -18,7 +18,7 @@ const show = (key: keyof typeof fixtures) => render(<ResponseView response={fixt
 describe("respuestas con el contrato que produce Rust", () => {
   it("muestra una lectura con su origen", () => {
     show("reading");
-    expect(screen.getByText("11,4")).toBeInTheDocument();
+    expect(document.body).toHaveTextContent("11,4");
     expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "71");
     expect(screen.getByText(/lectura directa del equipo, sin IA/)).toBeInTheDocument();
   });
