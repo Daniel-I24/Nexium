@@ -165,7 +165,7 @@ Fuentes oficiales consultadas hoy: [modelos](https://aistudio.google.com/docs/mo
 
 **Por qué dos modelos:** una consulta de intención debe ser rápida y gastar poco, y una captura debe leerse con precisión. Son dos ajustes independientes.
 
-**Pendiente de prueba real con clave:** la elección es lo que indica la documentación, no un resultado medido. Si `gemini-3.5-flash-lite` bastara para capturas, un solo modelo sería más simple. Se comparan con capturas sin datos sensibles y el resultado se registra en `docs/ESTADO_DEL_PROYECTO.md`. Se descartan `gemini-3.8-flash` (marcado "New", no estable) y `gemini-2.5-flash` (deprecado: desde el 1 de diciembre de 2026 las peticiones se redirigen a otros modelos).
+**Prueba real:** los dos modelos acertaron cuatro capturas sintéticas. Se mantienen ambos porque `gemini-3.6-flash` explicó mejor los errores; la muestra es pequeña. Resultados en `docs/ESTADO_DEL_PROYECTO.md`. Se descartan `gemini-3.8-flash` (marcado "New", no estable) y `gemini-2.5-flash` (deprecado: desde el 1 de diciembre de 2026 las peticiones se redirigen a otros modelos).
 
 **Límites de la capa gratuita:** Google no publica las cifras por modelo en su documentación: solo se ven en AI Studio, para cada proyecto. La cuota diaria se reinicia a medianoche, hora del Pacífico. Por eso Nexium no incluye cifras fijas y mantiene su propio límite diario configurable.
 
