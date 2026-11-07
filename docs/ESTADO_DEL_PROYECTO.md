@@ -22,7 +22,7 @@ Código escrito, con pruebas automáticas, en este orden de módulos: interfaz, 
 
 **Automático, en este Windows:**
 
-- `cargo test --lib`: 94 pruebas correctas.
+- `cargo test --lib`: 102 pruebas correctas.
 - `cargo test --test contract`: 7 pruebas correctas. Los JSON de Rust coinciden con los que usa la interfaz.
 - `npm test`: 26 pruebas correctas.
 - `npm run lint` y `tsc --noEmit`: sin errores.
@@ -33,7 +33,7 @@ Estas pruebas usan servidores simulados para Gemini y Open-Meteo. Las pruebas co
 
 **Visual:** interfaz abierta en Edge sin ventana visible y fotografiada con datos de ejemplo, en 1100×720, 720×520 y 1920×1080, en ambos temas. Se corrigieron el ancho en pantallas grandes y el espaciado de la coma en la lectura. Tras esas correcciones no se ha vuelto a fotografiar.
 
-**Voz:** Whisper transcribió audio humano real. Resultados parciales en `docs/PRUEBA_VOZ.md`.
+**Voz:** medición terminada con 40 clips cortos de habla real. `small` con `audio_ctx` queda como predeterminado: 15,70 % de palabras erróneas, 1,53 s de transcripción y 332 MB de memoria pico. Detalles en `docs/PRUEBA_VOZ.md`. El modelo se carga en el primer uso y se libera tras 10 minutos sin uso (configurable). Eso solo está cubierto con pruebas automáticas: falta verlo en la app real. Falta también probar con un micrófono y frases reales.
 
 ## Sin probar
 
@@ -89,12 +89,12 @@ Fecha: 7 de noviembre de 2026. Herramienta: `src-tauri/examples/weather_live.rs`
 | `whisper-rs-sys` no compila sin `libclang` | Corregido: LLVM en el perfil de usuario y `LIBCLANG_PATH` |
 | MSBuild no compila dentro del directorio temporal | Evitado: nunca se compila en Temp |
 | TypeScript 7 incompatible con `typescript-eslint` | Corregido: se fija la 6.0.3 |
-| Latencia de Whisper en frases cortas | **Abierto:** ver `docs/PRUEBA_VOZ.md` |
+| Latencia de Whisper en frases cortas: 6,45 s | Corregido con `audio_ctx`: 1,53 s en la medición. Falta verlo en la app real |
 | CI de Linux: `libspa` no compila en Ubuntu 22.04, porque `xcap` exige un PipeWire más reciente | Corregido: la CI usa Ubuntu 24.04. Los paquetes de Linux quedan pensados para 24.04 o superior |
 | CI de Linux: faltaban la función `screenshot` de `ashpd` y `libgbm`, y se usaba una conversión de URI inexistente | Corregido |
 | Aclaración de recordatorio sin forma de pregunta, y fecha pasada propuesta | Corregido (`7bcb079`) |
 | Fecha "5/6": el modelo no pregunta por el día y el mes | **Abierto** |
-| La medición optimizada de Whisper se detuvo por falta de memoria en el equipo | **Abierto:** pendiente de relanzar con memoria libre |
+| La medición de Whisper se detuvo por falta de memoria en el equipo | Corregido: compilación con 2 procesos en perfil de desarrollo, resultados por clip y parada por debajo de 2 GB |
 
 ## Limitaciones pendientes
 

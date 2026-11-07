@@ -86,7 +86,7 @@ Una función central no puede depender de eso.
 
 ### Decisiones sobre la voz
 
-- Modelo por defecto: `ggml-small-q5_1.bin` (190 MB, licencia MIT), con `ggml-base-q5_1.bin` (60 MB) como opción para equipos modestos. El español necesita algo más que el modelo `tiny`. La calidad y la latencia se medirán en la Etapa 4 con este hardware.
+- Modelo por defecto: `ggml-small-q5_1.bin` (190 MB, licencia MIT), con `ggml-base-q5_1.bin` (60 MB) como opción para equipos modestos. El español necesita algo más que el modelo `tiny`. Las mediciones están en `docs/PRUEBA_VOZ.md`.
 - Se descarga una vez, con permiso expreso y barra de progreso, y se verifica su hash. No se incluye en el instalador.
 - **Compilación:** exige CMake y `libclang`, ver el riesgo R1.
 
