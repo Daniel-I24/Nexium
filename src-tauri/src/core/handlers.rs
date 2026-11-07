@@ -335,7 +335,7 @@ pub fn draft_reminder(request: &ReminderRequest, now: DateTime<Local>) -> Respon
     let content = request.content.clone();
     let due = request.date.zip(request.time).and_then(|(date, time)| local_iso(date, time));
     if let Some(question) = &request.ambiguity {
-        return ResponseBody::ReminderDraft { content, due_at: due.map(|value| value.to_rfc3339()), question: Some(question.clone()), options: vec![] };
+        return ResponseBody::ReminderDraft { content, due_at: due.filter(|value| *value > now).map(|value| value.to_rfc3339()), question: Some(question.clone()), options: vec![] };
     }
     match (request.date, request.time, due) {
         (_, _, Some(value)) if value <= now => ResponseBody::ReminderDraft {
@@ -491,6 +491,13 @@ mod tests {
     fn the_model_ambiguity_is_passed_on() {
         let ResponseBody::ReminderDraft { question, .. } = draft_reminder(&request(Some((2026, 11, 12)), Some((8, 0)), Some("¿A las 8 de la mañana o de la noche?")), now()) else { panic!() };
         assert_eq!(question.as_deref(), Some("¿A las 8 de la mañana o de la noche?"));
+    }
+
+    #[test]
+    fn an_ambiguous_past_date_is_not_proposed() {
+        let ResponseBody::ReminderDraft { due_at, question, .. } = draft_reminder(&request(Some((2020, 6, 5)), Some((10, 0)), Some("¿De la mañana o de la noche?")), now()) else { panic!() };
+        assert_eq!(due_at, None);
+        assert!(question.is_some());
     }
 
     #[tokio::test]

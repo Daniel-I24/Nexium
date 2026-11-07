@@ -124,7 +124,10 @@ pub fn parse_interpretation(text: &str, fallback_question: &str) -> Result<Inten
             let time = time_text.as_deref().and_then(|t| NaiveTime::parse_from_str(t, "%H:%M").ok());
             // Una fecha que no se entiende se pregunta: nunca se adivina.
             let unreadable = (date_text.is_some() && date.is_none()) || (time_text.is_some() && time.is_none());
-            let ambiguity = clean(raw.reminder_ambiguity).or_else(|| unreadable.then(|| "¿Puedes indicarme la fecha y la hora exactas?".to_owned()));
+            // La aclaración se muestra tal cual: si el modelo no devuelve una pregunta, se usa la genérica.
+            let model_doubt = clean(raw.reminder_ambiguity);
+            let is_question = model_doubt.as_deref().is_some_and(|doubt| doubt.contains('?'));
+            let ambiguity = if is_question { model_doubt } else { (unreadable || model_doubt.is_some()).then(|| "¿Puedes indicarme la fecha y la hora exactas?".to_owned()) };
             Intent::CreateReminder(ReminderRequest { content, date, time, ambiguity })
         }
         "list_reminders" => Intent::ListReminders,
@@ -162,6 +165,13 @@ mod tests {
         let Intent::CreateReminder(reminder) = intent else { panic!() };
         assert_eq!(reminder.date, None);
         assert!(reminder.ambiguity.is_some());
+    }
+
+    #[test]
+    fn a_doubt_that_is_not_a_question_becomes_one() {
+        let intent = parse(r#"{"intent":"create_reminder","reminder_content":"estudiar","reminder_ambiguity":"pronto"}"#).unwrap();
+        let Intent::CreateReminder(reminder) = intent else { panic!() };
+        assert_eq!(reminder.ambiguity.as_deref(), Some("¿Puedes indicarme la fecha y la hora exactas?"));
     }
 
     #[test]
