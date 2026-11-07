@@ -116,7 +116,7 @@ impl Assistant {
 
     fn finish(&self, request: &str, outcome: Outcome, origin: &str) -> AssistantResponse {
         let (id, created_at) = self.history.record(request, outcome.category, outcome.status, &outcome.summary).unwrap_or_else(|_| (0, Local::now().to_rfc3339()));
-        let origin_label = outcome.source.as_ref().map_or_else(|| origin.to_owned(), |source| format!("{source}, consultado {origin}"));
+        let origin_label = origin_label(outcome.source.as_deref(), origin);
         AssistantResponse { id, request: request.to_owned(), created_at, category: outcome.category, status: outcome.status, origin_label, summary: outcome.summary, body: outcome.body }
     }
 
@@ -125,7 +125,7 @@ impl Assistant {
         let provider = self.ai.display_name().to_owned();
         let (intent, origin, note) = match self.resolve(text, &cancel, &stage).await {
             Resolved::Local(intent) => (intent, ORIGIN_LOCAL.to_owned(), None),
-            Resolved::Ai(intent) => (intent, format!("solicitud interpretada con IA ({provider}); datos del equipo"), None),
+            Resolved::Ai(intent) => (intent, format!("solicitud interpretada con IA ({provider})"), None),
             Resolved::Degraded(intent, note) => (intent, "reglas locales, sin IA".to_owned(), Some(note)),
             Resolved::Failed(outcome) => return self.finish(text, outcome, "sin datos"),
         };
@@ -180,9 +180,25 @@ impl Assistant {
     }
 }
 
+/// Un dato externo no es una lectura del equipo: se nombra su fuente.
+fn origin_label(source: Option<&str>, origin: &str) -> String {
+    match source {
+        Some(source) if origin == ORIGIN_LOCAL => format!("{source}, sin IA"),
+        Some(source) => format!("{source}; {origin}"),
+        None => origin.to_owned(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_origin_names_an_external_source() {
+        assert_eq!(origin_label(Some("Open-Meteo"), ORIGIN_LOCAL), "Open-Meteo, sin IA");
+        assert_eq!(origin_label(Some("Open-Meteo"), "solicitud interpretada con IA (Gemini)"), "Open-Meteo; solicitud interpretada con IA (Gemini)");
+        assert_eq!(origin_label(None, ORIGIN_LOCAL), ORIGIN_LOCAL);
+    }
     use crate::{
         core::handlers::{ClarifyHandler, FilesHandler, ReminderIntentHandler, ScreenHandler, SystemHandler, TimeHandler},
         database::Database,

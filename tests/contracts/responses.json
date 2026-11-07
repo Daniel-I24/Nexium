@@ -38,7 +38,7 @@
     "createdAt": "2026-11-05T14:05:00-05:00",
     "category": "files",
     "status": "completed",
-    "originLabel": "solicitud interpretada con IA (Google Gemini); datos del equipo",
+    "originLabel": "solicitud interpretada con IA (Google Gemini)",
     "summary": "1 coincidencia en Documentos",
     "body": {
       "kind": "files",
@@ -53,7 +53,7 @@
     "createdAt": "2026-11-05T14:05:00-05:00",
     "category": "reminders",
     "status": "pending",
-    "originLabel": "solicitud interpretada con IA (Google Gemini); datos del equipo",
+    "originLabel": "solicitud interpretada con IA (Google Gemini)",
     "summary": "¿A qué hora quieres el aviso?",
     "body": {
       "kind": "reminderDraft",
@@ -94,7 +94,7 @@
     "createdAt": "2026-11-05T14:05:00-05:00",
     "category": "weather",
     "status": "completed",
-    "originLabel": "Open-Meteo, consultado lectura directa del equipo, sin IA",
+    "originLabel": "Open-Meteo, sin IA",
     "summary": "15 °C",
     "body": {
       "kind": "reading",

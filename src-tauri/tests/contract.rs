@@ -5,7 +5,7 @@ use serde_json::Value;
 
 const CREATED: &str = "2026-11-05T14:05:00-05:00";
 const LOCAL: &str = "lectura directa del equipo, sin IA";
-const WITH_AI: &str = "solicitud interpretada con IA (Google Gemini); datos del equipo";
+const WITH_AI: &str = "solicitud interpretada con IA (Google Gemini)";
 
 fn fixtures() -> Value {
     serde_json::from_str(include_str!("../../tests/contracts/responses.json")).expect("JSON válido")
@@ -72,5 +72,5 @@ fn weather() {
         rows: vec![DataRow::value("Pronóstico de hoy", "9 °C a 19 °C · lluvia")],
         attribution: Some(Attribution { text: "Datos meteorológicos de Open-Meteo (CC BY 4.0)".into(), url: "https://open-meteo.com/".into() }),
     };
-    assert_matches("weather", &response(7, "¿Cómo está el clima?", Category::Weather, InteractionStatus::Completed, "Open-Meteo, consultado lectura directa del equipo, sin IA", "15 °C", body));
+    assert_matches("weather", &response(7, "¿Cómo está el clima?", Category::Weather, InteractionStatus::Completed, "Open-Meteo, sin IA", "15 °C", body));
 }
