@@ -99,7 +99,9 @@ impl Assistant {
         match attempt {
             Ok(answer) => {
                 let _ = self.usage.record(answer.tokens);
-                Resolved::Ai(answer.value)
+                // La fecha que elija el modelo no cuenta: si admite dos lecturas, se pregunta.
+                let doubt = matches!(answer.value, Intent::CreateReminder(_)).then(|| rules::ambiguous_date_question(text)).flatten();
+                Resolved::Ai(doubt.unwrap_or(answer.value))
             }
             Err(AiError::Cancelled) => Resolved::Failed(Outcome { status: InteractionStatus::Cancelled, ..Outcome::failed(Category::General, "cancelled", "Operación cancelada.", None) }),
             Err(error) if rules::is_search_request(text) => {
@@ -124,6 +126,7 @@ impl Assistant {
         let text = text.trim();
         let provider = self.ai.display_name().to_owned();
         let (intent, origin, note) = match self.resolve(text, &cancel, &stage).await {
+            Resolved::Local(intent @ Intent::Clarify { .. }) => (intent, "reglas locales, sin IA".to_owned(), None),
             Resolved::Local(intent) => (intent, ORIGIN_LOCAL.to_owned(), None),
             Resolved::Ai(intent) => (intent, format!("solicitud interpretada con IA ({provider})"), None),
             Resolved::Degraded(intent, note) => (intent, "reglas locales, sin IA".to_owned(), Some(note)),
@@ -213,7 +216,7 @@ mod tests {
         services::{reminders::ReminderService, secrets::{SecretBackend, SecretStore}},
     };
     use async_trait::async_trait;
-    use chrono::NaiveDate;
+    use chrono::{NaiveDate, NaiveTime};
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Mutex,
@@ -406,6 +409,26 @@ mod tests {
         assert_eq!(response.status, InteractionStatus::Pending);
         assert!(response.origin_label.contains("Proveedor de prueba"));
         assert_eq!(h.assistant.usage.today_totals().unwrap(), (1, 7));
+    }
+
+    #[tokio::test]
+    async fn an_ambiguous_numeric_date_needs_neither_ai_nor_key() {
+        let h = harness(None, false, false);
+        let response = ask(&h.assistant, "Recuérdame pagar el 5/6").await;
+        let ResponseBody::Clarification { question, suggestions } = response.body else { panic!() };
+        assert_eq!(question, "¿Te refieres al 5 de junio o al 6 de mayo?");
+        assert_eq!(suggestions.iter().map(|s| s.request.as_str()).collect::<Vec<_>>(), ["Recuérdame pagar el 5 de junio", "Recuérdame pagar el 6 de mayo"]);
+        assert_eq!(response.origin_label, "reglas locales, sin IA");
+        assert_eq!(h.ai_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn the_model_cannot_settle_an_ambiguous_numeric_date() {
+        let chosen = ReminderRequest { content: "Pagar".into(), date: NaiveDate::from_ymd_opt(2099, 6, 5), time: NaiveTime::from_hms_opt(10, 0, 0), ambiguity: None };
+        let h = harness(Some(Ok(Intent::CreateReminder(chosen))), true, false);
+        let response = ask(&h.assistant, "No me dejes olvidar pagar el 5/6").await;
+        assert_eq!(h.ai_calls.load(Ordering::SeqCst), 1);
+        assert!(matches!(response.body, ResponseBody::Clarification { ref question, .. } if question == "¿Te refieres al 5 de junio o al 6 de mayo?"));
     }
 
     #[tokio::test]

@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Datelike, Local, Timelike, Weekday};
 
-const MONTHS: [&str; 12] = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+pub const MONTHS: [&str; 12] = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
 pub fn weekday_name(day: Weekday) -> &'static str {
     match day {

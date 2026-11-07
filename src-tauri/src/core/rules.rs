@@ -5,6 +5,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use unicode_normalization::UnicodeNormalization;
 
+use super::format::MONTHS;
 use crate::{
     models::{FileQuery, Intent, SystemMetric, WeatherWhen},
     providers::ai::schema::valid_file_name,
@@ -33,6 +34,7 @@ static SCREEN: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(mi pantalla|la pant
 static FILE_NAME: LazyLock<Regex> = LazyLock::new(|| regex(r"(?i)[\p{L}\p{N}_ -]*[\p{L}\p{N}_-]\.[a-z0-9]{1,5}\b"));
 static FILE_REQUEST: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(existe|busca|encuentra|buscar|encontrar|archivo)\b"));
 static SEARCH: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(busca|buscame|encuentra|encontrar|localiza)\b"));
+static NUMERIC_DATE: LazyLock<Regex> = LazyLock::new(|| regex(r"\b\d+(?:[/-]\d+)+\b"));
 static LIST_REMINDERS: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(que|cuales|mis|ver) recordatorios\b|\bque tengo pendiente\b"));
 
 /// Minúsculas, sin acentos y sin signos: "¿Cuánta RAM?" pasa a "cuanta ram".
@@ -88,11 +90,46 @@ pub fn is_search_request(text: &str) -> bool {
     SEARCH.is_match(&normalize(text))
 }
 
+/// Las dos lecturas de una fecha numérica, si realmente admite dos: "5/6" sí, "13/6" o "5/5" no.
+fn date_readings(token: &str, before: &str) -> Option<(String, String)> {
+    let separator = if token.contains('/') { '/' } else { '-' };
+    let parts: Vec<&str> = token.split(separator).collect();
+    let (first, second, year) = match parts[..] {
+        [first, second] => (first, second, None),
+        [first, second, year] if matches!(year.len(), 2 | 4) => (first, second, Some(year)),
+        _ => return None,
+    };
+    // "las páginas 5-6" no es una fecha: sin año, el guión solo cuenta tras "el" o "del".
+    if separator == '-' && year.is_none() && !matches!(normalize(before).split(' ').next_back(), Some("el" | "del")) {
+        return None;
+    }
+    if first.len() > 2 || second.len() > 2 {
+        return None;
+    }
+    let (first, second): (usize, usize) = (first.parse().ok()?, second.parse().ok()?);
+    if first == second || !(1..=12).contains(&first) || !(1..=12).contains(&second) {
+        return None;
+    }
+    let suffix = year.map_or_else(String::new, |year| format!(" de {}{year}", if year.len() == 2 { "20" } else { "" }));
+    let reading = |day: usize, month: usize| format!("{day} de {}{suffix}", MONTHS[month - 1]);
+    Some((reading(first, second), reading(second, first)))
+}
+
+/// Pregunta por la primera fecha numérica ambigua, sin intervención de la IA.
+/// Cada sugerencia es la misma solicitud con la fecha escrita sin ambigüedad.
+pub fn ambiguous_date_question(original: &str) -> Option<Intent> {
+    NUMERIC_DATE.find_iter(original).find_map(|found| {
+        let (first, second) = date_readings(found.as_str(), &original[..found.start()])?;
+        let with_date = |date: &str| format!("{}{date}{}", &original[..found.start()], &original[found.end()..]).trim().to_owned();
+        Some(Intent::Clarify { question: format!("¿Te refieres al {first} o al {second}?"), suggestions: vec![with_date(&first), with_date(&second)] })
+    })
+}
+
 /// Devuelve una intención solo si la frase no deja lugar a dudas.
 pub fn match_local(original: &str) -> Option<Intent> {
     let text = normalize(original);
     if text.starts_with("recuerdame") || text.starts_with("recordarme") || text.contains("ponme un recordatorio") || text.contains("crea un recordatorio") {
-        return None;
+        return ambiguous_date_question(original);
     }
     if LIST_REMINDERS.is_match(&text) {
         return Some(Intent::ListReminders);
@@ -196,6 +233,38 @@ mod tests {
             "cuéntame un chiste",
         ] {
             assert_eq!(match_local(phrase), None, "{phrase}");
+        }
+    }
+
+    #[test]
+    fn a_numeric_date_with_two_readings_is_asked_without_ai() {
+        assert_eq!(
+            match_local("Recuérdame pagar el 5/6 a las 10:00"),
+            Some(Intent::Clarify {
+                question: "¿Te refieres al 5 de junio o al 6 de mayo?".into(),
+                suggestions: vec!["Recuérdame pagar el 5 de junio a las 10:00".into(), "Recuérdame pagar el 6 de mayo a las 10:00".into()],
+            })
+        );
+    }
+
+    #[test]
+    fn numeric_date_readings() {
+        let question = |phrase: &str| match ambiguous_date_question(phrase) {
+            Some(Intent::Clarify { question, .. }) => Some(question),
+            _ => None,
+        };
+        for (phrase, expected) in [
+            ("el 5/6", "¿Te refieres al 5 de junio o al 6 de mayo?"),
+            ("el 05/06", "¿Te refieres al 5 de junio o al 6 de mayo?"),
+            ("el 5-6", "¿Te refieres al 5 de junio o al 6 de mayo?"),
+            ("el 1/12/2027", "¿Te refieres al 1 de diciembre de 2027 o al 12 de enero de 2027?"),
+            ("el 3-4-27", "¿Te refieres al 3 de abril de 2027 o al 4 de marzo de 2027?"),
+            ("del 13/6 al 7/8", "¿Te refieres al 7 de agosto o al 8 de julio?"),
+        ] {
+            assert_eq!(question(phrase).as_deref(), Some(expected), "{phrase}");
+        }
+        for phrase in ["el 13/6", "el 6/13", "el 5/5", "el 0/6", "el 2026-06-05", "las páginas 5-6", "el 005/6", "el 5/6-7", "v5/6", "el 12 de mayo"] {
+            assert_eq!(question(phrase), None, "{phrase}");
         }
     }
 
