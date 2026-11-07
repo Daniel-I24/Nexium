@@ -47,7 +47,7 @@ Estas pruebas usan servidores simulados para Gemini y Open-Meteo. Las pruebas co
 | "Cuéntame un chiste" | Explica lo que Nexium sabe hacer, sin ejecutar nada |
 | Aviso de captura | Nombra a Google Gemini y no captura nada sin pulsar Capturar. No se pulsó |
 | Recordatorios, Historial y Ajustes | Abren con datos reales |
-| Tamaños y temas | 720×520, 1100×720 y 1920×1080 sin desbordes. Tema claro y oscuro, este último por emulación de la vista. El cambio real de tema del sistema no se probó |
+| Tamaños y temas | 720×520, 1100×720 y 1920×1080 sin desbordes. Tema oscuro real del sistema y tema claro por emulación de la vista. El cambio real de tema del sistema no se probó |
 | Ancho máximo en pantallas grandes | Correcto |
 | Coma de la lectura | El arreglo anterior no bastaba, porque se leía "7 , 9". Corregido en `0d9f7d1` |
 
