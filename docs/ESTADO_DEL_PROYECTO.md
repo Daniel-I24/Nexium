@@ -2,7 +2,7 @@
 
 Última actualización: 7 de noviembre de 2026.
 
-**Etapa actual:** 3 y 4 en curso. La aplicación completa aún no se ha ejecutado en una ventana real.
+**Etapa actual:** 5, integración en Windows. La aplicación ya se ejecuta en una ventana real. Faltan las comprobaciones que requieren al propietario: micrófono, bandeja, notificaciones, almacén de claves y captura real.
 
 | Etapa | Estado |
 |---|---|
@@ -10,7 +10,7 @@
 | 2. Diseño visual | Aprobada, con ajustes incorporados |
 | 3. Configuración | Compila y pasa pruebas en los tres sistemas en CI. Prueba de Whisper parcial |
 | 4. Módulos | Código y pruebas automáticas escritos. Sin verificación de extremo a extremo |
-| 5. Integración | Sin empezar |
+| 5. Integración | En curso: comandos reales, clima y Gemini comprobados desde la interfaz. Faltan las pruebas manuales de abajo |
 | 6. Multiplataforma | CI en verde en Windows, macOS y Linux (`54a1742`), con instaladores generados. Sin pruebas manuales en macOS ni Linux |
 | 7. Entrega | README y plan de pruebas manuales escritos |
 
@@ -22,24 +22,50 @@ Código escrito, con pruebas automáticas, en este orden de módulos: interfaz, 
 
 **Automático, en este Windows:**
 
-- `cargo test --lib`: 102 pruebas correctas.
+- `cargo test --lib`: 103 pruebas correctas.
 - `cargo test --test contract`: 7 pruebas correctas. Los JSON de Rust coinciden con los que usa la interfaz.
-- `npm test`: 26 pruebas correctas.
+- `npm test`: 27 pruebas correctas.
 - `npm run lint` y `tsc --noEmit`: sin errores.
 
 Estas pruebas usan servidores simulados para Gemini y Open-Meteo. Las pruebas con los servicios reales están más abajo.
 
 **CI:** la ejecución de `54a1742` pasó en Windows, macOS y Linux: lint, pruebas y creación de instaladores. Esto verifica compilación y pruebas automáticas, no el funcionamiento real en esos sistemas.
 
-**Visual:** interfaz abierta en Edge sin ventana visible y fotografiada con datos de ejemplo, en 1100×720, 720×520 y 1920×1080, en ambos temas. Se corrigieron el ancho en pantallas grandes y el espaciado de la coma en la lectura. Tras esas correcciones no se ha vuelto a fotografiar.
+**Ventana real de Tauri (`tauri dev`, Windows, 7 de noviembre de 2026),** manejada por la interfaz con la depuración de WebView2:
+
+| Comprobación | Resultado |
+|---|---|
+| Hora | Coincide con el reloj del sistema |
+| RAM | 7,9 GB de 15,3 GB, igual que el sistema |
+| Batería | 97 % frente al 96 % que informa Windows. Puede ser redondeo: no se investigó |
+| Internet, CPU y modo oscuro | Responden sin IA. El modo oscuro coincide con el del sistema. La CPU no se comparó con el Administrador de tareas |
+| Red Wi-Fi | Coincide con `netsh`. Faltan los casos sin permiso de ubicación |
+| Clima de Medellín | Datos de Open-Meteo con su atribución |
+| Recordatorio "el próximo jueves a las ocho" | Borrador con el 12 de noviembre a las 08:00. No se guardó |
+| Recordatorio ambiguo | Pide fecha y hora en lugar de inventarlas |
+| Búsqueda de archivos | Se detiene en "Pendiente de autorización". No se autorizaron carpetas reales |
+| "Cuéntame un chiste" | Explica lo que Nexium sabe hacer, sin ejecutar nada |
+| Aviso de captura | Nombra a Google Gemini y no captura nada sin pulsar Capturar. No se pulsó |
+| Recordatorios, Historial y Ajustes | Abren con datos reales |
+| Tamaños y temas | 720×520, 1100×720 y 1920×1080 sin desbordes. Tema claro y oscuro, este último por emulación de la vista. El cambio real de tema del sistema no se probó |
+| Ancho máximo en pantallas grandes | Correcto |
+| Coma de la lectura | El arreglo anterior no bastaba, porque se leía "7 , 9". Corregido en `0d9f7d1` |
+
+Las pruebas con datos de ejemplo no detectaron estos defectos; sí la ventana real. Todos corregidos:
+
+- La cinta duplicaba entradas y superaba su límite de 5 (`7f586d1`).
+- La respuesta nueva quedaba fuera de la vista cuando crecía la cinta (`7f586d1`).
+- Origen sin sentido: "Open-Meteo, consultado lectura directa del equipo, sin IA" (`108a58b`).
 
 **Voz:** medición terminada con 40 clips cortos de habla real. `small` con `audio_ctx` queda como predeterminado: 15,70 % de palabras erróneas, 1,53 s de transcripción y 332 MB de memoria pico. Detalles en `docs/PRUEBA_VOZ.md`. El modelo se carga en el primer uso y se libera tras 10 minutos sin uso (configurable). Eso solo está cubierto con pruebas automáticas: falta verlo en la app real. Falta también probar con un micrófono y frases reales.
 
 ## Sin probar
 
-- La aplicación en una ventana real de Tauri.
-- Comandos reales desde la interfaz, micrófono, bandeja, notificaciones y almacén de claves.
+- Micrófono, bandeja, notificaciones y almacén de claves.
 - Captura de pantalla real.
+- Búsqueda de archivos en carpetas reales.
+- Carga y liberación del modelo de voz en la app real.
+- El instalador: todo lo anterior es con `tauri dev`.
 - Cualquier cosa en macOS o Linux más allá de lo que compruebe la CI. Lista en `docs/PLAN_PRUEBAS_MANUALES.md`.
 
 ## Pruebas reales con Gemini
