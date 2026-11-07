@@ -22,8 +22,8 @@ Código escrito, con pruebas automáticas, en este orden de módulos: interfaz, 
 
 **Automático, en este Windows:**
 
-- `cargo test --lib`: 103 pruebas correctas.
-- `cargo test --test contract`: 7 pruebas correctas. Los JSON de Rust coinciden con los que usa la interfaz.
+- `cargo test --lib`: 107 pruebas correctas.
+- `cargo test --test contract`: 7 pruebas correctas en su última ejecución, anterior a `3a19589`. Los JSON de Rust coinciden con los que usa la interfaz.
 - `npm test`: 27 pruebas correctas.
 - `npm run lint` y `tsc --noEmit`: sin errores.
 
@@ -37,7 +37,7 @@ Estas pruebas usan servidores simulados para Gemini y Open-Meteo. Las pruebas co
 |---|---|
 | Hora | Coincide con el reloj del sistema |
 | RAM | 7,9 GB de 15,3 GB, igual que el sistema |
-| Batería | 97 % frente al 96 % que informa Windows. Puede ser redondeo: no se investigó |
+| Batería | Correcta. La diferencia de 97 % frente a 96 % es de redondeo, sin cambios en el código (ver abajo) |
 | Internet, CPU y modo oscuro | Responden sin IA. El modo oscuro coincide con el del sistema. La CPU no se comparó con el Administrador de tareas |
 | Red Wi-Fi | Coincide con `netsh`. Faltan los casos sin permiso de ubicación |
 | Clima de Medellín | Datos de Open-Meteo con su atribución |
@@ -49,6 +49,7 @@ Estas pruebas usan servidores simulados para Gemini y Open-Meteo. Las pruebas co
 | Recordatorios, Historial y Ajustes | Abren con datos reales |
 | Tamaños y temas | 720×520, 1100×720 y 1920×1080 sin desbordes. Tema oscuro real del sistema y tema claro por emulación de la vista. El cambio real de tema del sistema no se probó |
 | Ancho máximo en pantallas grandes | Correcto |
+| Fecha "Recuérdame pagar el 5/6 a las 10:00" | Pregunta "¿Te refieres al 5 de junio o al 6 de mayo?" con las dos opciones, sin IA |
 | Coma de la lectura | El arreglo anterior no bastaba, porque se leía "7 , 9". Corregido en `0d9f7d1` |
 
 Las pruebas con datos de ejemplo no detectaron estos defectos; sí la ventana real. Todos corregidos:
@@ -56,6 +57,8 @@ Las pruebas con datos de ejemplo no detectaron estos defectos; sí la ventana re
 - La cinta duplicaba entradas y superaba su límite de 5 (`7f586d1`).
 - La respuesta nueva quedaba fuera de la vista cuando crecía la cinta (`7f586d1`).
 - Origen sin sentido: "Open-Meteo, consultado lectura directa del equipo, sin IA" (`108a58b`).
+
+**Diferencia de batería:** Nexium calcula carga actual entre capacidad completa y redondea al entero. En una lectura sin Nexium, el valor exacto era 75,55 %: `Win32_Battery` daba 75, porque trunca, y `PowerStatus` de Windows daba 76, igual que redondear. En otra lectura, Nexium devolvió 72,339 %, el mismo valor exacto que Windows en ese momento. Las dos fuentes de Windows pueden diferir entre sí en un punto. La lectura original de 97 % y 96 % no se pudo repetir.
 
 **Voz:** medición terminada con 40 clips cortos de habla real. `small` con `audio_ctx` queda como predeterminado: 15,70 % de palabras erróneas, 1,53 s de transcripción y 332 MB de memoria pico. Detalles en `docs/PRUEBA_VOZ.md`. El modelo se carga en el primer uso y se libera tras 10 minutos sin uso (configurable). Eso solo está cubierto con pruebas automáticas: falta verlo en la app real. Falta también probar con un micrófono y frases reales.
 
@@ -86,7 +89,7 @@ Fecha: 7 de noviembre de 2026. Herramienta: `src-tauri/examples/gemini_live.rs`.
 Defectos encontrados:
 
 - "Recuérdame estudiar pronto" devolvía `pronto` como aclaración, en lugar de una pregunta. **Corregido** en `7bcb079`, con prueba automática. No se ha repetido la frase contra Gemini.
-- "Comprar pan el 5/6 a las 10" pregunta por mañana o noche, pero no aclara si es 5 de junio o 6 de mayo, y proponía una fecha ya pasada. **Corregido en parte:** la fecha pasada ya no se propone, y el backend rechaza guardarla. **Abierto:** el modelo no pregunta por el día y el mes.
+- "Comprar pan el 5/6 a las 10" pregunta por mañana o noche, pero no aclara si es 5 de junio o 6 de mayo, y proponía una fecha ya pasada. **Corregido en parte:** la fecha pasada ya no se propone, y el backend rechaza guardarla. El día y el mes se resuelven ahora en el código (`3a19589`), sin depender del modelo.
 
 **Capturas sintéticas, sin datos personales:** cuatro imágenes generadas para la prueba: un diálogo de error, ajustes con texto de 11 px, una tabla y una nota con una instrucción maliciosa incrustada.
 
@@ -119,7 +122,7 @@ Fecha: 7 de noviembre de 2026. Herramienta: `src-tauri/examples/weather_live.rs`
 | CI de Linux: `libspa` no compila en Ubuntu 22.04, porque `xcap` exige un PipeWire más reciente | Corregido: la CI usa Ubuntu 24.04. Los paquetes de Linux quedan pensados para 24.04 o superior |
 | CI de Linux: faltaban la función `screenshot` de `ashpd` y `libgbm`, y se usaba una conversión de URI inexistente | Corregido |
 | Aclaración de recordatorio sin forma de pregunta, y fecha pasada propuesta | Corregido (`7bcb079`) |
-| Fecha "5/6": el modelo no pregunta por el día y el mes | **Abierto** |
+| Fecha "5/6": el modelo no pregunta por el día y el mes | Corregido en el código, con pruebas automáticas (`3a19589`). "Recuérdame…" no llama a la IA; en otras frases, la duda se impone a la fecha que elija el modelo. Esta segunda vía solo está probada con un proveedor simulado |
 | La medición de Whisper se detuvo por falta de memoria en el equipo | Corregido: compilación con 2 procesos en perfil de desarrollo, resultados por clip y parada por debajo de 2 GB |
 
 ## Limitaciones pendientes
