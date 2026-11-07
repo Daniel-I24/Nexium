@@ -31,7 +31,7 @@ use crate::{
         capture::{CaptureError, NativeScreenCapture, ScreenCaptureProvider},
         files::{AuthorizedFolder, LocalFileSearch},
         notification::{NotificationProvider, TauriNotifications},
-        speech::WhisperSpeech,
+        speech::{SpeechProvider, WhisperSpeech},
         system::NativeSystemProvider,
         weather::OpenMeteo,
     },
@@ -45,6 +45,7 @@ use crate::{
 };
 
 const REMINDER_CHECK_INTERVAL: Duration = Duration::from_secs(20);
+const SPEECH_IDLE_CHECK_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Oculta Nexium durante la captura para que el análisis trate de lo que hay detrás.
 struct WindowAwareCapture<R: Runtime> {
@@ -116,7 +117,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
     Ok(AppState {
         assistant,
         ai,
-        speech: Arc::new(WhisperSpeech),
+        speech: Arc::new(WhisperSpeech::default()),
         secrets,
         settings,
         history,
@@ -143,6 +144,18 @@ fn start_reminder_scheduler<R: Runtime>(app: AppHandle<R>, reminders: ReminderSe
                 }
             }
             tokio::time::sleep(REMINDER_CHECK_INTERVAL).await;
+        }
+    });
+}
+
+/// Devuelve al sistema la memoria del modelo de voz cuando lleva tiempo sin usarse.
+fn start_speech_release(speech: Arc<dyn SpeechProvider>, settings: SettingsService) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(SPEECH_IDLE_CHECK_INTERVAL).await;
+            if let Ok(current) = settings.get() {
+                speech.release_idle(Duration::from_secs(u64::from(current.speech_idle_minutes) * 60));
+            }
         }
     });
 }
@@ -189,6 +202,7 @@ pub fn run() {
             let handle = app.handle().clone();
             let state = build_state(&handle)?;
             start_reminder_scheduler(handle.clone(), state.reminders.clone());
+            start_speech_release(state.speech.clone(), state.settings.clone());
             app.manage(state);
             // Sin bandeja disponible, cerrar la ventana cierra la aplicación.
             let has_tray = build_tray(&handle).is_ok();

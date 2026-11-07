@@ -12,6 +12,7 @@ pub const DEFAULT_PROVIDER: &str = "gemini";
 pub const DEFAULT_INTERPRET_MODEL: &str = "gemini-3.5-flash-lite";
 pub const DEFAULT_VISION_MODEL: &str = "gemini-3.6-flash";
 pub const DEFAULT_SPEECH_MODEL: &str = "small";
+pub const DEFAULT_SPEECH_IDLE_MINUTES: u32 = 10;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
@@ -21,6 +22,7 @@ pub struct Settings {
     pub vision_model: String,
     pub daily_ai_limit: u32,
     pub speech_model: String,
+    pub speech_idle_minutes: u32,
     pub weather_city: String,
     pub authorized_folders: Vec<String>,
     pub folders_confirmed: bool,
@@ -34,6 +36,7 @@ impl Default for Settings {
             vision_model: DEFAULT_VISION_MODEL.into(),
             daily_ai_limit: 200,
             speech_model: DEFAULT_SPEECH_MODEL.into(),
+            speech_idle_minutes: DEFAULT_SPEECH_IDLE_MINUTES,
             weather_city: String::new(),
             authorized_folders: Vec::new(),
             folders_confirmed: false,
@@ -59,6 +62,9 @@ impl Settings {
         }
         if !known_speech_models.contains(&self.speech_model.as_str()) {
             return Err(AppError::Validation("Ese modelo de voz no existe.".into()));
+        }
+        if !(1..=240).contains(&self.speech_idle_minutes) {
+            return Err(AppError::Validation("El tiempo para liberar el modelo de voz debe estar entre 1 y 240 minutos.".into()));
         }
         if self.weather_city.chars().count() > 100 {
             return Err(AppError::Validation("El nombre de la ciudad es demasiado largo.".into()));
@@ -110,6 +116,19 @@ mod tests {
         let settings = service().get().unwrap();
         assert_eq!(settings.ai_provider, "gemini");
         assert_ne!(settings.interpret_model, settings.vision_model);
+    }
+
+    #[test]
+    fn the_voice_idle_period_is_validated_and_defaults_for_old_settings() {
+        let mut settings = Settings::default();
+        let models = ["small"];
+        assert!(settings.validate(&[], &models).is_ok());
+        settings.speech_idle_minutes = 0;
+        assert!(settings.validate(&[], &models).is_err());
+        settings.speech_idle_minutes = 241;
+        assert!(settings.validate(&[], &models).is_err());
+        let stored: Settings = serde_json::from_str(r#"{"speechModel":"small"}"#).unwrap();
+        assert_eq!(stored.speech_idle_minutes, DEFAULT_SPEECH_IDLE_MINUTES);
     }
 
     #[test]

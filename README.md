@@ -114,7 +114,7 @@ Las operaciones locales no consumen cuota. Si la cuota se agota, Nexium lo expli
 
 ### Voz
 
-El modelo se descarga una sola vez desde **Ajustes**, con tu confirmación, y se verifica su hash. Se guarda en la carpeta de datos de la aplicación, dentro de `models/`. Detalles y mediciones: [`docs/PRUEBA_VOZ.md`](docs/PRUEBA_VOZ.md).
+El modelo se descarga una sola vez desde **Ajustes**, con tu confirmación, y se verifica su hash. Se guarda en la carpeta de datos de la aplicación, dentro de `models/`. Se carga en memoria la primera vez que hablas y se libera tras un periodo sin uso, configurable en **Ajustes** (10 minutos por defecto). Detalles y mediciones: [`docs/PRUEBA_VOZ.md`](docs/PRUEBA_VOZ.md).
 
 ## Pruebas
 

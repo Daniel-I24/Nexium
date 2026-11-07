@@ -120,6 +120,7 @@ export interface Settings {
   visionModel: string;
   dailyAiLimit: number;
   speechModel: string;
+  speechIdleMinutes: number;
   weatherCity: string;
   authorizedFolders: string[];
   foldersConfirmed: boolean;

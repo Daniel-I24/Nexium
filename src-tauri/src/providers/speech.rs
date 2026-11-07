@@ -7,7 +7,7 @@ use std::{
         mpsc, Arc, Mutex,
     },
     thread::JoinHandle,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use async_trait::async_trait;
@@ -94,14 +94,69 @@ impl std::fmt::Display for SpeechError {
 #[async_trait]
 pub trait SpeechProvider: Send + Sync {
     async fn transcribe(&self, samples: Vec<f32>, model_path: PathBuf, cancel: CancellationToken) -> Result<String, SpeechError>;
+    /// Libera de la memoria un modelo que lleve al menos `max_idle` sin usarse.
+    fn release_idle(&self, max_idle: Duration);
 }
 
-pub struct WhisperSpeech;
+struct CachedModel<T> {
+    path: PathBuf,
+    model: Arc<T>,
+    last_used: Instant,
+}
 
-fn run_whisper(samples: &[f32], model_path: &Path, cancelled: Arc<AtomicBool>) -> Result<String, SpeechError> {
+/// Conserva un solo modelo cargado. Se carga en el primer uso y se libera tras un periodo de inactividad.
+pub struct ModelCache<T> {
+    slot: Mutex<Option<CachedModel<T>>>,
+}
+
+impl<T> Default for ModelCache<T> {
+    fn default() -> Self {
+        Self { slot: Mutex::new(None) }
+    }
+}
+
+impl<T> ModelCache<T> {
+    pub fn get_or_load<E>(&self, path: &Path, now: Instant, load: impl FnOnce() -> Result<T, E>) -> Result<Arc<T>, E> {
+        let mut slot = self.slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(cached) = slot.as_mut().filter(|cached| cached.path == path) {
+            cached.last_used = now;
+            return Ok(cached.model.clone());
+        }
+        // El anterior se libera antes de cargar: nunca hay dos modelos en memoria.
+        *slot = None;
+        let model = Arc::new(load()?);
+        *slot = Some(CachedModel { path: path.to_owned(), model: model.clone(), last_used: now });
+        Ok(model)
+    }
+
+    pub fn touch(&self, now: Instant) {
+        if let Some(cached) = self.slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_mut() {
+            cached.last_used = now;
+        }
+    }
+
+    /// Si el modelo se está cargando, no espera: lo revisará en la siguiente pasada.
+    pub fn release_if_idle(&self, now: Instant, max_idle: Duration) -> bool {
+        let Ok(mut slot) = self.slot.try_lock() else { return false };
+        let idle = slot.as_ref().is_some_and(|cached| now.saturating_duration_since(cached.last_used) >= max_idle);
+        if idle {
+            *slot = None;
+        }
+        idle
+    }
+}
+
+#[derive(Default)]
+pub struct WhisperSpeech {
+    models: Arc<ModelCache<WhisperContext>>,
+}
+
+fn load_whisper(model_path: &Path) -> Result<WhisperContext, SpeechError> {
     let path = model_path.to_str().ok_or_else(|| SpeechError::Failed("La ruta del modelo no es válida.".into()))?;
-    // El modelo se carga para cada solicitud: fuera de ellas no ocupa memoria.
-    let context = WhisperContext::new_with_params(path, WhisperContextParameters::default()).map_err(|_| SpeechError::Failed("No se pudo cargar el modelo de voz. Vuelve a descargarlo en Ajustes.".into()))?;
+    WhisperContext::new_with_params(path, WhisperContextParameters::default()).map_err(|_| SpeechError::Failed("No se pudo cargar el modelo de voz. Vuelve a descargarlo en Ajustes.".into()))
+}
+
+fn run_whisper(samples: &[f32], context: &WhisperContext, cancelled: Arc<AtomicBool>) -> Result<String, SpeechError> {
     let mut state = context.create_state().map_err(|_| SpeechError::Failed("No se pudo preparar la transcripción.".into()))?;
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     params.set_language(Some("es"));
@@ -143,7 +198,13 @@ impl SpeechProvider for WhisperSpeech {
         }
         let cancelled = Arc::new(AtomicBool::new(false));
         let flag = cancelled.clone();
-        let task = tokio::task::spawn_blocking(move || run_whisper(&samples, &model_path, flag));
+        let models = self.models.clone();
+        let task = tokio::task::spawn_blocking(move || {
+            let context = models.get_or_load(&model_path, Instant::now(), || load_whisper(&model_path))?;
+            let outcome = run_whisper(&samples, &context, flag);
+            models.touch(Instant::now());
+            outcome
+        });
         tokio::pin!(task);
         tokio::select! {
             outcome = &mut task => outcome.map_err(|_| SpeechError::Failed("La transcripción se interrumpió.".into()))?.map(|text| clean_transcript(&text)),
@@ -153,6 +214,10 @@ impl SpeechProvider for WhisperSpeech {
                 Err(SpeechError::Cancelled)
             }
         }
+    }
+
+    fn release_idle(&self, max_idle: Duration) {
+        self.models.release_if_idle(Instant::now(), max_idle);
     }
 }
 
@@ -373,7 +438,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_missing_model_is_reported() {
-        let error = WhisperSpeech.transcribe(vec![0.0; 10], PathBuf::from("no-existe.bin"), CancellationToken::new()).await.unwrap_err();
+        let error = WhisperSpeech::default().transcribe(vec![0.0; 10], PathBuf::from("no-existe.bin"), CancellationToken::new()).await.unwrap_err();
         assert_eq!(error, SpeechError::ModelMissing);
     }
 
@@ -398,6 +463,77 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         download_model(&model, dir.path(), |_, _| {}, Some(&server.uri())).await.unwrap();
         assert!(dir.path().join("m.bin").exists());
+    }
+
+    #[test]
+    fn the_model_loads_once_and_stays_in_memory() {
+        let cache = ModelCache::default();
+        let (path, now, mut loads) = (Path::new("small.bin"), Instant::now(), 0);
+        for _ in 0..3 {
+            cache
+                .get_or_load(path, now, || {
+                    loads += 1;
+                    Ok::<_, ()>(7)
+                })
+                .unwrap();
+        }
+        assert_eq!(loads, 1);
+    }
+
+    #[test]
+    fn another_model_replaces_the_first_before_loading() {
+        let cache = ModelCache::default();
+        let now = Instant::now();
+        let first = cache.get_or_load(Path::new("small.bin"), now, || Ok::<_, ()>(1)).unwrap();
+        let weak = Arc::downgrade(&first);
+        drop(first);
+        let second = cache
+            .get_or_load(Path::new("base.bin"), now, || {
+                assert!(weak.upgrade().is_none());
+                Ok::<_, ()>(2)
+            })
+            .unwrap();
+        assert_eq!(*second, 2);
+    }
+
+    #[test]
+    fn a_failed_load_leaves_nothing_cached() {
+        let cache = ModelCache::<i32>::default();
+        let now = Instant::now();
+        assert_eq!(cache.get_or_load(Path::new("m.bin"), now, || Err("dañado")).unwrap_err(), "dañado");
+        assert_eq!(*cache.get_or_load(Path::new("m.bin"), now, || Ok::<_, &str>(1)).unwrap(), 1);
+    }
+
+    #[test]
+    fn the_model_is_released_only_after_the_idle_period() {
+        let cache = ModelCache::default();
+        let (path, start, idle) = (Path::new("m.bin"), Instant::now(), Duration::from_secs(600));
+        let model = cache.get_or_load(path, start, || Ok::<_, ()>(1)).unwrap();
+        let weak = Arc::downgrade(&model);
+        drop(model);
+        assert!(!cache.release_if_idle(start + Duration::from_secs(599), idle));
+        assert!(weak.upgrade().is_some());
+        assert!(cache.release_if_idle(start + idle, idle));
+        assert!(weak.upgrade().is_none());
+        assert!(!cache.release_if_idle(start + idle, idle));
+    }
+
+    #[test]
+    fn using_the_model_restarts_the_idle_period() {
+        let cache = ModelCache::default();
+        let (start, idle) = (Instant::now(), Duration::from_secs(600));
+        cache.get_or_load(Path::new("m.bin"), start, || Ok::<_, ()>(1)).unwrap();
+        cache.touch(start + Duration::from_secs(500));
+        assert!(!cache.release_if_idle(start + idle, idle));
+    }
+
+    #[test]
+    fn a_model_in_use_survives_its_release() {
+        let cache = ModelCache::default();
+        let (start, idle) = (Instant::now(), Duration::from_secs(1));
+        let in_use = cache.get_or_load(Path::new("m.bin"), start, || Ok::<_, ()>(9)).unwrap();
+        assert!(cache.release_if_idle(start + idle, idle));
+        assert_eq!(*in_use, 9);
     }
 
     #[test]

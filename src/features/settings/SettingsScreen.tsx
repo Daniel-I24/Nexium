@@ -156,6 +156,10 @@ export function SettingsScreen() {
             </li>
           ))}
         </ul>
+        <Field label="Liberar el modelo tras estos minutos sin uso">
+          <input type="number" min={1} max={240} value={draft.speechIdleMinutes} onChange={(event) => update("speechIdleMinutes", Number(event.target.value))} className={`font-mono ${inputStyle}`} />
+        </Field>
+        <p className="m-0 text-sm text-muted">El modelo se carga la primera vez que hablas y se mantiene en memoria para responder más rápido.</p>
       </Section>
 
       <Section title="Clima">
