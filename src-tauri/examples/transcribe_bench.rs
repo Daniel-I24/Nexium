@@ -16,6 +16,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use nexium_lib::providers::speech::audio_context;
 use serde::{Deserialize, Serialize};
 use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
@@ -71,11 +72,6 @@ fn read_wav(path: &Path) -> Vec<f32> {
     let bytes = std::fs::read(path).expect("wav");
     let data = bytes.windows(4).position(|w| w == b"data").expect("chunk data") + 8;
     bytes[data..].chunks_exact(2).map(|s| f32::from(i16::from_le_bytes([s[0], s[1]])) / 32768.0).collect()
-}
-
-/// 1500 unidades equivalen a 30 s; se añade un margen para no cortar el final.
-fn audio_context(samples: usize) -> i32 {
-    i32::try_from(samples / 320 + 128).unwrap_or(1500).clamp(256, 1500)
 }
 
 /// Vigila la memoria durante la transcripción, no solo entre clips.

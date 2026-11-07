@@ -156,10 +156,17 @@ fn load_whisper(model_path: &Path) -> Result<WhisperContext, SpeechError> {
     WhisperContext::new_with_params(path, WhisperContextParameters::default()).map_err(|_| SpeechError::Failed("No se pudo cargar el modelo de voz. Vuelve a descargarlo en Ajustes.".into()))
 }
 
+/// Whisper procesa 30 s aunque el audio dure menos. Ajustarlo a la duración real reduce la espera de 6,5 a 1,5 s
+/// en frases cortas (`docs/PRUEBA_VOZ.md`). 1500 unidades equivalen a 30 s; el margen evita cortar el final.
+pub fn audio_context(samples: usize) -> i32 {
+    i32::try_from(samples / 320 + 128).unwrap_or(1500).clamp(256, 1500)
+}
+
 fn run_whisper(samples: &[f32], context: &WhisperContext, cancelled: Arc<AtomicBool>) -> Result<String, SpeechError> {
     let mut state = context.create_state().map_err(|_| SpeechError::Failed("No se pudo preparar la transcripción.".into()))?;
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     params.set_language(Some("es"));
+    params.set_audio_ctx(audio_context(samples.len()));
     params.set_n_threads(std::thread::available_parallelism().map_or(4, |n| i32::try_from(n.get() / 2).unwrap_or(4).clamp(1, 8)));
     params.set_print_progress(false);
     params.set_print_realtime(false);
@@ -463,6 +470,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         download_model(&model, dir.path(), |_, _| {}, Some(&server.uri())).await.unwrap();
         assert!(dir.path().join("m.bin").exists());
+    }
+
+    #[test]
+    fn the_audio_context_follows_the_duration_within_limits() {
+        assert_eq!(audio_context(0), 256);
+        assert_eq!(audio_context(16_000 * 10), 628);
+        assert_eq!(audio_context(16_000 * 30), 1500);
+        assert_eq!(audio_context(usize::MAX), 1500);
     }
 
     #[test]
