@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AssistantResponse, ResponseBody } from "@/types/api";
@@ -30,6 +31,16 @@ describe("useAssistant", () => {
     expect(invoke).toHaveBeenCalledWith("assistant_submit", { text: "hola" });
     expect(result.current.current?.summary).toBe("s");
     expect(result.current.bar).toEqual({ kind: "idle" });
+  });
+
+  it("la cinta no duplica entradas ni pasa de cinco, también en modo estricto", async () => {
+    const { result } = renderHook(() => useAssistant(), { wrapper: StrictMode });
+    for (const id of [1, 2, 3, 4, 5, 6, 7]) {
+      invoke.mockResolvedValueOnce({ ...reply({ kind: "text", text: "hola" }), id });
+      await act(() => result.current.submit("hola"));
+    }
+    expect(result.current.current?.id).toBe(7);
+    expect(result.current.tape.map((entry) => entry.id)).toEqual([2, 3, 4, 5, 6]);
   });
 
   it("la cuota agotada no es reintentable", async () => {

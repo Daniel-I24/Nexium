@@ -6,12 +6,18 @@ import type { AssistantResponse, ReminderOption, SuggestedRequest } from "@/type
 
 const LEVEL_HISTORY = 72;
 const CAPTURE_REQUEST = "Analiza lo que aparece en mi pantalla";
+const TAPE_LENGTH = 5;
+
+/** Respuesta actual y cinta cambian juntas: separadas, un actualizador tendría que modificar la otra. */
+interface Session {
+  current: AssistantResponse | null;
+  tape: AssistantResponse[];
+}
 
 export function useAssistant() {
   const [bar, setBar] = useState<BarState>({ kind: "idle" });
   const [levels, setLevels] = useState<number[]>([]);
-  const [current, setCurrent] = useState<AssistantResponse | null>(null);
-  const [tape, setTape] = useState<AssistantResponse[]>([]);
+  const [{ current, tape }, setSession] = useState<Session>({ current: null, tape: [] });
   const lastRequest = useRef<string | null>(null);
   const captureQuestion = useRef(CAPTURE_REQUEST);
   const requestCaptureRef = useRef<(question: string) => Promise<void>>(() => Promise.resolve());
@@ -29,10 +35,10 @@ export function useAssistant() {
       setBar({ kind: "idle" });
       return;
     }
-    setCurrent((previous) => {
-      if (previous) setTape((entries) => [...entries, previous].slice(-5));
-      return response;
-    });
+    setSession(({ current: previous, tape: entries }) => ({
+      current: response,
+      tape: previous ? [...entries, previous].slice(-TAPE_LENGTH) : entries,
+    }));
     const { body } = response;
     if (body.kind === "reminderDraft" && body.question) {
       setBar({ kind: "clarify", question: body.question, reminderOptions: body.options, suggestions: [] });
@@ -132,9 +138,10 @@ export function useAssistant() {
     async (content: string, dueAt: string) => {
       try {
         const reminder = await api.createReminder(content, dueAt, currentId);
-        setCurrent((previous) =>
-          previous ? { ...previous, status: "completed", summary: `Guardado: ${reminder.content}`, body: { kind: "reminderSaved", reminder } } : previous,
-        );
+        setSession((session) => ({
+          ...session,
+          current: session.current ? { ...session.current, status: "completed", summary: `Guardado: ${reminder.content}`, body: { kind: "reminderSaved", reminder } } : null,
+        }));
         setBar({ kind: "idle" });
       } catch (error) {
         fail(error);
