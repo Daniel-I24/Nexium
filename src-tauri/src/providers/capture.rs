@@ -6,7 +6,10 @@ use async_trait::async_trait;
 use image::{imageops::FilterType, DynamicImage};
 
 const MAX_SIDE: u32 = 1568;
-const JPEG_QUALITY: u8 = 80;
+const REDUCED_SIDE: u32 = 1024;
+const JPEG_QUALITIES: [u8; 4] = [80, 65, 50, 35];
+/// Por debajo del máximo del servidor, y barato de validar con su límite de CPU.
+pub const MAX_ENCODED_BYTES: usize = 700_000;
 
 #[derive(Debug, PartialEq)]
 pub enum CaptureError {
@@ -21,13 +24,29 @@ pub trait ScreenCaptureProvider: Send + Sync {
 
 pub struct NativeScreenCapture;
 
+fn jpeg(image: &DynamicImage, quality: u8) -> Result<Vec<u8>, CaptureError> {
+    let mut buffer = Cursor::new(Vec::new());
+    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buffer, quality);
+    image.write_with_encoder(encoder).map_err(|_| CaptureError::Failed("No se pudo preparar la captura.".into()))?;
+    Ok(buffer.into_inner())
+}
+
 /// Reduce la imagen y la codifica en JPEG: menos tokens y menos detalle innecesario.
+/// Baja la calidad solo si hace falta, para conservar legible el texto pequeño.
 pub fn encode_for_analysis(image: DynamicImage) -> Result<Vec<u8>, CaptureError> {
     let resized = if image.width().max(image.height()) > MAX_SIDE { image.resize(MAX_SIDE, MAX_SIDE, FilterType::Triangle) } else { image };
-    let mut buffer = Cursor::new(Vec::new());
-    let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buffer, JPEG_QUALITY);
-    resized.to_rgb8().write_with_encoder(encoder).map_err(|_| CaptureError::Failed("No se pudo preparar la captura.".into()))?;
-    Ok(buffer.into_inner())
+    let rgb = DynamicImage::ImageRgb8(resized.to_rgb8());
+    for quality in JPEG_QUALITIES {
+        let bytes = jpeg(&rgb, quality)?;
+        if bytes.len() <= MAX_ENCODED_BYTES {
+            return Ok(bytes);
+        }
+    }
+    let bytes = jpeg(&rgb.resize(REDUCED_SIDE, REDUCED_SIDE, FilterType::Triangle), JPEG_QUALITIES[JPEG_QUALITIES.len() - 1])?;
+    if bytes.len() > MAX_ENCODED_BYTES {
+        return Err(CaptureError::Failed("La pantalla tiene demasiado detalle para enviarla.".into()));
+    }
+    Ok(bytes)
 }
 
 fn permission_message() -> String {
@@ -94,6 +113,18 @@ mod tests {
         let decoded = image::load_from_memory(&bytes).unwrap();
         assert_eq!(decoded.width(), MAX_SIDE);
         assert!(decoded.height() < 900);
+    }
+
+    #[test]
+    fn detailed_images_are_compressed_under_the_limit() {
+        let mut seed = 7u32;
+        let noise = image::RgbImage::from_fn(1568, 900, |_, _| {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            image::Rgb([(seed >> 24) as u8, (seed >> 16) as u8, (seed >> 8) as u8])
+        });
+        let bytes = encode_for_analysis(DynamicImage::ImageRgb8(noise)).unwrap();
+        assert!(bytes.len() <= MAX_ENCODED_BYTES, "{}", bytes.len());
+        assert_eq!(&bytes[..2], &[0xFF, 0xD8]);
     }
 
     #[test]
