@@ -97,13 +97,11 @@ export interface HistoryEntry {
 }
 
 export interface ProviderInfo {
-  id: string;
   displayName: string;
   dataNotice: string;
-  keyUrl: string;
 }
 
-export type KeySource = "secureStore" | "session" | "devEnv" | "none";
+export type AiServiceStatus = "notConfigured" | "notUsedYet" | "working" | "limited" | "quotaExhausted" | "unreachable";
 
 export interface SpeechModelStatus {
   id: string;
@@ -115,9 +113,6 @@ export interface SpeechModelStatus {
 }
 
 export interface Settings {
-  aiProvider: string;
-  interpretModel: string;
-  visionModel: string;
   dailyAiLimit: number;
   speechModel: string;
   speechIdleMinutes: number;
@@ -129,8 +124,7 @@ export interface Settings {
 export interface SettingsView {
   settings: Settings;
   provider: ProviderInfo;
-  keySource: KeySource;
-  secureStoreAvailable: boolean;
+  aiStatus: AiServiceStatus;
   aiRequestsToday: number;
   tokensToday: number;
   knownFolders: string[];

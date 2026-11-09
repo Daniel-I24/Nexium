@@ -3,20 +3,18 @@ use thiserror::Error;
 /// Errores neutros de IA: el resto de la aplicación no conoce a ningún proveedor.
 #[derive(Debug, Error, PartialEq)]
 pub enum AiError {
-    #[error("No hay una clave de API configurada.")]
-    NoApiKey,
-    #[error("La clave de API no es válida o caducó.")]
-    InvalidKey,
+    #[error("Esta versión no incluye el servicio de IA.")]
+    NotConfigured,
     #[error("Se agotó la cuota diaria.")]
     QuotaExhausted,
     #[error("Demasiadas solicitudes en poco tiempo.")]
     RateLimited,
     #[error("Se alcanzó el límite diario configurado en Nexium.")]
     LocalLimitReached,
+    #[error("Se alcanzó el límite diario de uso del servicio.")]
+    DailyLimit,
     #[error("El proveedor rechazó la solicitud: {0}")]
     Rejected(String),
-    #[error("El modelo configurado no existe: {0}")]
-    ModelNotFound(String),
     #[error("El servicio de IA no está disponible.")]
     Unavailable,
     #[error("No hay conexión con el servicio de IA.")]
@@ -32,13 +30,12 @@ pub enum AiError {
 impl AiError {
     pub fn code(&self) -> &'static str {
         match self {
-            Self::NoApiKey => "noApiKey",
-            Self::InvalidKey => "invalidKey",
+            Self::NotConfigured => "notConfigured",
             Self::QuotaExhausted => "quotaExhausted",
             Self::RateLimited => "rateLimited",
             Self::LocalLimitReached => "localLimit",
+            Self::DailyLimit => "dailyLimit",
             Self::Rejected(_) => "rejected",
-            Self::ModelNotFound(_) => "modelNotFound",
             Self::Unavailable => "unavailable",
             Self::Network => "network",
             Self::Timeout => "timeout",

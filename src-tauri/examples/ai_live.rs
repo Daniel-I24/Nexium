@@ -1,25 +1,30 @@
-//! Prueba real contra Gemini. Gasta cuota, así que nunca se ejecuta en CI.
-//! Lee GEMINI_API_KEY de .env; la clave no se imprime en ningún caso.
+//! Prueba real del servicio de IA. Gasta cuota, así que nunca se ejecuta en CI.
+//! Con NEXIUM_AI_SERVER_URL usa el servidor desplegado; sin ella, Gemini directo con la clave de .env.
+//! La clave no se imprime en ningún caso.
 //!
-//!   cargo run --example gemini_live -- frases <modelo>
-//!   cargo run --example gemini_live -- imagen <modelo> <imagen.png> "<pregunta>"
+//!   cargo run --example ai_live -- frases
+//!   cargo run --example ai_live -- imagen <imagen.png> "<pregunta>"
 //!
 //! Las imágenes deben estar libres de datos personales (ver docs/ESTADO_DEL_PROYECTO.md).
 
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::time::{Duration, Instant};
 
 use chrono::{Datelike, Days, Local, NaiveDate, Weekday};
 use nexium_lib::{
     error::AiError,
     models::Intent,
     providers::{
-        ai::{gemini::{GeminiProvider, DEV_KEY_VARIABLE}, AiProvider, InterpretRequest, VisionRequest},
+        ai::{
+            gemini::{dev_key, GeminiProvider, DEV_KEY_VARIABLE},
+            server::NexiumServer,
+            AiProvider, InterpretRequest, VisionRequest,
+        },
         capture::encode_for_analysis,
     },
-    services::secrets::{KeyringBackend, SecretStore},
 };
 
-const PAUSE: Duration = Duration::from_secs(5);
+// Por encima del límite por minuto del servidor.
+const PAUSE: Duration = Duration::from_secs(7);
 
 #[derive(Clone, Copy)]
 enum When {
@@ -67,7 +72,7 @@ fn check(intent: &Intent, expected: &str, when: When, today: NaiveDate) -> bool 
     }
 }
 
-async fn phrases(provider: &GeminiProvider, model: &str) {
+async fn phrases(provider: &dyn AiProvider) {
     use When::{MustAsk, Next, NoCheck, Today, Tomorrow};
     let cases: &[(&str, &str, When)] = &[
         ("Necesito encontrar el informe que hice para la clase de programación", "search_files", NoCheck),
@@ -104,7 +109,7 @@ async fn phrases(provider: &GeminiProvider, model: &str) {
             tokio::time::sleep(PAUSE).await;
         }
         let start = Instant::now();
-        let answer = provider.interpret(InterpretRequest { text: (*text).to_owned(), now: Local::now(), model: model.to_owned() }).await;
+        let answer = provider.interpret(InterpretRequest { text: (*text).to_owned(), now: Local::now() }).await;
         let elapsed = start.elapsed().as_millis();
         match answer {
             Ok(answer) => {
@@ -114,38 +119,41 @@ async fn phrases(provider: &GeminiProvider, model: &str) {
                 tokens += answer.tokens;
                 println!("| {text} | {expected} | `{:?}` | {elapsed} | {} |", answer.value, if ok { "Sí" } else { "NO" });
             }
-            Err(error @ (AiError::QuotaExhausted | AiError::RateLimited | AiError::InvalidKey | AiError::NoApiKey | AiError::ModelNotFound(_))) => {
+            Err(error @ (AiError::QuotaExhausted | AiError::RateLimited | AiError::DailyLimit | AiError::NotConfigured)) => {
                 println!("\nDetenido en la frase {} sin reintentar: {error} ({})", index + 1, error.code());
                 break;
             }
             Err(error) => println!("| {text} | {expected} | Error: {error} | {elapsed} | NO |"),
         }
     }
-    println!("\nResumen modelo={model}: {passed} de {} correctas · media {} ms · {tokens} tokens", cases.len(), total_ms / cases.len().max(1) as u128);
+    println!("\nResumen: {passed} de {} correctas · media {} ms · {tokens} tokens", cases.len(), total_ms / cases.len().max(1) as u128);
 }
 
-async fn image(provider: &GeminiProvider, model: &str, path: &str, question: &str) {
+async fn image(provider: &dyn AiProvider, path: &str, question: &str) {
     let source = image::open(path).expect("no se pudo abrir la imagen");
     let image_jpeg = encode_for_analysis(source).expect("no se pudo preparar la imagen");
+    println!("imagen: {} KB", image_jpeg.len() / 1024);
     let start = Instant::now();
-    match provider.analyze_image(VisionRequest { image_jpeg, question: question.to_owned(), model: model.to_owned() }).await {
-        Ok(answer) => println!("modelo={model} ms={} tokens={}\n{}", start.elapsed().as_millis(), answer.tokens, answer.value),
-        Err(error) => println!("modelo={model} error={} ({error})", error.code()),
+    match provider.analyze_image(VisionRequest { image_jpeg, question: question.to_owned() }).await {
+        Ok(answer) => println!("ms={} tokens={}\n{}", start.elapsed().as_millis(), answer.tokens, answer.value),
+        Err(error) => println!("error={} ({error})", error.code()),
     }
 }
 
 #[tokio::main]
 async fn main() {
-    let secrets = Arc::new(SecretStore::new(Box::new(KeyringBackend)));
-    if secrets.get("gemini", DEV_KEY_VARIABLE).is_none() {
-        println!("Falta la clave. Complétala en C:\\Nexium\\Nexium\\.env, en la línea {DEV_KEY_VARIABLE}=");
-        return;
-    }
-    let provider = GeminiProvider::new(secrets);
+    let provider: Box<dyn AiProvider> = match (std::env::var("NEXIUM_AI_SERVER_URL"), dev_key()) {
+        (Ok(url), _) => Box::new(NexiumServer::new(Some(&url), uuid::Uuid::new_v4().to_string())),
+        (_, Some(key)) => Box::new(GeminiProvider::new(key)),
+        _ => {
+            println!("Falta NEXIUM_AI_SERVER_URL o la línea {DEV_KEY_VARIABLE}= de .env");
+            return;
+        }
+    };
     let arguments: Vec<String> = std::env::args().collect();
     match arguments.get(1).map(String::as_str) {
-        Some("frases") => phrases(&provider, &arguments[2]).await,
-        Some("imagen") => image(&provider, &arguments[2], &arguments[3], &arguments[4]).await,
-        _ => println!("Uso: gemini_live frases <modelo> | imagen <modelo> <ruta> <pregunta>"),
+        Some("frases") => phrases(provider.as_ref()).await,
+        Some("imagen") => image(provider.as_ref(), &arguments[2], &arguments[3]).await,
+        _ => println!("Uso: ai_live frases | imagen <ruta> <pregunta>"),
     }
 }

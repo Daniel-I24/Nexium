@@ -2,24 +2,19 @@ use std::{collections::HashSet, path::PathBuf};
 
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::{
     database::Database,
     error::{AppError, AppResult},
 };
 
-pub const DEFAULT_PROVIDER: &str = "gemini";
-pub const DEFAULT_INTERPRET_MODEL: &str = "gemini-3.5-flash-lite";
-pub const DEFAULT_VISION_MODEL: &str = "gemini-3.6-flash";
 pub const DEFAULT_SPEECH_MODEL: &str = "small";
 pub const DEFAULT_SPEECH_IDLE_MINUTES: u32 = 10;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
-    pub ai_provider: String,
-    pub interpret_model: String,
-    pub vision_model: String,
     pub daily_ai_limit: u32,
     pub speech_model: String,
     pub speech_idle_minutes: u32,
@@ -31,9 +26,6 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            ai_provider: DEFAULT_PROVIDER.into(),
-            interpret_model: DEFAULT_INTERPRET_MODEL.into(),
-            vision_model: DEFAULT_VISION_MODEL.into(),
             daily_ai_limit: 200,
             speech_model: DEFAULT_SPEECH_MODEL.into(),
             speech_idle_minutes: DEFAULT_SPEECH_IDLE_MINUTES,
@@ -45,18 +37,7 @@ impl Default for Settings {
 }
 
 impl Settings {
-    /// Un identificador de modelo solo admite caracteres de identificador: nunca llega a una URL.
-    fn valid_model(model: &str) -> bool {
-        !model.is_empty() && model.len() <= 80 && model.chars().all(|c| c.is_ascii_alphanumeric() || "-._".contains(c))
-    }
-
     pub fn validate(&self, known_folders: &[String], known_speech_models: &[&str]) -> AppResult<()> {
-        if !Self::valid_model(&self.interpret_model) || !Self::valid_model(&self.vision_model) {
-            return Err(AppError::Validation("El nombre de un modelo de IA no es válido.".into()));
-        }
-        if self.ai_provider != DEFAULT_PROVIDER {
-            return Err(AppError::Validation("Ese proveedor de IA no está disponible.".into()));
-        }
         if !(1..=10_000).contains(&self.daily_ai_limit) {
             return Err(AppError::Validation("El límite diario debe estar entre 1 y 10 000.".into()));
         }
@@ -98,6 +79,13 @@ impl SettingsService {
         Ok(())
     }
 
+    /// Identificador anónimo y aleatorio de esta instalación, creado la primera vez. Solo sirve para limitar el uso.
+    pub fn install_id(&self) -> AppResult<String> {
+        let db = self.db.lock()?;
+        db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('install_id', ?1)", params![Uuid::new_v4().to_string()])?;
+        Ok(db.query_row("SELECT value FROM settings WHERE key = 'install_id'", [], |row| row.get(0))?)
+    }
+
     pub fn authorized_paths(&self) -> AppResult<Vec<PathBuf>> {
         Ok(self.get()?.authorized_folders.into_iter().map(PathBuf::from).collect())
     }
@@ -112,10 +100,19 @@ mod tests {
     }
 
     #[test]
-    fn defaults_keep_separate_models() {
-        let settings = service().get().unwrap();
-        assert_eq!(settings.ai_provider, "gemini");
-        assert_ne!(settings.interpret_model, settings.vision_model);
+    fn the_installation_id_is_anonymous_and_stable() {
+        let service = service();
+        let id = service.install_id().unwrap();
+        assert_eq!(Uuid::parse_str(&id).unwrap().get_version_num(), 4);
+        assert_eq!(service.install_id().unwrap(), id);
+        service.save(&Settings::default()).unwrap();
+        assert_eq!(service.install_id().unwrap(), id);
+    }
+
+    #[test]
+    fn settings_saved_by_older_versions_still_load() {
+        let stored: Settings = serde_json::from_str(r#"{"aiProvider":"gemini","interpretModel":"x","visionModel":"y","dailyAiLimit":7}"#).unwrap();
+        assert_eq!(stored.daily_ai_limit, 7);
     }
 
     #[test]
@@ -132,18 +129,12 @@ mod tests {
     }
 
     #[test]
-    fn saved_models_persist() {
+    fn saved_settings_persist() {
         let service = service();
         let mut settings = service.get().unwrap();
-        settings.vision_model = "gemini-3.5-flash-lite".into();
+        settings.weather_city = "Medellín".into();
         service.save(&settings).unwrap();
-        assert_eq!(service.get().unwrap().vision_model, "gemini-3.5-flash-lite");
-    }
-
-    #[test]
-    fn rejects_models_with_url_characters() {
-        let settings = Settings { interpret_model: "../secret?x=1".into(), ..Settings::default() };
-        assert!(settings.validate(&[], &["small"]).is_err());
+        assert_eq!(service.get().unwrap().weather_city, "Medellín");
     }
 
     #[test]

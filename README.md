@@ -8,7 +8,9 @@ Los hechos salen del equipo, no de un modelo. La IA interpreta lo que pides, per
 
 ## Privacidad: léelo antes de usar la IA
 
-Nexium usa por defecto **Google Gemini en su capa gratuita**. Según los [términos de Google](https://aistudio.google.com/docs/terms), en los servicios no pagados:
+La IA viene integrada: no necesitas configurar ninguna clave. Tus solicitudes y capturas **pasan por el servidor de Nexium hacia Google Gemini**, en su capa gratuita. El servidor no guarda su contenido; solo registra métricas de uso y errores, y cuenta el uso con un identificador anónimo de instalación y tu dirección IP, que no se almacena. Detalles en [`server/README.md`](server/README.md).
+
+Según los [términos de Google](https://aistudio.google.com/docs/terms), en los servicios no pagados:
 
 - Google puede usar lo que envías y las respuestas para mejorar sus productos y tecnologías de aprendizaje automático.
 - Personas pueden leer esos datos, tras desvincularlos de tu cuenta.
@@ -21,8 +23,8 @@ Esto importa sobre todo en el **análisis de pantalla**: antes de cada captura, 
 | Hora, CPU, RAM, batería, red, modo oscuro | No | |
 | Voz | No: Whisper la transcribe localmente | |
 | Nombres y rutas de archivos | No | |
-| Texto de una solicitud no resuelta por reglas locales | Sí | Google Gemini |
-| Captura de pantalla, solo tras confirmar | Sí | Google Gemini |
+| Texto de una solicitud no resuelta por reglas locales | Sí | Servidor de Nexium, y de ahí Google Gemini |
+| Captura de pantalla, solo tras confirmar | Sí | Servidor de Nexium, y de ahí Google Gemini |
 | Ciudad del clima | Sí | Open-Meteo |
 
 Otras condiciones de esos términos: hay que tener 18 años o más, el servicio está pensado para desarrolladores con fines profesionales o comerciales, y en el Espacio Económico Europeo, Reino Unido y Suiza una aplicación ofrecida a usuarios solo puede usar servicios de pago.
@@ -32,14 +34,14 @@ Otras condiciones de esos términos: hay que tener 18 años o más, el servicio 
 - **Voz:** botón visible, micrófono solo mientras la barra está en amarillo, transcripción local con Whisper.
 - **Sistema:** CPU, RAM, batería, Internet, Wi-Fi, nombre de la red y modo oscuro. Lo que un sistema no permite consultar aparece como "No disponible", nunca con un valor inventado.
 - **Archivos:** búsqueda por nombre en Documentos y Escritorio, tras tu autorización. No abre, modifica, mueve ni elimina nada.
-- **Pantalla:** una sola captura en memoria, enviada al proveedor de IA y descartada.
+- **Pantalla:** una sola captura en memoria, comprimida y enviada al servicio de IA, y después descartada.
 - **Clima y hora:** condiciones actuales y pronóstico de Open-Meteo; hora del equipo.
 - **Recordatorios:** en lenguaje natural, con aclaración si la fecha es ambigua. Se guardan en SQLite.
-- **Historial:** solicitudes, categoría, estado y respuesta, sin claves, audio ni imágenes.
+- **Historial:** solicitudes, categoría, estado y respuesta, sin audio ni imágenes.
 
 ## Tecnologías
 
-Tauri 2, React 19, TypeScript 6, Tailwind CSS 4, Rust, SQLite (`rusqlite`), Whisper (`whisper-rs`), `cpal`, `xcap`, `sysinfo`, API de Gemini y Open-Meteo. La justificación está en [`docs/ANALISIS_TECNICO.md`](docs/ANALISIS_TECNICO.md).
+Tauri 2, React 19, TypeScript 6, Tailwind CSS 4, Rust, SQLite (`rusqlite`), Whisper (`whisper-rs`), `cpal`, `xcap`, `sysinfo`, Cloudflare Workers, API de Gemini y Open-Meteo. La justificación está en [`docs/ANALISIS_TECNICO.md`](docs/ANALISIS_TECNICO.md).
 
 ## Arquitectura
 
@@ -50,11 +52,19 @@ React (solo presentación)
 Rust: reglas locales ──► IA si hace falta ──► Intent validado ──► CommandHandler
         SystemProvider · FileSearchProvider · WeatherProvider · AiProvider
         SpeechProvider · ScreenCaptureProvider · NotificationProvider
+   │  solo si hace falta IA
+   ▼
+Servidor de Nexium (Cloudflare Worker): valida, limita el uso y guarda la clave
+   ▼
+Google Gemini
 ```
+
+La clave de Gemini solo existe como secreto de Cloudflare: nunca en el código, los instaladores, la CI ni tu equipo.
 
 ```text
 src/            Interfaz: app, components, features, services, types, styles
 src-tauri/src/  commands, core, providers, services, database, models, platform
+server/         Worker intermediario de IA, con su README y sus pruebas
 tests/          Pruebas de integración y contratos con Rust
 docs/           Análisis, diseño, estado, prueba de voz y pruebas manuales
 ```
@@ -93,24 +103,20 @@ npm run tauri dev
 
 ## Configuración
 
-### Clave de IA
+### IA
 
-Créala en [Google AI Studio](https://aistudio.google.com/apikey).
+Quien usa Nexium no configura nada. **Ajustes** muestra el estado del servicio y un límite diario propio de solicitudes.
 
-- **Aplicación instalada:** escríbela en **Ajustes**. Se guarda en el almacén seguro del sistema (Credential Manager, Keychain o Secret Service) y no vuelve a mostrarse.
-- **Desarrollo:** copia `.env.example` como `.env` y completa `GEMINI_API_KEY=`. Git ignora `.env`, y la compilación de distribución no contiene código que lo lea.
+Las operaciones locales no consumen cuota. Si la cuota se agota, Nexium lo explica y no reintenta ni cambia de plan.
+
+Modelos e instrucciones están en el servidor (`server/src/ai-contract.json`): `gemini-3.5-flash-lite` para interpretar y `gemini-3.6-flash` para analizar la pantalla.
 
 ### Variables de entorno
 
-| Variable | Uso |
-|---|---|
-| `GEMINI_API_KEY` | Solo en desarrollo: clave de Gemini para `tauri dev` y las pruebas en vivo |
-
-### Modelos
-
-En **Ajustes** se configuran por separado el modelo de interpretación y el de análisis de pantalla, además del límite diario de solicitudes. Por defecto: `gemini-3.5-flash-lite` y `gemini-3.6-flash`.
-
-Las operaciones locales no consumen cuota. Si la cuota se agota, Nexium lo explica y no reintenta ni cambia de plan. Google muestra los límites de tu proyecto en AI Studio.
+| Variable | Cuándo | Uso |
+|---|---|---|
+| `NEXIUM_AI_SERVER_URL` | Al compilar | Dirección del servidor de Nexium. Sin ella, la compilación no incluye IA. No es secreta |
+| `GEMINI_API_KEY` | Solo en desarrollo, en `.env` | Sin `NEXIUM_AI_SERVER_URL`, `tauri dev` llama directamente a Gemini con esta clave. Ese código no existe en los instaladores |
 
 ### Voz
 
@@ -122,13 +128,14 @@ El modelo se descarga una sola vez desde **Ajustes**, con tu confirmación, y se
 npm run lint        # ESLint y reglas de Tailwind
 npm test            # Vitest
 cd src-tauri && cargo test
+cd server && npm ci && npm test
 ```
 
 Pruebas con servicios reales, que gastan cuota y nunca se ejecutan en CI:
 
 ```bash
 cd src-tauri
-cargo run --example gemini_live -- frases gemini-3.5-flash-lite
+cargo run --example ai_live -- frases
 ```
 
 ## Compilación y distribución
@@ -139,7 +146,13 @@ npm run tauri build
 
 Cada envío a `main` compila instaladores en GitHub Actions (`.msi`, `.exe`, `.dmg`, `.deb`, `.AppImage`) y los deja en "Artifacts".
 
-**Los instaladores no están firmados.** Windows mostrará SmartScreen, y macOS bloqueará la apertura normal. Comprar certificados de firma es una decisión pendiente antes de una distribución pública.
+### Abrir un instalador sin firmar
+
+Nexium es un proyecto universitario distribuido solo en GitHub, y sus instaladores no están firmados. El sistema avisará la primera vez. Descarga los instaladores únicamente de la página de [Releases](https://github.com/Daniel-I24/Nexium/releases) de este repositorio. No hace falta desactivar ninguna protección del sistema.
+
+**Windows (SmartScreen):** al abrir el instalador aparece "Windows protegió su PC". Pulsa **Más información** y después **Ejecutar de todas formas**.
+
+**macOS (Gatekeeper):** abre el `.dmg`, arrastra Nexium a Aplicaciones e inténtalo abrir. Cuando macOS lo bloquee, ve a **Ajustes del Sistema → Privacidad y seguridad**, baja hasta el aviso sobre Nexium y pulsa **Abrir igualmente**. Solo hay que hacerlo una vez.
 
 ## Limitaciones conocidas
 
@@ -149,7 +162,12 @@ Cada envío a `main` compila instaladores en GitHub Actions (`.msi`, `.exe`, `.d
 - Open-Meteo es gratuito solo para uso no comercial. **Un uso comercial requiere un plan de pago.**
 - Las respuestas se muestran en texto. No hay voz sintetizada en esta versión.
 - La base de datos local no está cifrada. Contiene solicitudes y respuestas, que puedes eliminar desde Historial.
+- La IA necesita Internet y comparte una cuota gratuita limitada: en días de mucho uso puede agotarse hasta el día siguiente. Las consultas locales siguen funcionando.
 
 ## Atribución
 
 Datos meteorológicos de [Open-Meteo](https://open-meteo.com/), con licencia [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Tipografías Instrument Sans e IBM Plex Mono, con licencia OFL. Reconocimiento de voz con [whisper.cpp](https://github.com/ggml-org/whisper.cpp), con licencia MIT.
+
+## Licencia
+
+[MIT](LICENSE).

@@ -13,10 +13,10 @@ use crate::{
     error::AiError,
     models::{AssistantResponse, Category, FileQuery, Intent, InteractionStatus, ResponseBody, Stage},
     providers::{
-        ai::{AiProvider, InterpretRequest, VisionRequest},
+        ai::{AiProvider, AiStatusTracker, InterpretRequest, VisionRequest},
         capture::{CaptureError, ScreenCaptureProvider},
     },
-    services::{history::HistoryService, secrets::SecretStore, settings::SettingsService, usage::UsageService},
+    services::{history::HistoryService, settings::SettingsService, usage::UsageService},
 };
 
 pub const MAX_REQUEST_LENGTH: usize = 500;
@@ -25,7 +25,7 @@ pub type StageSink = Arc<dyn Fn(Stage) + Send + Sync>;
 
 pub struct Assistant {
     pub ai: Arc<dyn AiProvider>,
-    pub secrets: Arc<SecretStore>,
+    pub ai_status: AiStatusTracker,
     pub capture: Arc<dyn ScreenCaptureProvider>,
     pub handlers: Vec<Box<dyn CommandHandler>>,
     pub settings: SettingsService,
@@ -44,8 +44,8 @@ enum Resolved {
 impl Assistant {
     /// Comprueba lo que no cuesta nada antes de gastar cuota.
     fn check_ai_available(&self) -> Result<(), AiError> {
-        if self.secrets.get(self.ai.key_account(), self.ai.dev_key_variable()).is_none() {
-            return Err(AiError::NoApiKey);
+        if !self.ai.is_configured() {
+            return Err(AiError::NotConfigured);
         }
         let limit = self.settings.get().map_or(u32::MAX, |settings| settings.daily_ai_limit);
         let (requests, _) = self.usage.today_totals().unwrap_or((0, 0));
@@ -57,20 +57,18 @@ impl Assistant {
 
     /// Mensaje en español para cada error de IA. Ninguno se reintenta ni cambia de plan automáticamente.
     pub fn describe_ai_error(&self, error: &AiError) -> (String, Option<String>) {
-        let provider = self.ai.display_name();
         let local_hint = "Las consultas de hora, sistema y red siguen funcionando.".to_owned();
         match error {
-            AiError::NoApiKey => (format!("Para esto necesito una clave de {provider}."), Some(format!("Configúrala en Ajustes. {local_hint}"))),
-            AiError::InvalidKey => (format!("{provider} rechazó la clave de API."), Some(format!("Revísala en Ajustes. {local_hint}"))),
+            AiError::NotConfigured => ("Esta versión de Nexium no incluye el servicio de IA.".into(), Some(local_hint)),
             AiError::QuotaExhausted => (self.ai.quota_message(), Some(local_hint)),
-            AiError::RateLimited => (format!("{provider} recibió demasiadas solicitudes en poco tiempo."), Some(format!("Espera un minuto y vuelve a intentarlo. {local_hint}"))),
+            AiError::RateLimited => ("El servicio de IA recibió demasiadas solicitudes en poco tiempo.".into(), Some(format!("Espera un minuto y vuelve a intentarlo. {local_hint}"))),
+            AiError::DailyLimit => ("Se alcanzó el límite diario de uso de IA de este equipo o esta red.".into(), Some(format!("Vuelve a intentarlo mañana. {local_hint}"))),
             AiError::LocalLimitReached => ("Alcanzaste el límite diario de solicitudes de IA configurado en Nexium.".into(), Some(format!("Puedes cambiarlo en Ajustes. {local_hint}"))),
-            AiError::ModelNotFound(model) => (format!("{provider} no reconoce el modelo \u{201c}{model}\u{201d}."), Some("Elige otro modelo en Ajustes.".into())),
-            AiError::Unavailable => (format!("{provider} no está disponible en este momento."), Some(local_hint)),
-            AiError::Network => (format!("No pude conectar con {provider}."), Some(format!("Comprueba tu conexión a Internet. {local_hint}"))),
-            AiError::Timeout => (format!("{provider} tardó demasiado en responder."), Some(local_hint)),
+            AiError::Unavailable => ("El servicio de IA no está disponible en este momento.".into(), Some(local_hint)),
+            AiError::Network => ("No pude conectar con el servicio de IA.".into(), Some(format!("Comprueba tu conexión a Internet. {local_hint}"))),
+            AiError::Timeout => ("El servicio de IA tardó demasiado en responder.".into(), Some(local_hint)),
             AiError::InvalidResponse => ("No pude interpretar la respuesta del modelo.".into(), Some("Prueba a escribir la solicitud de otra forma.".into())),
-            AiError::Rejected(reason) => (format!("{provider} rechazó la solicitud. {reason}"), None),
+            AiError::Rejected(reason) => (format!("El servicio de IA rechazó la solicitud. {reason}"), None),
             AiError::Cancelled => ("Operación cancelada.".into(), None),
         }
     }
@@ -88,14 +86,14 @@ impl Assistant {
             Err(error) => Err(error),
             Ok(()) => {
                 stage(Stage::Interpreting);
-                let model = self.settings.get().map(|settings| settings.interpret_model).unwrap_or_default();
-                let request = InterpretRequest { text: text.to_owned(), now: Local::now(), model };
+                let request = InterpretRequest { text: text.to_owned(), now: Local::now() };
                 tokio::select! {
                     answer = self.ai.interpret(request) => answer,
                     () = cancel.cancelled() => Err(AiError::Cancelled),
                 }
             }
         };
+        self.ai_status.record(&attempt);
         match attempt {
             Ok(answer) => {
                 let _ = self.usage.record(answer.tokens);
@@ -164,12 +162,12 @@ impl Assistant {
             return self.finish(question, Outcome { status: InteractionStatus::Cancelled, ..Outcome::failed(Category::Screen, "cancelled", "Operación cancelada.", None) }, "sin datos");
         }
         stage(Stage::Analyzing);
-        let model = self.settings.get().map(|settings| settings.vision_model).unwrap_or_default();
-        let request = VisionRequest { image_jpeg: image, question: question.to_owned(), model };
+        let request = VisionRequest { image_jpeg: image, question: question.to_owned() };
         let answer = tokio::select! {
             answer = self.ai.analyze_image(request) => answer,
             () = cancel.cancelled() => Err(AiError::Cancelled),
         };
+        self.ai_status.record(&answer);
         match answer {
             Ok(answer) => {
                 let _ = self.usage.record(answer.tokens);
@@ -208,12 +206,12 @@ mod tests {
         error::AiError,
         models::{BatteryInfo, MemoryInfo, Reading, ReminderRequest, WifiInfo},
         providers::{
-            ai::{AiAnswer, AiProvider},
+            ai::{AiAnswer, AiProvider, AiServiceStatus},
             capture::CaptureError,
             files::{AuthorizedFolder, LocalFileSearch},
             system::SystemProvider,
         },
-        services::{reminders::ReminderService, secrets::{SecretBackend, SecretStore}},
+        services::reminders::ReminderService,
     };
     use async_trait::async_trait;
     use chrono::{NaiveDate, NaiveTime};
@@ -225,27 +223,19 @@ mod tests {
     struct FakeAi {
         calls: Arc<AtomicUsize>,
         answer: Mutex<Option<Result<Intent, AiError>>>,
+        configured: bool,
     }
 
     #[async_trait]
     impl AiProvider for FakeAi {
-        fn id(&self) -> &str {
-            "fake"
-        }
         fn display_name(&self) -> &str {
             "Proveedor de prueba"
         }
         fn data_notice(&self) -> &str {
             "aviso"
         }
-        fn key_url(&self) -> &str {
-            "x"
-        }
-        fn key_account(&self) -> &str {
-            "fake"
-        }
-        fn dev_key_variable(&self) -> &str {
-            "NEXIUM_TEST_NO_KEY"
+        fn is_configured(&self) -> bool {
+            self.configured
         }
         fn quota_message(&self) -> String {
             "Cuota agotada de prueba".into()
@@ -302,20 +292,6 @@ mod tests {
         }
     }
 
-    struct Key(bool);
-
-    impl SecretBackend for Key {
-        fn read(&self, _: &str) -> Result<Option<String>, String> {
-            Ok(self.0.then(|| "k".to_owned()))
-        }
-        fn write(&self, _: &str, _: &str) -> Result<(), String> {
-            Ok(())
-        }
-        fn delete(&self, _: &str) -> Result<(), String> {
-            Ok(())
-        }
-    }
-
     struct Harness {
         assistant: Assistant,
         ai_calls: Arc<AtomicUsize>,
@@ -323,7 +299,7 @@ mod tests {
         _folder: tempfile::TempDir,
     }
 
-    fn harness(answer: Option<Result<Intent, AiError>>, has_key: bool, capture_fails: bool) -> Harness {
+    fn harness(answer: Option<Result<Intent, AiError>>, configured: bool, capture_fails: bool) -> Harness {
         let db = Database::in_memory().unwrap();
         let settings = SettingsService::new(db.clone());
         let ai_calls = Arc::new(AtomicUsize::new(0));
@@ -343,8 +319,8 @@ mod tests {
             Box::new(ClarifyHandler),
         ];
         let assistant = Assistant {
-            ai: Arc::new(FakeAi { calls: ai_calls.clone(), answer: Mutex::new(answer) }),
-            secrets: Arc::new(SecretStore::new(Box::new(Key(has_key)))),
+            ai: Arc::new(FakeAi { calls: ai_calls.clone(), answer: Mutex::new(answer), configured }),
+            ai_status: AiStatusTracker::default(),
             capture: Arc::new(FakeCapture { calls: capture_calls.clone(), fail: capture_fails }),
             handlers,
             settings,
@@ -444,11 +420,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn without_a_key_no_call_is_made() {
+    async fn without_the_service_no_call_is_made() {
         let h = harness(None, false, false);
         let response = ask(&h.assistant, "cuéntame algo").await;
-        assert!(matches!(response.body, ResponseBody::Error { ref code, .. } if code == "noApiKey"));
+        assert!(matches!(response.body, ResponseBody::Error { ref code, .. } if code == "notConfigured"));
         assert_eq!(h.ai_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn the_service_status_comes_from_real_use() {
+        let h = harness(Some(Err(AiError::QuotaExhausted)), true, false);
+        assert_eq!(h.assistant.ai_status.current(true), AiServiceStatus::NotUsedYet);
+        ask(&h.assistant, "¿Qué hora es?").await;
+        assert_eq!(h.assistant.ai_status.current(true), AiServiceStatus::NotUsedYet);
+        ask(&h.assistant, "cuéntame algo").await;
+        assert_eq!(h.assistant.ai_status.current(true), AiServiceStatus::QuotaExhausted);
+        h.assistant.analyze_screen("x", CancellationToken::new(), silent()).await;
+        assert_eq!(h.assistant.ai_status.current(true), AiServiceStatus::Working);
     }
 
     #[tokio::test]
@@ -502,7 +490,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn without_a_key_no_capture_is_taken() {
+    async fn without_the_service_no_capture_is_taken() {
         let h = harness(None, false, false);
         h.assistant.analyze_screen("x", CancellationToken::new(), silent()).await;
         assert_eq!(h.capture_calls.load(Ordering::SeqCst), 0);

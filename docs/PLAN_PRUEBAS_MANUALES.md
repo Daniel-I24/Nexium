@@ -20,7 +20,7 @@ Instalador: descárgalo de la última ejecución de [CI](https://github.com/Dani
 | 10 | Pulsar Hablar | La barra pasa a amarillo; el sistema puede pedir permiso de micrófono |
 | 11 | Hablar y pulsar Terminar | La frase se transcribe y se ejecuta |
 | 12 | Pulsar Cancelar mientras escucha | La barra sale del amarillo y no se transcribe nada |
-| 13 | Guardar la clave de Gemini en Ajustes | Indica "almacén seguro del sistema" y sigue tras reiniciar |
+| 13 | Abrir Ajustes en una instalación nueva | No pide ninguna clave. Muestra el estado del servicio de IA y el aviso de privacidad |
 | 14 | "Recuérdame probar Nexium hoy a las HH:MM", dos minutos más tarde | Pide confirmar, y llega la notificación a esa hora |
 | 15 | Cerrar la ventana con el recordatorio pendiente | La app sigue en la bandeja y el aviso llega |
 | 16 | Salir desde la bandeja y volver a abrir tras la hora | El recordatorio sigue guardado y aparece como vencido |
@@ -51,5 +51,4 @@ Instalador: descárgalo de la última ejecución de [CI](https://github.com/Dani
 | L1 | Analizar pantalla en Wayland | Diálogo del escritorio; la captura pasa por el portal |
 | L2 | Analizar pantalla en X11 | Captura directa |
 | L3 | Sin NetworkManager, preguntar por el Wi-Fi | "No disponible", con el motivo |
-| L4 | Sin servicio de llaves, guardar la clave | Indica "solo durante esta sesión" |
-| L5 | Bandeja del sistema en GNOME | Puede requerir una extensión. Si no hay bandeja, cerrar la ventana cierra la app |
+| L4 | Bandeja del sistema en GNOME | Puede requerir una extensión. Si no hay bandeja, cerrar la ventana cierra la app |

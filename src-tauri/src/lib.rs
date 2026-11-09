@@ -27,7 +27,7 @@ use crate::{
     database::Database,
     models::Reading,
     providers::{
-        ai::{gemini::GeminiProvider, AiProvider},
+        ai::{server::NexiumServer, AiProvider, AiStatusTracker},
         capture::{CaptureError, NativeScreenCapture, ScreenCaptureProvider},
         files::{AuthorizedFolder, LocalFileSearch},
         notification::{NotificationProvider, TauriNotifications},
@@ -38,7 +38,6 @@ use crate::{
     services::{
         history::HistoryService,
         reminders::ReminderService,
-        secrets::{KeyringBackend, SecretStore},
         settings::SettingsService,
         usage::UsageService,
     },
@@ -78,6 +77,16 @@ fn known_folders<R: Runtime>(app: &AppHandle<R>) -> Vec<AuthorizedFolder> {
         .collect()
 }
 
+/// La dirección del servidor se fija al compilar. El adaptador directo solo existe en desarrollo y solo actúa sin servidor.
+fn build_ai(install_id: String) -> Arc<dyn AiProvider> {
+    let server_url = option_env!("NEXIUM_AI_SERVER_URL").filter(|url| !url.trim().is_empty());
+    #[cfg(debug_assertions)]
+    if let (None, Some(key)) = (server_url, providers::ai::gemini::dev_key()) {
+        return Arc::new(providers::ai::gemini::GeminiProvider::new(key));
+    }
+    Arc::new(NexiumServer::new(server_url, install_id))
+}
+
 fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::error::Error>> {
     let data_dir = app.path().app_data_dir()?;
     std::fs::create_dir_all(&data_dir)?;
@@ -86,8 +95,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
     let history = HistoryService::new(db.clone());
     let reminders = ReminderService::new(db.clone());
     let usage = UsageService::new(db);
-    let secrets = Arc::new(SecretStore::new(Box::new(KeyringBackend)));
-    let ai: Arc<dyn AiProvider> = Arc::new(GeminiProvider::new(secrets.clone()));
+    let ai = build_ai(settings.install_id()?);
     let folders = known_folders(app);
 
     let theme_app = app.clone();
@@ -107,7 +115,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
     ];
     let assistant = Arc::new(Assistant {
         ai: ai.clone(),
-        secrets: secrets.clone(),
+        ai_status: AiStatusTracker::default(),
         capture: Arc::new(WindowAwareCapture { app: app.clone(), inner: NativeScreenCapture }),
         handlers,
         settings: settings.clone(),
@@ -118,7 +126,6 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
         assistant,
         ai,
         speech: Arc::new(WhisperSpeech::default()),
-        secrets,
         settings,
         history,
         reminders,
@@ -238,8 +245,6 @@ pub fn run() {
             commands::history_clear,
             commands::settings_get,
             commands::settings_save,
-            commands::ai_key_save,
-            commands::ai_key_delete,
         ])
         .run(tauri::generate_context!())
         .expect("no se pudo iniciar Nexium");

@@ -38,8 +38,6 @@ export const api = {
 
   getSettings: () => invoke<SettingsView>("settings_get"),
   saveSettings: (settings: Settings) => invoke<SettingsView>("settings_save", { settings }),
-  saveApiKey: (key: string) => invoke<SettingsView>("ai_key_save", { key }),
-  deleteApiKey: () => invoke<SettingsView>("ai_key_delete"),
 };
 
 export const events = {

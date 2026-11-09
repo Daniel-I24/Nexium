@@ -16,7 +16,7 @@ use crate::{
     error::{AppError, AppResult},
     models::{AssistantResponse, Category, HistoryEntry, InteractionStatus, Reminder, ResponseBody, Stage},
     providers::{
-        ai::AiProvider,
+        ai::{AiProvider, AiServiceStatus},
         files::AuthorizedFolder,
         speech::{self, Recording, SpeechModelStatus, SpeechProvider},
         weather::ATTRIBUTION_URL,
@@ -24,7 +24,6 @@ use crate::{
     services::{
         history::HistoryService,
         reminders::ReminderService,
-        secrets::{KeySource, SecretStore},
         settings::{Settings, SettingsService},
         usage::UsageService,
     },
@@ -34,7 +33,6 @@ pub struct AppState {
     pub assistant: Arc<Assistant>,
     pub ai: Arc<dyn AiProvider>,
     pub speech: Arc<dyn SpeechProvider>,
-    pub secrets: Arc<SecretStore>,
     pub settings: SettingsService,
     pub history: HistoryService,
     pub reminders: ReminderService,
@@ -180,7 +178,8 @@ pub async fn voice_stop<R: Runtime>(app: AppHandle<R>, state: State<'_, AppState
             body: ResponseBody::Error { code: "noSpeech".into(), message: "No oí ninguna solicitud.".into(), hint: Some("Acércate al micrófono o escribe tu solicitud.".into()) },
         }));
     }
-    let response = state.assistant.process(&text, cancel, stage).await;
+    // Lo transcrito cumple el mismo límite que lo escrito.
+    let response = state.assistant.process(validate_text(&text)?, cancel, stage).await;
     present_stage(&app).await;
     Ok(Some(response))
 }
@@ -265,20 +264,16 @@ pub fn history_clear(state: State<'_, AppState>) -> AppResult<()> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderInfo {
-    id: String,
     display_name: String,
     data_notice: String,
-    key_url: String,
 }
 
-/// Nunca incluye el valor de la clave: solo de dónde procede.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsView {
     settings: Settings,
     provider: ProviderInfo,
-    key_source: KeySource,
-    secure_store_available: bool,
+    ai_status: AiServiceStatus,
     ai_requests_today: u32,
     tokens_today: u64,
     known_folders: Vec<String>,
@@ -288,13 +283,11 @@ pub struct SettingsView {
 fn settings_view(state: &AppState) -> AppResult<SettingsView> {
     let settings = state.settings.get()?;
     let (ai_requests_today, tokens_today) = state.usage.today_totals()?;
-    let account = state.ai.key_account();
     Ok(SettingsView {
         speech_models: speech::statuses(&state.models_dir, &settings.speech_model),
         settings,
-        provider: ProviderInfo { id: state.ai.id().into(), display_name: state.ai.display_name().into(), data_notice: state.ai.data_notice().into(), key_url: state.ai.key_url().into() },
-        key_source: state.secrets.source(account, state.ai.dev_key_variable()),
-        secure_store_available: state.secrets.secure_store_available(account),
+        provider: ProviderInfo { display_name: state.ai.display_name().into(), data_notice: state.ai.data_notice().into() },
+        ai_status: state.assistant.ai_status.current(state.ai.is_configured()),
         ai_requests_today,
         tokens_today,
         known_folders: state.known_folders.iter().map(|folder| folder.path.to_string_lossy().into_owned()).collect(),
@@ -311,17 +304,5 @@ pub fn settings_save(state: State<'_, AppState>, settings: Settings) -> AppResul
     let known: Vec<String> = state.known_folders.iter().map(|folder| folder.path.to_string_lossy().into_owned()).collect();
     settings.validate(&known, &speech::catalog_ids())?;
     state.settings.save(&settings)?;
-    settings_view(&state)
-}
-
-#[tauri::command]
-pub fn ai_key_save(state: State<'_, AppState>, key: String) -> AppResult<SettingsView> {
-    state.secrets.save(state.ai.key_account(), &key)?;
-    settings_view(&state)
-}
-
-#[tauri::command]
-pub fn ai_key_delete(state: State<'_, AppState>) -> AppResult<SettingsView> {
-    state.secrets.delete(state.ai.key_account())?;
     settings_view(&state)
 }

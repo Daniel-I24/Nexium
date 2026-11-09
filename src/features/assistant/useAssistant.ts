@@ -47,7 +47,7 @@ export function useAssistant() {
     } else if (body.kind === "captureRequest") {
       void requestCaptureRef.current(body.question);
     } else if (body.kind === "error") {
-      setBar({ kind: "error", message: body.message, retryable: body.code !== "quotaExhausted" && body.code !== "noApiKey" });
+      setBar({ kind: "error", message: body.message, retryable: body.code !== "quotaExhausted" && body.code !== "notConfigured" });
     } else {
       setBar({ kind: "idle" });
     }

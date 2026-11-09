@@ -1,14 +1,16 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/Button";
 import { api, errorMessage, events } from "@/services/api";
-import type { DownloadProgress, KeySource, Settings, SettingsView } from "@/types/api";
+import type { AiServiceStatus, DownloadProgress, Settings, SettingsView } from "@/types/api";
 
-const keyLabels: Record<KeySource, string> = {
-  secureStore: "Guardada en el almacén seguro del sistema",
-  session: "Solo durante esta sesión: este sistema no ofrece almacén seguro",
-  devEnv: "Leída de .env (solo en desarrollo)",
-  none: "Sin configurar",
+const statusLabels: Record<AiServiceStatus, string> = {
+  notConfigured: "No incluido en esta versión",
+  notUsedYet: "Incluido. Sin usar todavía en esta sesión",
+  working: "Funcionando",
+  limited: "Límite de uso alcanzado por ahora",
+  quotaExhausted: "Cuota diaria agotada. Vuelve a intentarlo mañana",
+  unreachable: "Sin conexión con el servicio",
 };
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -34,7 +36,6 @@ const inputStyle = "h-11 rounded-sm border border-line bg-panel px-3 text-md tex
 export function SettingsScreen() {
   const [view, setView] = useState<SettingsView | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
-  const [apiKey, setApiKey] = useState("");
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [download, setDownload] = useState<DownloadProgress | null>(null);
 
@@ -67,13 +68,6 @@ export function SettingsScreen() {
   const toggleFolder = (folder: string, enabled: boolean) =>
     update("authorizedFolders", enabled ? [...draft.authorizedFolders, folder] : draft.authorizedFolders.filter((item) => item !== folder));
 
-  const saveKey = (event: FormEvent) => {
-    event.preventDefault();
-    const key = apiKey.trim();
-    setApiKey("");
-    if (key) void run(() => api.saveApiKey(key), "Clave guardada.");
-  };
-
   const startDownload = async (modelId: string) => {
     try {
       await api.downloadSpeechModel(modelId);
@@ -93,35 +87,10 @@ export function SettingsScreen() {
 
       <Section title={`Inteligencia artificial: ${view.provider.displayName}`}>
         <p className="m-0 border-t-2 border-query pt-2 text-sm">{view.provider.dataNotice}</p>
-        <p className="m-0 text-sm text-muted">
-          Clave: {keyLabels[view.keySource]}. Se crea en <span className="font-mono">{view.provider.keyUrl}</span>
-        </p>
-        <form onSubmit={saveKey} className="flex flex-wrap items-end gap-3">
-          <div className="min-w-48 flex-1">
-            <Field label="Clave de API">
-              <input type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} className={`w-full ${inputStyle}`} />
-            </Field>
-          </div>
-          <Button type="submit" variant="primary" disabled={!apiKey.trim()}>
-            Guardar clave
-          </Button>
-          {view.keySource === "secureStore" && (
-            <Button variant="danger" onClick={() => void run(api.deleteApiKey, "Clave eliminada.")}>
-              Eliminar clave
-            </Button>
-          )}
-        </form>
-        <div className="flex flex-col gap-3">
-          <Field label="Modelo para interpretar solicitudes">
-            <input value={draft.interpretModel} onChange={(event) => update("interpretModel", event.target.value)} className={`font-mono ${inputStyle}`} />
-          </Field>
-          <Field label="Modelo para analizar la pantalla">
-            <input value={draft.visionModel} onChange={(event) => update("visionModel", event.target.value)} className={`font-mono ${inputStyle}`} />
-          </Field>
-          <Field label="Límite diario de solicitudes de IA">
-            <input type="number" min={1} max={10000} value={draft.dailyAiLimit} onChange={(event) => update("dailyAiLimit", Number(event.target.value))} className={`font-mono ${inputStyle}`} />
-          </Field>
-        </div>
+        <p className="m-0 text-sm">Estado del servicio: {statusLabels[view.aiStatus]}</p>
+        <Field label="Límite diario de solicitudes de IA">
+          <input type="number" min={1} max={10000} value={draft.dailyAiLimit} onChange={(event) => update("dailyAiLimit", Number(event.target.value))} className={`font-mono ${inputStyle}`} />
+        </Field>
         <p className="m-0 font-mono text-sm text-muted">
           Hoy: {view.aiRequestsToday} solicitudes · {view.tokensToday} tokens
         </p>
