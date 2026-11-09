@@ -15,6 +15,8 @@ pub enum AiError {
     DailyLimit,
     #[error("El servicio de IA no está disponible en esta región.")]
     RegionUnavailable,
+    #[error("No se pudo determinar el país desde el que se usa el servicio de IA.")]
+    RegionUnknown,
     #[error("El proveedor rechazó la solicitud: {0}")]
     Rejected(String),
     #[error("El servicio de IA no está disponible.")]
@@ -38,6 +40,7 @@ impl AiError {
             Self::LocalLimitReached => "localLimit",
             Self::DailyLimit => "dailyLimit",
             Self::RegionUnavailable => "regionUnavailable",
+            Self::RegionUnknown => "regionUnknown",
             Self::Rejected(_) => "rejected",
             Self::Unavailable => "unavailable",
             Self::Network => "network",

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Env, OperationLimits } from "../src/env";
 import { handleRequest } from "../src/index";
+import { REAL_JPEG, REAL_PNG } from "./captures";
 import { CAPTURE_CONTENT_TYPE, MAX_IMAGE_BYTES, MAX_TEXT_CHARS } from "../src/validation";
 
 const INSTALL = "3f2b8a10-5c4e-4d7a-9b1c-0a1b2c3d4e5f";
@@ -177,11 +178,44 @@ describe("validación", () => {
     expect(JSON.parse(await ((spy.mock.calls[0] as [string, RequestInit])[1].body as Blob).text()).input[1].data).toBe(JPEG);
   });
 
-  it("no decodifica la imagen: tras la cabecera válida el contenido no se inspecciona", async () => {
-    const spy = geminiReplies(success("ok"));
-    const response = await handleRequest(capture(`${JPEG}$$$$`), testEnv());
-    expect(response.status).toBe(200);
-    expect(spy).toHaveBeenCalledTimes(1);
+  it("acepta una captura JPEG real con cualquiera de los tres rellenos de base64", async () => {
+    const bytes = Uint8Array.from(atob(REAL_JPEG), (char) => char.charCodeAt(0));
+    for (const extra of [0, 1, 2]) {
+      const padded = new Uint8Array([...bytes, ...new Array<number>(extra).fill(0)]);
+      const image = btoa(String.fromCharCode(...padded));
+      const spy = geminiReplies(success("ok"));
+      expect((await handleRequest(capture(image), testEnv())).status).toBe(200);
+      expect(JSON.parse(await ((spy.mock.calls.at(-1) as [string, RequestInit])[1].body as Blob).text()).input[1].data).toBe(image);
+      spy.mockRestore();
+    }
+  });
+
+  it("rechaza una captura PNG real aunque se declare JPEG", async () => {
+    await rejected(capture(REAL_PNG), "invalid_request", 400);
+    await rejected(capture(REAL_PNG, "¿Qué es?", "image/png"), "invalid_request", 400);
+  });
+
+  it("valida todo el alfabeto de base64, no solo el principio", async () => {
+    const lastGroupStart = REAL_JPEG.length - 4;
+    const withBadByte = (position: number, char: string) => `${REAL_JPEG.slice(0, position)}${char}${REAL_JPEG.slice(position + 1)}`;
+    for (const char of ["$", " ", "-", "_", "\"", "\\", "ñ", "\r"]) {
+      await rejected(capture(withBadByte(REAL_JPEG.length >> 1, char)), "invalid_request", 400);
+      await rejected(capture(withBadByte(lastGroupStart, char)), "invalid_request", 400);
+    }
+    await rejected(capture(`${JPEG}$$$$`), "invalid_request", 400);
+  });
+
+  it("valida el relleno de base64", async () => {
+    for (const image of [`${JPEG}A===`, `${JPEG}====`, `${JPEG}=AAA`, `${JPEG}A=AA`, `/9j/4A==${JPEG}`, `${JPEG}AAA=AAAA`]) {
+      await rejected(capture(image), "invalid_request", 400);
+    }
+  });
+
+  it("rechaza un relleno con bits sobrantes", async () => {
+    await rejected(capture(`${JPEG}AB==`), "invalid_request", 400);
+    await rejected(capture(`${JPEG}AAB=`), "invalid_request", 400);
+    geminiReplies(success("ok"));
+    expect((await handleRequest(capture(`${JPEG}AA==`), testEnv())).status).toBe(200);
   });
 
   it("no llama a Google si falta el secreto", async () => {
@@ -197,18 +231,19 @@ describe("validación", () => {
 describe("regiones", () => {
   const EEA_UK_CH = "AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT LV LT LU MT NL PL PT RO SK SI ES SE IS LI NO GB CH".split(" ");
 
-  const blocked = async (country: string | null) => {
+  const refusal = async (country: string | null, code: string, message: string) => {
     const spy = vi.spyOn(globalThis, "fetch");
     const response = await handleRequest(post("/v1/interpret", { text: "hola", now: NOW }, {}, country), testEnv());
     expect(response.status).toBe(451);
-    expect(await response.clone().text()).toContain("no está disponible en tu región");
-    expect(await errorOf(response)).toBe("region_unavailable");
+    expect(await response.clone().text()).toContain(message);
+    expect(await errorOf(response)).toBe(code);
     expect(spy).not.toHaveBeenCalled();
   };
+  const blocked = (country: string) => refusal(country, "region_unavailable", "no está disponible en tu región");
 
   it.each(EEA_UK_CH)("bloquea %s", blocked);
   it.each(["GF", "GP", "MF", "MQ", "RE", "YT", "AX"])("bloquea el territorio de la UE %s", blocked);
-  it.each(["XX", "T1", null])("bloquea un país desconocido: %s", blocked);
+  it.each(["XX", "T1", null])("explica que no se pudo determinar el país: %s", (country) => refusal(country, "country_unknown", "No se pudo determinar tu país"));
 
   it.each(["CO", "MX", "US", "AR", "JP"])("permite %s", async (country) => {
     geminiReplies(success());

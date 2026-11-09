@@ -7,7 +7,7 @@ import type { AssistantResponse, ReminderOption, SuggestedRequest } from "@/type
 const LEVEL_HISTORY = 72;
 const CAPTURE_REQUEST = "Analiza lo que aparece en mi pantalla";
 const TAPE_LENGTH = 5;
-const notRetryable = new Set(["quotaExhausted", "notConfigured", "regionUnavailable"]);
+const notRetryable = new Set(["quotaExhausted", "notConfigured", "regionUnavailable", "regionUnknown"]);
 
 /** Respuesta actual y cinta cambian juntas: separadas, un actualizador tendría que modificar la otra. */
 interface Session {

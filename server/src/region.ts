@@ -17,5 +17,6 @@ const UNKNOWN_COUNTRIES = new Set(["XX", "T1"]);
 
 /** `request.cf` lo rellena Cloudflare: el cliente no puede falsificarlo, a diferencia de una cabecera. */
 export function assertRegionAllowed(country: unknown): void {
-  if (typeof country !== "string" || UNKNOWN_COUNTRIES.has(country) || BLOCKED_COUNTRIES.has(country)) throw new ApiError("region_unavailable");
+  if (typeof country !== "string" || UNKNOWN_COUNTRIES.has(country)) throw new ApiError("country_unknown");
+  if (BLOCKED_COUNTRIES.has(country)) throw new ApiError("region_unavailable");
 }

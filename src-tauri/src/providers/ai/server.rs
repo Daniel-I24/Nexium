@@ -54,6 +54,7 @@ fn map_error(detail: ErrorDetail) -> AiError {
         "service_quota" => AiError::QuotaExhausted,
         "daily_limit" => AiError::DailyLimit,
         "region_unavailable" => AiError::RegionUnavailable,
+        "country_unknown" => AiError::RegionUnknown,
         "rate_limited" => AiError::RateLimited,
         "timeout" => AiError::Timeout,
         "unavailable" => AiError::Unavailable,
@@ -202,6 +203,7 @@ mod tests {
         assert_eq!(error_for(429, "daily_limit").await, AiError::DailyLimit);
         assert_eq!(error_for(429, "rate_limited").await, AiError::RateLimited);
         assert_eq!(error_for(451, "region_unavailable").await, AiError::RegionUnavailable);
+        assert_eq!(error_for(451, "country_unknown").await, AiError::RegionUnknown);
         assert_eq!(error_for(504, "timeout").await, AiError::Timeout);
         assert_eq!(error_for(503, "unavailable").await, AiError::Unavailable);
     }
@@ -245,6 +247,22 @@ mod tests {
         let (line, image) = body.split_once('\n').unwrap();
         assert_eq!(image, "AQID");
         assert_eq!(serde_json::from_str::<Value>(line).unwrap()["question"], "una\ndos");
+    }
+
+    #[test]
+    fn png_and_jpeg_captures_leave_as_standard_base64_of_a_jpeg() {
+        let source = image::DynamicImage::ImageRgb8(image::RgbImage::from_fn(640, 400, |x, y| image::Rgb([(x % 256) as u8, (y % 256) as u8, ((x ^ y) % 256) as u8])));
+        for format in [image::ImageFormat::Png, image::ImageFormat::Jpeg] {
+            let mut file = std::io::Cursor::new(Vec::new());
+            source.write_to(&mut file, format).unwrap();
+            let loaded = image::load_from_memory(file.get_ref()).unwrap();
+            let jpeg = crate::providers::capture::encode_for_analysis(loaded).unwrap();
+            let body = String::from_utf8(capture_body("¿Qué es?", &jpeg)).unwrap();
+            let (_, encoded) = body.split_once('\n').unwrap();
+            assert_eq!(STANDARD.decode(encoded).unwrap(), jpeg, "{format:?}");
+            assert_eq!(&jpeg[..3], &[0xFF, 0xD8, 0xFF], "{format:?}");
+            assert!((0xC0..=0xFE).contains(&jpeg[3]), "{format:?}");
+        }
     }
 
     #[test]

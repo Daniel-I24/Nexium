@@ -11,9 +11,12 @@ const LOCAL_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):\d{2}([+-]\d{2}:\d{
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const JPEG_TYPE = "image/jpeg";
 export const CAPTURE_CONTENT_TYPE = "application/x-nexium-capture";
-const QUOTE = 0x22;
-const BACKSLASH = 0x5c;
 const NEWLINE = 0x0a;
+const PADDING = 0x3d;
+const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+/** Valor de cada byte en base64, o -1 si no pertenece al alfabeto. */
+const BASE64_VALUES = new Int8Array(256).fill(-1);
+for (let value = 0; value < BASE64_ALPHABET.length; value++) BASE64_VALUES[BASE64_ALPHABET.charCodeAt(value)] = value;
 /** Ocho caracteres de base64 son seis bytes: bastan para la cabecera y no obligan a decodificar el resto. */
 const HEADER_CHARS = 8;
 
@@ -81,25 +84,33 @@ function describeNow(value: unknown): string {
   return `${weekday} ${year}-${month}-${day} ${hour}:${minute}, zona ${zone}`;
 }
 
-/** Todo JPEG empieza por FF D8 FF, seguido del byte de un marcador (C0 a FE). */
-function hasJpegHeader(base64: Uint8Array): boolean {
-  let head: string;
-  try {
-    head = atob(String.fromCharCode(...base64.subarray(0, HEADER_CHARS)));
-  } catch {
-    return false;
+/** Base64 estándar y canónico: todo el alfabeto, relleno solo al final y sin bits sobrantes. No decodifica nada. */
+function isBase64(data: Uint8Array): boolean {
+  const { length } = data;
+  if (length === 0 || length % 4 !== 0) return false;
+  const padding = data[length - 1] !== PADDING ? 0 : data[length - 2] === PADDING ? 2 : 1;
+  const end = length - padding;
+  for (let index = 0; index < end; index++) {
+    if ((BASE64_VALUES[data[index] as number] as number) < 0) return false;
   }
+  const spareBits = padding === 0 ? 0 : padding === 2 ? 0x0f : 0x03;
+  return ((BASE64_VALUES[data[end - 1] as number] as number) & spareBits) === 0;
+}
+
+/** Todo JPEG empieza por FF D8 FF, seguido del byte de un marcador (C0 a FE). Exige base64 ya validado. */
+function hasJpegHeader(base64: Uint8Array): boolean {
+  const head = atob(String.fromCharCode(...base64.subarray(0, HEADER_CHARS)));
   const marker = head.charCodeAt(3);
   return head.startsWith("\xff\xd8\xff") && marker >= 0xc0 && marker <= 0xfe;
 }
 
 /**
- * Comprueba tamaño, tipo declarado y cabecera. La imagen nunca se decodifica: el límite de CPU es de 10 ms.
- * Comillas y barras se rechazan porque estos bytes se insertan tal cual dentro del JSON que recibe Google.
+ * Comprueba tamaño, base64 y cabecera. La imagen nunca se decodifica: el límite de CPU es de 10 ms.
+ * Validar todo el alfabeto también impide que estos bytes, que se insertan tal cual, se salgan del JSON que recibe Google.
  */
 function checkJpegBase64(image: Uint8Array): void {
   if (image.length > MAX_IMAGE_BASE64) throw new ApiError("payload_too_large");
-  if (image.length % 4 !== 0 || image.includes(QUOTE) || image.includes(BACKSLASH) || !hasJpegHeader(image)) throw new ApiError("invalid_request");
+  if (!isBase64(image) || !hasJpegHeader(image)) throw new ApiError("invalid_request");
 }
 
 /** El cuerpo es una línea JSON con la pregunta y el tipo, y después la imagen en base64. */

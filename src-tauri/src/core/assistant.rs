@@ -64,7 +64,8 @@ impl Assistant {
             AiError::RateLimited => ("El servicio de IA recibió demasiadas solicitudes en poco tiempo.".into(), Some(format!("Espera un minuto y vuelve a intentarlo. {local_hint}"))),
             AiError::DailyLimit => ("Se alcanzó el límite diario de uso de IA de este equipo o esta red.".into(), Some(format!("Vuelve a intentarlo mañana. {local_hint}"))),
             AiError::LocalLimitReached => ("Alcanzaste el límite diario de solicitudes de IA configurado en Nexium.".into(), Some(format!("Puedes cambiarlo en Ajustes. {local_hint}"))),
-            AiError::RegionUnavailable => ("El servicio de IA de Nexium no está disponible en tu región.".into(), Some(format!("No se ofrece en el Espacio Económico Europeo, Reino Unido ni Suiza, ni cuando no se puede determinar el país. {local_hint}"))),
+            AiError::RegionUnavailable => ("El servicio de IA de Nexium no está disponible en tu región.".into(), Some(format!("No se ofrece en el Espacio Económico Europeo, Reino Unido ni Suiza. {local_hint}"))),
+            AiError::RegionUnknown => ("No se pudo determinar tu país, y el servicio de IA de Nexium no se ofrece sin conocerlo.".into(), Some(format!("Si usas Tor o una conexión que oculte tu ubicación, prueba con otra conexión. {local_hint}"))),
             AiError::Unavailable => ("El servicio de IA no está disponible en este momento.".into(), Some(local_hint)),
             AiError::Network => ("No pude conectar con el servicio de IA.".into(), Some(format!("Comprueba tu conexión a Internet. {local_hint}"))),
             AiError::Timeout => ("El servicio de IA tardó demasiado en responder.".into(), Some(local_hint)),
@@ -418,6 +419,16 @@ mod tests {
         let hint = hint.unwrap();
         assert!(hint.contains("Espacio Económico Europeo") && hint.contains("siguen funcionando"));
         assert_eq!(h.ai_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn an_unknown_country_is_explained_apart_from_a_blocked_region() {
+        let h = harness(Some(Err(AiError::RegionUnknown)), true, false);
+        let response = ask(&h.assistant, "cuéntame algo sobre el proyecto").await;
+        let ResponseBody::Error { code, message, hint } = response.body else { panic!() };
+        assert_eq!(code, "regionUnknown");
+        assert!(message.contains("No se pudo determinar tu país"));
+        assert!(hint.unwrap().contains("Tor"));
     }
 
     #[tokio::test]
