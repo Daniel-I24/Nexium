@@ -8,6 +8,7 @@ import { MAX_IMAGE_BYTES, MAX_TEXT_CHARS } from "../src/validation";
 const INSTALL = "3f2b8a10-5c4e-4d7a-9b1c-0a1b2c3d4e5f";
 const NOW = "2026-11-09T10:30:00-05:00";
 const JPEG = "/9j/4AAQ";
+const CAPTURE = { question: "¿Qué es?", imageType: "image/jpeg", image: JPEG };
 const WIDE = { perMinute: 1000, perDay: 1000 };
 const WIDE_LIMITS: OperationLimits = { install: WIDE, ip: WIDE, global: WIDE };
 
@@ -25,12 +26,13 @@ function testEnv(overrides: Partial<OperationLimits> = {}): Env {
   };
 }
 
-function post(path: string, body: unknown, headers: Record<string, string> = {}): Request {
+function post(path: string, body: unknown, headers: Record<string, string> = {}, country: string | null = "CO"): Request {
   const raw = typeof body === "string" ? body : JSON.stringify(body);
   return new Request(`https://nexium.test${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Content-Length": String(new TextEncoder().encode(raw).length), "X-Nexium-Install": INSTALL, "CF-Connecting-IP": "203.0.113.7", ...headers },
     body: raw,
+    ...(country === null ? {} : { cf: { country } as unknown as IncomingRequestCfProperties }),
   });
 }
 
@@ -85,7 +87,7 @@ describe("operaciones", () => {
 
   it("analiza una captura con el modelo de visión", async () => {
     const spy = geminiReplies(success("Un error de ruta."));
-    const response = await handleRequest(post("/v1/analyze", { question: "¿Qué es?", image: JPEG }), testEnv());
+    const response = await handleRequest(post("/v1/analyze", CAPTURE), testEnv());
     expect(await response.json()).toEqual({ output: "Un error de ruta.", tokens: 42 });
     const sent = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
     expect(sent.model).toBe("gemini-3.6-flash");
@@ -137,12 +139,23 @@ describe("validación", () => {
   });
 
   it("solo acepta imágenes JPEG en base64 dentro del límite", async () => {
-    const analyze = (image: unknown) => post("/v1/analyze", { question: "¿Qué es?", image });
+    const analyze = (image: unknown, imageType: unknown = "image/jpeg") => post("/v1/analyze", { question: "¿Qué es?", imageType, image });
+    await rejected(analyze(JPEG, "image/png"), "invalid_request", 400);
+    await rejected(post("/v1/analyze", { question: "¿Qué es?", image: JPEG }), "invalid_request", 400);
+    await rejected(analyze("/9j/AAAA"), "invalid_request", 400);
+    await rejected(analyze("/9j/"), "invalid_request", 400);
     await rejected(analyze("iVBORw0KGgo="), "invalid_request", 400);
     await rejected(analyze("/9j/4AA"), "invalid_request", 400);
     await rejected(analyze("/9j/4A$Q"), "invalid_request", 400);
     await rejected(analyze(5), "invalid_request", 400);
     await rejected(analyze(`/9j/${"A".repeat(Math.ceil(MAX_IMAGE_BYTES / 3) * 4)}`), "payload_too_large", 413);
+  });
+
+  it("no decodifica la imagen: tras la cabecera válida el contenido no se inspecciona", async () => {
+    const spy = geminiReplies(success("ok"));
+    const response = await handleRequest(post("/v1/analyze", { ...CAPTURE, image: `${JPEG}$$$$` }), testEnv());
+    expect(response.status).toBe(200);
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it("no llama a Google si falta el secreto", async () => {
@@ -152,6 +165,45 @@ describe("validación", () => {
     const response = await handleRequest(interpret(), noKey);
     expect(response.status).toBe(503);
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("regiones", () => {
+  const EEA_UK_CH = "AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT LV LT LU MT NL PL PT RO SK SI ES SE IS LI NO GB CH".split(" ");
+
+  const blocked = async (country: string | null) => {
+    const spy = vi.spyOn(globalThis, "fetch");
+    const response = await handleRequest(post("/v1/interpret", { text: "hola", now: NOW }, {}, country), testEnv());
+    expect(response.status).toBe(451);
+    expect(await response.clone().text()).toContain("no está disponible en tu región");
+    expect(await errorOf(response)).toBe("region_unavailable");
+    expect(spy).not.toHaveBeenCalled();
+  };
+
+  it.each(EEA_UK_CH)("bloquea %s", blocked);
+  it.each(["GF", "GP", "MF", "MQ", "RE", "YT", "AX"])("bloquea el territorio de la UE %s", blocked);
+  it.each(["XX", "T1", null])("bloquea un país desconocido: %s", blocked);
+
+  it.each(["CO", "MX", "US", "AR", "JP"])("permite %s", async (country) => {
+    geminiReplies(success());
+    expect((await handleRequest(post("/v1/interpret", { text: "hola", now: NOW }, {}, country), testEnv())).status).toBe(200);
+  });
+
+  it("no se puede evitar con una cabecera", async () => {
+    await handleRequest(post("/v1/interpret", { text: "hola", now: NOW }, { "CF-IPCountry": "CO" }, "DE"), testEnv()).then(async (response) => expect(await errorOf(response)).toBe("region_unavailable"));
+  });
+
+  it("no consume ningún cupo", async () => {
+    const limited = testEnv({ global: { perMinute: 1, perDay: 1 } });
+    await handleRequest(post("/v1/interpret", { text: "hola", now: NOW }, {}, "DE"), limited);
+    geminiReplies(success());
+    expect((await handleRequest(interpret(), limited)).status).toBe(200);
+  });
+
+  it("no registra el país", async () => {
+    const log = vi.spyOn(console, "log");
+    await handleRequest(post("/v1/interpret", { text: "hola", now: NOW }, {}, "DE"), testEnv());
+    expect(log.mock.calls.flat().join(" ")).not.toContain("DE");
   });
 });
 
@@ -219,7 +271,7 @@ describe("límites de uso", () => {
     const limited = testEnv({ install: { perMinute: 1, perDay: 10 } });
     geminiReplies(success(), success());
     expect((await handleRequest(interpret(), limited)).status).toBe(200);
-    expect((await handleRequest(post("/v1/analyze", { question: "¿Qué es?", image: JPEG }), limited)).status).toBe(200);
+    expect((await handleRequest(post("/v1/analyze", CAPTURE), limited)).status).toBe(200);
   });
 
   it("si el contador falla, no se llama a Google", async () => {
@@ -288,7 +340,7 @@ describe("registros", () => {
   it("solo contienen métricas, nunca datos del usuario", async () => {
     const log = vi.spyOn(console, "log");
     geminiReplies(success("respuesta privada"));
-    await handleRequest(post("/v1/analyze", { question: "pregunta privada", image: JPEG }), testEnv());
+    await handleRequest(post("/v1/analyze", { ...CAPTURE, question: "pregunta privada" }), testEnv());
     const written = log.mock.calls.flat().join(" ");
     expect(JSON.parse(written)).toMatchObject({ operation: "analyze", code: "ok", status: 200, tokens: 42 });
     for (const secret of ["pregunta privada", "respuesta privada", JPEG, INSTALL, "203.0.113.7", "clave-de-prueba"]) {

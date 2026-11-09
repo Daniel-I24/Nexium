@@ -5,6 +5,7 @@ const ERRORS = {
   invalid_request: [400, "La solicitud no tiene un formato válido."],
   invalid_install: [400, "No se pudo identificar la instalación de Nexium."],
   payload_too_large: [413, "La solicitud o la imagen es demasiado grande."],
+  region_unavailable: [451, "El servicio de IA de Nexium no está disponible en tu región: no se ofrece en el Espacio Económico Europeo, Reino Unido ni Suiza, ni cuando no se puede determinar el país."],
   rate_limited: [429, "Demasiadas solicitudes en poco tiempo. Espera un momento y vuelve a intentarlo."],
   daily_limit: [429, "Se alcanzó el límite diario de uso de IA de este equipo o esta red. Vuelve a intentarlo mañana."],
   service_quota: [429, "Se agotó la cuota diaria gratuita del servicio de IA de Nexium. Vuelve a intentarlo mañana."],

@@ -8,10 +8,10 @@ export const MAX_ANALYZE_BODY = MAX_IMAGE_BASE64 + 4_096;
 
 const INSTALL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const LOCAL_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):\d{2}([+-]\d{2}:\d{2})$/;
-const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-/** Los tres primeros bytes de todo JPEG (FF D8 FF), vistos en base64. */
-const JPEG_PREFIX = "/9j/";
+const JPEG_TYPE = "image/jpeg";
+/** Ocho caracteres de base64 son seis bytes: bastan para la cabecera y no obligan a decodificar el resto. */
+const HEADER_CHARS = 8;
 
 export interface InterpretInput {
   text: string;
@@ -68,10 +68,23 @@ function describeNow(value: unknown): string {
   return `${weekday} ${year}-${month}-${day} ${hour}:${minute}, zona ${zone}`;
 }
 
-function jpegBase64(value: unknown): string {
-  if (typeof value !== "string") throw new ApiError("invalid_request");
+/** Todo JPEG empieza por FF D8 FF, seguido del byte de un marcador (C0 a FE). */
+function hasJpegHeader(base64: string): boolean {
+  let head: string;
+  try {
+    head = atob(base64.slice(0, HEADER_CHARS));
+  } catch {
+    return false;
+  }
+  const marker = head.charCodeAt(3);
+  return head.startsWith("\xff\xd8\xff") && marker >= 0xc0 && marker <= 0xfe;
+}
+
+/** Comprueba tamaño, tipo declarado y cabecera. La imagen completa nunca se decodifica: el límite de CPU es de 10 ms. */
+function jpegBase64(value: unknown, declaredType: unknown): string {
+  if (typeof value !== "string" || declaredType !== JPEG_TYPE) throw new ApiError("invalid_request");
   if (value.length > MAX_IMAGE_BASE64) throw new ApiError("payload_too_large");
-  if (value.length % 4 !== 0 || !value.startsWith(JPEG_PREFIX) || !BASE64.test(value)) throw new ApiError("invalid_request");
+  if (value.length % 4 !== 0 || !hasJpegHeader(value)) throw new ApiError("invalid_request");
   return value;
 }
 
@@ -81,8 +94,8 @@ export function interpretInput(body: Record<string, unknown>): InterpretInput {
 }
 
 export function analyzeInput(body: Record<string, unknown>): AnalyzeInput {
-  onlyFields(body, "question", "image");
-  return { question: text(body.question), image: jpegBase64(body.image) };
+  onlyFields(body, "question", "imageType", "image");
+  return { question: text(body.question), image: jpegBase64(body.image, body.imageType) };
 }
 
 /** En IPv6 una persona controla como mínimo un /64: limitar la dirección completa no serviría. */

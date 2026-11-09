@@ -9,9 +9,17 @@ Ambas son `POST`, exigen `Content-Type: application/json`, `Content-Length` y la
 | Ruta | Cuerpo | Límites |
 |---|---|---|
 | `/v1/interpret` | `{ "text": "…", "now": "2026-11-09T10:30:00-05:00" }` | Texto de hasta 500 caracteres. Cuerpo de hasta 4 KiB |
-| `/v1/analyze` | `{ "question": "…", "image": "<JPEG en base64>" }` | Imagen de hasta 1 MB |
+| `/v1/analyze` | `{ "question": "…", "imageType": "image/jpeg", "image": "<JPEG en base64>" }` | Imagen de hasta 1 MB |
 
 Un campo adicional se rechaza: el cliente no puede elegir modelo, instrucciones ni URL. El modelo y las instrucciones están en `src/ai-contract.json`.
+
+De la imagen solo se comprueban el tamaño, el tipo declarado y la cabecera del archivo. El Worker no la decodifica, para no acercarse al límite de 10 ms de CPU.
+
+## Regiones
+
+Los [términos de Google](https://aistudio.google.com/docs/terms) solo permiten servicios de pago en aplicaciones ofrecidas a usuarios del Espacio Económico Europeo, Reino Unido y Suiza, y Nexium usa la capa gratuita. Por eso el Worker responde `region_unavailable` a esas regiones, incluidas las regiones ultraperiféricas de la UE y las Åland, y cuando Cloudflare no puede determinar el país (códigos `XX` y `T1`). No se llama a Google ni se consume cupo.
+
+El país sale de `request.cf.country`, que rellena Cloudflare y el cliente no puede modificar. Una VPN sí cambia el país que ve Cloudflare. El país no se registra.
 
 ## Errores
 
@@ -21,6 +29,7 @@ Un campo adicional se rechaza: el cliente no puede elegir modelo, instrucciones 
 |---|---|---|
 | `invalid_request`, `invalid_install` | 400 | Formato no válido |
 | `payload_too_large` | 413 | Texto o imagen demasiado grande |
+| `region_unavailable` | 451 | Región sin servicio (ver [Regiones](#regiones)) |
 | `rate_limited` | 429 | Demasiadas solicitudes por minuto. Incluye `Retry-After` |
 | `daily_limit` | 429 | Límite diario de la instalación o de la red |
 | `service_quota` | 429 | Cupo global o cuota gratuita de Gemini agotados |
@@ -38,7 +47,7 @@ Se configuran en `vars.LIMITS` de `wrangler.jsonc`, por operación:
 - **`ip`:** por dirección IP, o por red `/64` en IPv6. Es más amplio, porque un aula entera puede compartir una IP.
 - **`global`:** cupo de todo el servicio.
 
-El contador global debe quedar por debajo de la cuota real de tu proyecto. Google solo la muestra en AI Studio, y la cifra de `wrangler.jsonc` es una estimación prudente.
+El cupo global debe quedar por debajo de la cuota real más baja de tu proyecto, con margen. Google solo la muestra en AI Studio y no se ha podido consultar, así que las cifras actuales (500 interpretaciones y 50 análisis al día) son un valor prudente, no un dato de Google. Para cambiarlas no hay que tocar el código: edita `vars.LIMITS` y ejecuta `npx wrangler deploy`. Si Google agota antes su cuota, la aplicación recibe el mismo mensaje de cuota.
 
 El identificador de instalación no se puede verificar, porque el cliente es público: alguien podría inventar identificadores. Por eso existen los límites por IP y el cupo global.
 

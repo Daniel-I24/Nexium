@@ -163,6 +163,7 @@ Nexium es un proyecto universitario distribuido solo en GitHub, y sus instalador
 - Las respuestas se muestran en texto. No hay voz sintetizada en esta versión.
 - La base de datos local no está cifrada. Contiene solicitudes y respuestas, que puedes eliminar desde Historial.
 - La IA necesita Internet y comparte una cuota gratuita limitada: en días de mucho uso puede agotarse hasta el día siguiente. Las consultas locales siguen funcionando.
+- La IA no está disponible en el Espacio Económico Europeo, Reino Unido ni Suiza, porque los [términos de Google](https://aistudio.google.com/docs/terms) solo permiten allí servicios de pago. El servidor lo decide según el país que informa Cloudflare, y Nexium lo explica con un mensaje. Las consultas locales siguen funcionando.
 
 ## Atribución
 

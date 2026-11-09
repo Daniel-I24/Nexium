@@ -2,6 +2,7 @@ import type { Env } from "./env";
 import { ApiError, errorResponse, errorStatus } from "./errors";
 import { analyzeRequest, callGemini, interpretRequest, type ModelAnswer } from "./gemini";
 import { enforceLimits } from "./limiter";
+import { assertRegionAllowed } from "./region";
 import { analyzeInput, installId, interpretInput, ipBucket, MAX_ANALYZE_BODY, MAX_INTERPRET_BODY, readObject } from "./validation";
 
 export { UsageCounter } from "./limiter";
@@ -11,6 +12,7 @@ type Operation = "interpret" | "analyze";
 const OPERATIONS: Record<string, Operation> = { "/v1/interpret": "interpret", "/v1/analyze": "analyze" };
 
 async function run(operation: Operation, request: Request, env: Env): Promise<ModelAnswer> {
+  assertRegionAllowed(request.cf?.country);
   const install = installId(request.headers.get("X-Nexium-Install"));
   const body = await readObject(request, operation === "interpret" ? MAX_INTERPRET_BODY : MAX_ANALYZE_BODY);
   const upstream = operation === "interpret" ? interpretRequest(interpretInput(body)) : analyzeRequest(analyzeInput(body));
