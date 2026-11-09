@@ -9,7 +9,7 @@ const MAX_SIDE: u32 = 1568;
 const REDUCED_SIDE: u32 = 1024;
 const JPEG_QUALITIES: [u8; 4] = [80, 65, 50, 35];
 /// Por debajo del máximo del servidor, y barato de validar con su límite de CPU.
-pub const MAX_ENCODED_BYTES: usize = 700_000;
+pub const MAX_ENCODED_BYTES: usize = 500_000;
 
 #[derive(Debug, PartialEq)]
 pub enum CaptureError {

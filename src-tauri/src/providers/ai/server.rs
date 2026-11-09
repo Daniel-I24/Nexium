@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD, Engine};
-use reqwest::Response;
+use reqwest::{header::CONTENT_TYPE, RequestBuilder, Response};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -16,6 +16,7 @@ use crate::{error::AiError, models::Intent};
 const INTERPRET_TIMEOUT: Duration = Duration::from_secs(45);
 const VISION_TIMEOUT: Duration = Duration::from_secs(130);
 const INSTALL_HEADER: &str = "X-Nexium-Install";
+const CAPTURE_CONTENT_TYPE: &str = "application/x-nexium-capture";
 
 pub struct NexiumServer {
     http: reqwest::Client,
@@ -60,22 +61,26 @@ fn map_error(detail: ErrorDetail) -> AiError {
     }
 }
 
+/// Una línea JSON y después la imagen: así el servidor no tiene que analizar 1 MB de JSON.
+fn capture_body(question: &str, image_jpeg: &[u8]) -> Vec<u8> {
+    let mut body = json!({ "question": question, "imageType": "image/jpeg" }).to_string().into_bytes();
+    body.push(b'\n');
+    body.extend_from_slice(STANDARD.encode(image_jpeg).as_bytes());
+    body
+}
+
 impl NexiumServer {
     pub fn new(base_url: Option<&str>, install_id: String) -> Self {
         Self { http: reqwest::Client::new(), base_url: base_url.and_then(usable_url), install_id }
     }
 
-    async fn post(&self, path: &str, body: Value, timeout: Duration) -> Result<ModelReply, AiError> {
+    fn request(&self, path: &str, timeout: Duration) -> Result<RequestBuilder, AiError> {
         let base_url = self.base_url.as_deref().ok_or(AiError::NotConfigured)?;
-        let response = self
-            .http
-            .post(format!("{base_url}{path}"))
-            .header(INSTALL_HEADER, &self.install_id)
-            .timeout(timeout)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|error| if error.is_timeout() { AiError::Timeout } else { AiError::Network })?;
+        Ok(self.http.post(format!("{base_url}{path}")).header(INSTALL_HEADER, &self.install_id).timeout(timeout))
+    }
+
+    async fn send(request: RequestBuilder) -> Result<ModelReply, AiError> {
+        let response = request.send().await.map_err(|error| if error.is_timeout() { AiError::Timeout } else { AiError::Network })?;
         Self::read(response).await
     }
 
@@ -111,14 +116,14 @@ impl AiProvider for NexiumServer {
 
     async fn interpret(&self, request: InterpretRequest) -> Result<AiAnswer<Intent>, AiError> {
         let now = request.now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
-        let reply = self.post("/v1/interpret", json!({ "text": request.text, "now": now }), INTERPRET_TIMEOUT).await?;
+        let reply = Self::send(self.request("/v1/interpret", INTERPRET_TIMEOUT)?.json(&json!({ "text": request.text, "now": now }))).await?;
         let value = schema::parse_interpretation(&reply.output, &request.text)?;
         Ok(AiAnswer { value, tokens: reply.tokens })
     }
 
     async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<String>, AiError> {
-        let body = json!({ "question": request.question, "imageType": "image/jpeg", "image": STANDARD.encode(&request.image_jpeg) });
-        let reply = self.post("/v1/analyze", body, VISION_TIMEOUT).await?;
+        let body = capture_body(&request.question, &request.image_jpeg);
+        let reply = Self::send(self.request("/v1/analyze", VISION_TIMEOUT)?.header(CONTENT_TYPE, CAPTURE_CONTENT_TYPE).body(body)).await?;
         Ok(AiAnswer { value: reply.output.trim().to_owned(), tokens: reply.tokens })
     }
 }
@@ -128,7 +133,7 @@ mod tests {
     use super::*;
     use chrono::{FixedOffset, Local, TimeZone};
     use wiremock::{
-        matchers::{body_json, header, method, path},
+        matchers::{body_json, body_string_contains, header, method, path},
         Mock, MockServer, ResponseTemplate,
     };
 
@@ -180,7 +185,10 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/v1/analyze"))
-            .and(body_json(json!({ "question": "¿Qué es?", "imageType": "image/jpeg", "image": "AQID" })))
+            .and(header(CONTENT_TYPE.as_str(), CAPTURE_CONTENT_TYPE))
+            .and(body_string_contains("\"question\":\"¿Qué es?\""))
+            .and(body_string_contains("\"imageType\":\"image/jpeg\""))
+            .and(body_string_contains("}\nAQID"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "output": " Un error de ruta. ", "tokens": 9 })))
             .expect(1)
             .mount(&server)
@@ -229,6 +237,14 @@ mod tests {
         let provider = NexiumServer::new(None, INSTALL.into());
         assert!(!provider.is_configured());
         assert_eq!(provider.interpret(request()).await.unwrap_err(), AiError::NotConfigured);
+    }
+
+    #[test]
+    fn a_line_break_in_the_question_stays_inside_the_first_line() {
+        let body = String::from_utf8(capture_body("una\ndos", &[1, 2, 3])).unwrap();
+        let (line, image) = body.split_once('\n').unwrap();
+        assert_eq!(image, "AQID");
+        assert_eq!(serde_json::from_str::<Value>(line).unwrap()["question"], "una\ndos");
     }
 
     #[test]
