@@ -50,6 +50,7 @@ pub enum AiServiceStatus {
     Working,
     Limited,
     QuotaExhausted,
+    RegionUnavailable,
     Unreachable,
 }
 
@@ -62,6 +63,7 @@ impl AiStatusTracker {
             Ok(_) => AiServiceStatus::Working,
             Err(AiError::RateLimited | AiError::DailyLimit) => AiServiceStatus::Limited,
             Err(AiError::QuotaExhausted) => AiServiceStatus::QuotaExhausted,
+            Err(AiError::RegionUnavailable) => AiServiceStatus::RegionUnavailable,
             Err(AiError::Network | AiError::Timeout | AiError::Unavailable) => AiServiceStatus::Unreachable,
             // El resto no dice nada sobre el servicio: una cancelación o una solicitud rechazada, por ejemplo.
             Err(_) => return,
@@ -95,6 +97,7 @@ mod tests {
         assert_eq!(after(Err(AiError::RateLimited)), AiServiceStatus::Limited);
         assert_eq!(after(Err(AiError::DailyLimit)), AiServiceStatus::Limited);
         assert_eq!(after(Err(AiError::QuotaExhausted)), AiServiceStatus::QuotaExhausted);
+        assert_eq!(after(Err(AiError::RegionUnavailable)), AiServiceStatus::RegionUnavailable);
         assert_eq!(after(Err(AiError::Network)), AiServiceStatus::Unreachable);
         assert_eq!(after(Err(AiError::Cancelled)), AiServiceStatus::NotUsedYet);
     }

@@ -52,6 +52,7 @@ fn map_error(detail: ErrorDetail) -> AiError {
     match detail.code.as_str() {
         "service_quota" => AiError::QuotaExhausted,
         "daily_limit" => AiError::DailyLimit,
+        "region_unavailable" => AiError::RegionUnavailable,
         "rate_limited" => AiError::RateLimited,
         "timeout" => AiError::Timeout,
         "unavailable" => AiError::Unavailable,
@@ -116,7 +117,7 @@ impl AiProvider for NexiumServer {
     }
 
     async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<String>, AiError> {
-        let body = json!({ "question": request.question, "image": STANDARD.encode(&request.image_jpeg) });
+        let body = json!({ "question": request.question, "imageType": "image/jpeg", "image": STANDARD.encode(&request.image_jpeg) });
         let reply = self.post("/v1/analyze", body, VISION_TIMEOUT).await?;
         Ok(AiAnswer { value: reply.output.trim().to_owned(), tokens: reply.tokens })
     }
@@ -179,7 +180,7 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/v1/analyze"))
-            .and(body_json(json!({ "question": "¿Qué es?", "image": "AQID" })))
+            .and(body_json(json!({ "question": "¿Qué es?", "imageType": "image/jpeg", "image": "AQID" })))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "output": " Un error de ruta. ", "tokens": 9 })))
             .expect(1)
             .mount(&server)
@@ -192,6 +193,7 @@ mod tests {
         assert_eq!(error_for(429, "service_quota").await, AiError::QuotaExhausted);
         assert_eq!(error_for(429, "daily_limit").await, AiError::DailyLimit);
         assert_eq!(error_for(429, "rate_limited").await, AiError::RateLimited);
+        assert_eq!(error_for(451, "region_unavailable").await, AiError::RegionUnavailable);
         assert_eq!(error_for(504, "timeout").await, AiError::Timeout);
         assert_eq!(error_for(503, "unavailable").await, AiError::Unavailable);
     }

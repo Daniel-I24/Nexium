@@ -101,7 +101,7 @@ export interface ProviderInfo {
   dataNotice: string;
 }
 
-export type AiServiceStatus = "notConfigured" | "notUsedYet" | "working" | "limited" | "quotaExhausted" | "unreachable";
+export type AiServiceStatus = "notConfigured" | "notUsedYet" | "working" | "limited" | "quotaExhausted" | "regionUnavailable" | "unreachable";
 
 export interface SpeechModelStatus {
   id: string;

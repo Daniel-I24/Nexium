@@ -50,6 +50,13 @@ describe("useAssistant", () => {
     expect(result.current.bar).toEqual({ kind: "error", message: "Cuota", retryable: false });
   });
 
+  it("una región sin servicio no es reintentable", async () => {
+    invoke.mockResolvedValueOnce(reply({ kind: "error", code: "regionUnavailable", message: "Región", hint: null }, "failed"));
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("hola"));
+    expect(result.current.bar).toEqual({ kind: "error", message: "Región", retryable: false });
+  });
+
   it("una solicitud de pantalla pide permiso y no captura sola", async () => {
     const settings = { provider: { displayName: "Google Gemini", dataNotice: "Aviso." } };
     invoke.mockImplementation((command: string) =>

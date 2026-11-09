@@ -10,6 +10,7 @@ const statusLabels: Record<AiServiceStatus, string> = {
   working: "Funcionando",
   limited: "Límite de uso alcanzado por ahora",
   quotaExhausted: "Cuota diaria agotada. Vuelve a intentarlo mañana",
+  regionUnavailable: "No disponible en tu región",
   unreachable: "Sin conexión con el servicio",
 };
 

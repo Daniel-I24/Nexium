@@ -7,6 +7,7 @@ import type { AssistantResponse, ReminderOption, SuggestedRequest } from "@/type
 const LEVEL_HISTORY = 72;
 const CAPTURE_REQUEST = "Analiza lo que aparece en mi pantalla";
 const TAPE_LENGTH = 5;
+const notRetryable = new Set(["quotaExhausted", "notConfigured", "regionUnavailable"]);
 
 /** Respuesta actual y cinta cambian juntas: separadas, un actualizador tendría que modificar la otra. */
 interface Session {
@@ -47,7 +48,7 @@ export function useAssistant() {
     } else if (body.kind === "captureRequest") {
       void requestCaptureRef.current(body.question);
     } else if (body.kind === "error") {
-      setBar({ kind: "error", message: body.message, retryable: body.code !== "quotaExhausted" && body.code !== "notConfigured" });
+      setBar({ kind: "error", message: body.message, retryable: !notRetryable.has(body.code) });
     } else {
       setBar({ kind: "idle" });
     }
