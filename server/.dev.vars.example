@@ -1,0 +1,2 @@
+# Solo para `wrangler dev`. Copia este archivo como .dev.vars; .gitignore lo excluye del repositorio.
+GEMINI_API_KEY=

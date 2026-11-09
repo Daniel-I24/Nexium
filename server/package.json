@@ -1,0 +1,21 @@
+{
+  "name": "nexium-ai-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Intermediario entre Nexium y Google Gemini",
+  "license": "MIT",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.6.1",
+    "@cloudflare/workers-types": "5.20261109.1",
+    "typescript": "6.0.3",
+    "vitest": "^4.1.0",
+    "wrangler": "4.159.0"
+  }
+}

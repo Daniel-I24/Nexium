@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nexium-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [{ "name": "USAGE_COUNTER", "class_name": "UsageCounter" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UsageCounter"] }],
+  // Google no publica la cuota gratuita de cada modelo: ajusta "global" con la de tu proyecto en AI Studio.
+  "vars": {
+    "LIMITS": {
+      "interpret": {
+        "install": { "perMinute": 10, "perDay": 150 },
+        "ip": { "perMinute": 60, "perDay": 1500 },
+        "global": { "perMinute": 120, "perDay": 1000 }
+      },
+      "analyze": {
+        "install": { "perMinute": 3, "perDay": 20 },
+        "ip": { "perMinute": 15, "perDay": 200 },
+        "global": { "perMinute": 30, "perDay": 200 }
+      }
+    }
+  }
+}
