@@ -3,12 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Env, OperationLimits } from "../src/env";
 import { handleRequest } from "../src/index";
-import { MAX_IMAGE_BYTES, MAX_TEXT_CHARS } from "../src/validation";
+import { CAPTURE_CONTENT_TYPE, MAX_IMAGE_BYTES, MAX_TEXT_CHARS } from "../src/validation";
 
 const INSTALL = "3f2b8a10-5c4e-4d7a-9b1c-0a1b2c3d4e5f";
 const NOW = "2026-11-09T10:30:00-05:00";
 const JPEG = "/9j/4AAQ";
-const CAPTURE = { question: "¿Qué es?", imageType: "image/jpeg", image: JPEG };
 const WIDE = { perMinute: 1000, perDay: 1000 };
 const WIDE_LIMITS: OperationLimits = { install: WIDE, ip: WIDE, global: WIDE };
 
@@ -34,6 +33,10 @@ function post(path: string, body: unknown, headers: Record<string, string> = {},
     body: raw,
     ...(country === null ? {} : { cf: { country } as unknown as IncomingRequestCfProperties }),
   });
+}
+
+function capture(image: string = JPEG, question: unknown = "¿Qué es?", imageType: unknown = "image/jpeg"): Request {
+  return post("/v1/analyze", `${JSON.stringify({ question, imageType })}\n${image}`, { "Content-Type": CAPTURE_CONTENT_TYPE });
 }
 
 const interpret = (headers?: Record<string, string>, text = "Busca mi informe") => post("/v1/interpret", { text, now: NOW }, headers);
@@ -87,11 +90,14 @@ describe("operaciones", () => {
 
   it("analiza una captura con el modelo de visión", async () => {
     const spy = geminiReplies(success("Un error de ruta."));
-    const response = await handleRequest(post("/v1/analyze", CAPTURE), testEnv());
+    const response = await handleRequest(capture(JPEG, 'Dime "qué" es \\ esto'), testEnv());
     expect(await response.json()).toEqual({ output: "Un error de ruta.", tokens: 42 });
-    const sent = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
+    const sent = JSON.parse(await ((spy.mock.calls[0] as [string, RequestInit])[1].body as Blob).text());
     expect(sent.model).toBe("gemini-3.6-flash");
-    expect(sent.input[1]).toEqual({ type: "image", data: JPEG, mime_type: "image/jpeg" });
+    expect(sent.input).toEqual([
+      { type: "text", text: 'Dime "qué" es \\ esto' },
+      { type: "image", data: JPEG, mime_type: "image/jpeg" },
+    ]);
   });
 });
 
@@ -139,21 +145,41 @@ describe("validación", () => {
   });
 
   it("solo acepta imágenes JPEG en base64 dentro del límite", async () => {
-    const analyze = (image: unknown, imageType: unknown = "image/jpeg") => post("/v1/analyze", { question: "¿Qué es?", imageType, image });
-    await rejected(analyze(JPEG, "image/png"), "invalid_request", 400);
-    await rejected(post("/v1/analyze", { question: "¿Qué es?", image: JPEG }), "invalid_request", 400);
-    await rejected(analyze("/9j/AAAA"), "invalid_request", 400);
-    await rejected(analyze("/9j/"), "invalid_request", 400);
-    await rejected(analyze("iVBORw0KGgo="), "invalid_request", 400);
-    await rejected(analyze("/9j/4AA"), "invalid_request", 400);
-    await rejected(analyze("/9j/4A$Q"), "invalid_request", 400);
-    await rejected(analyze(5), "invalid_request", 400);
-    await rejected(analyze(`/9j/${"A".repeat(Math.ceil(MAX_IMAGE_BYTES / 3) * 4)}`), "payload_too_large", 413);
+    await rejected(capture(JPEG, "¿Qué es?", "image/png"), "invalid_request", 400);
+    await rejected(capture("/9j/AAAA"), "invalid_request", 400);
+    await rejected(capture("/9j/"), "invalid_request", 400);
+    await rejected(capture(""), "invalid_request", 400);
+    await rejected(capture("iVBORw0KGgo="), "invalid_request", 400);
+    await rejected(capture("/9j/4AA"), "invalid_request", 400);
+    await rejected(capture("/9j/4A$Q"), "invalid_request", 400);
+    await rejected(capture(`/9j/${"A".repeat(Math.ceil(MAX_IMAGE_BYTES / 3) * 4)}`), "payload_too_large", 413);
+  });
+
+  it("exige el formato de captura: una línea con los campos y después la imagen", async () => {
+    const raw = (body: string, type = CAPTURE_CONTENT_TYPE) => post("/v1/analyze", body, { "Content-Type": type });
+    await rejected(raw(JSON.stringify({ question: "¿Qué es?", imageType: "image/jpeg", image: JPEG })), "invalid_request", 400);
+    await rejected(raw(`no es json\n${JPEG}`), "invalid_request", 400);
+    await rejected(raw(`\n${JPEG}`), "invalid_request", 400);
+    await rejected(raw(`${JSON.stringify({ question: "¿Qué es?" })}\n${JPEG}`), "invalid_request", 400);
+    await rejected(raw(`${JSON.stringify({ question: "x", imageType: "image/jpeg", model: "gemini-pro" })}\n${JPEG}`), "invalid_request", 400);
+    await rejected(raw(`${JSON.stringify({ question: "x", imageType: "image/jpeg" })}\n${JPEG}`, "application/json"), "invalid_request", 400);
+    await rejected(raw(`${"x".repeat(5000)}\n${JPEG}`), "invalid_request", 400);
+  });
+
+  it("la imagen no puede salirse de su campo en el JSON enviado a Google", async () => {
+    await rejected(capture('/9j/4AAQ","model":"otro"AA'.padEnd(28, "A")), "invalid_request", 400);
+    await rejected(capture("/9j/4AAQ\\AAA"), "invalid_request", 400);
+  });
+
+  it("la pregunta no puede coincidir con la marca interna de la imagen", async () => {
+    const spy = geminiReplies(success("ok"));
+    await handleRequest(capture(JPEG, "00000000-0000-4000-8000-000000000000"), testEnv());
+    expect(JSON.parse(await ((spy.mock.calls[0] as [string, RequestInit])[1].body as Blob).text()).input[1].data).toBe(JPEG);
   });
 
   it("no decodifica la imagen: tras la cabecera válida el contenido no se inspecciona", async () => {
     const spy = geminiReplies(success("ok"));
-    const response = await handleRequest(post("/v1/analyze", { ...CAPTURE, image: `${JPEG}$$$$` }), testEnv());
+    const response = await handleRequest(capture(`${JPEG}$$$$`), testEnv());
     expect(response.status).toBe(200);
     expect(spy).toHaveBeenCalledTimes(1);
   });
@@ -271,7 +297,7 @@ describe("límites de uso", () => {
     const limited = testEnv({ install: { perMinute: 1, perDay: 10 } });
     geminiReplies(success(), success());
     expect((await handleRequest(interpret(), limited)).status).toBe(200);
-    expect((await handleRequest(post("/v1/analyze", CAPTURE), limited)).status).toBe(200);
+    expect((await handleRequest(capture(), limited)).status).toBe(200);
   });
 
   it("si el contador falla, no se llama a Google", async () => {
@@ -300,6 +326,13 @@ describe("errores de Google", () => {
     expect(spy).toHaveBeenCalledTimes(calls);
     expect(text).not.toContain("clave-de-prueba");
     expect(text).not.toContain("detalle interno");
+  });
+
+  it("un corte también se reintenta con una captura, y el cuerpo sigue completo", async () => {
+    const spy = geminiReplies(failure(503, "service_unavailable"), success("ok"));
+    expect((await handleRequest(capture(), testEnv())).status).toBe(200);
+    const body = (spy.mock.calls[1] as [string, RequestInit])[1].body as Blob;
+    expect(JSON.parse(await body.text()).input[1].data).toBe(JPEG);
   });
 
   it("un corte se reintenta una sola vez", async () => {
@@ -340,7 +373,7 @@ describe("registros", () => {
   it("solo contienen métricas, nunca datos del usuario", async () => {
     const log = vi.spyOn(console, "log");
     geminiReplies(success("respuesta privada"));
-    await handleRequest(post("/v1/analyze", { ...CAPTURE, question: "pregunta privada" }), testEnv());
+    await handleRequest(capture(JPEG, "pregunta privada"), testEnv());
     const written = log.mock.calls.flat().join(" ");
     expect(JSON.parse(written)).toMatchObject({ operation: "analyze", code: "ok", status: 200, tokens: 42 });
     for (const secret of ["pregunta privada", "respuesta privada", JPEG, INSTALL, "203.0.113.7", "clave-de-prueba"]) {

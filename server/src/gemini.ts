@@ -10,7 +10,7 @@ export interface ModelAnswer {
 }
 
 interface Upstream {
-  body: unknown;
+  body: string | Blob;
   timeoutMs: number;
 }
 
@@ -23,32 +23,32 @@ export function interpretRequest({ text, now }: InterpretInput): Upstream {
   const { model, timeoutMs, maxOutputTokens, thinkingLevel, systemInstruction, responseSchema } = contract.interpret;
   return {
     timeoutMs,
-    body: {
+    body: JSON.stringify({
       model,
       store: false,
       system_instruction: systemInstruction.replace("{now}", now),
       input: text,
       generation_config: { max_output_tokens: maxOutputTokens, thinking_level: thinkingLevel },
       response_format: { type: "text", mime_type: "application/json", schema: responseSchema },
-    },
+    }),
   };
 }
 
 export function analyzeRequest({ question, image }: AnalyzeInput): Upstream {
   const { model, timeoutMs, maxOutputTokens, systemInstruction } = contract.analyze;
-  return {
-    timeoutMs,
-    body: {
-      model,
-      store: false,
-      system_instruction: systemInstruction,
-      input: [
-        { type: "text", text: question },
-        { type: "image", data: image, mime_type: "image/jpeg" },
-      ],
-      generation_config: { max_output_tokens: maxOutputTokens },
-    },
-  };
+  // La imagen se empalma como bytes. La marca es aleatoria para que la pregunta no pueda coincidir con ella.
+  const marker = crypto.randomUUID();
+  const [before, after] = JSON.stringify({
+    model,
+    store: false,
+    system_instruction: systemInstruction,
+    input: [
+      { type: "text", text: question },
+      { type: "image", data: marker, mime_type: "image/jpeg" },
+    ],
+    generation_config: { max_output_tokens: maxOutputTokens },
+  }).split(marker) as [string, string];
+  return { timeoutMs, body: new Blob([before, image, after]) };
 }
 
 async function errorCode(response: Response): Promise<ErrorCode> {
@@ -65,7 +65,7 @@ async function send(upstream: Upstream, key: string): Promise<ModelAnswer> {
     response = await fetch(`${contract.baseUrl}/interactions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key, "Api-Revision": contract.apiRevision },
-      body: JSON.stringify(upstream.body),
+      body: upstream.body,
       signal: AbortSignal.timeout(upstream.timeoutMs),
     });
   } catch (error) {

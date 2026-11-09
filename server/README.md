@@ -4,16 +4,16 @@ Worker de Cloudflare que se interpone entre la aplicación y Google Gemini. Es l
 
 ## Operaciones
 
-Ambas son `POST`, exigen `Content-Type: application/json`, `Content-Length` y la cabecera `X-Nexium-Install` con un UUID v4 anónimo. Devuelven `{ "output": "…", "tokens": 42 }`.
+Ambas son `POST`, exigen `Content-Type`, `Content-Length` y la cabecera `X-Nexium-Install` con un UUID v4 anónimo. Devuelven `{ "output": "…", "tokens": 42 }`.
 
-| Ruta | Cuerpo | Límites |
-|---|---|---|
-| `/v1/interpret` | `{ "text": "…", "now": "2026-11-09T10:30:00-05:00" }` | Texto de hasta 500 caracteres. Cuerpo de hasta 4 KiB |
-| `/v1/analyze` | `{ "question": "…", "imageType": "image/jpeg", "image": "<JPEG en base64>" }` | Imagen de hasta 1 MB |
+| Ruta | `Content-Type` | Cuerpo | Límites |
+|---|---|---|---|
+| `/v1/interpret` | `application/json` | `{ "text": "…", "now": "2026-11-09T10:30:00-05:00" }` | Texto de hasta 500 caracteres. Cuerpo de hasta 4 KiB |
+| `/v1/analyze` | `application/x-nexium-capture` | Una línea `{ "question": "…", "imageType": "image/jpeg" }`, un salto de línea y el JPEG en base64 | Imagen de hasta 512 KB |
 
 Un campo adicional se rechaza: el cliente no puede elegir modelo, instrucciones ni URL. El modelo y las instrucciones están en `src/ai-contract.json`.
 
-De la imagen solo se comprueban el tamaño, el tipo declarado y la cabecera del archivo. El Worker no la decodifica, para no acercarse al límite de 10 ms de CPU.
+De la imagen solo se comprueban el tamaño, el tipo declarado y la cabecera del archivo, además de que no contenga comillas ni barras invertidas, porque sus bytes se insertan tal cual en el JSON que recibe Google. El Worker no la decodifica ni la convierte en cadena de texto, para no acercarse al límite de 10 ms de CPU.
 
 ## Regiones
 

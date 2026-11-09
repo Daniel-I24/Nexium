@@ -1,7 +1,7 @@
 import { ApiError } from "./errors";
 
 export const MAX_TEXT_CHARS = 500;
-export const MAX_IMAGE_BYTES = 1_000_000;
+export const MAX_IMAGE_BYTES = 512_000;
 const MAX_IMAGE_BASE64 = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
 export const MAX_INTERPRET_BODY = 4_096;
 export const MAX_ANALYZE_BODY = MAX_IMAGE_BASE64 + 4_096;
@@ -10,6 +10,10 @@ const INSTALL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9
 const LOCAL_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):\d{2}([+-]\d{2}:\d{2})$/;
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const JPEG_TYPE = "image/jpeg";
+export const CAPTURE_CONTENT_TYPE = "application/x-nexium-capture";
+const QUOTE = 0x22;
+const BACKSLASH = 0x5c;
+const NEWLINE = 0x0a;
 /** Ocho caracteres de base64 son seis bytes: bastan para la cabecera y no obligan a decodificar el resto. */
 const HEADER_CHARS = 8;
 
@@ -20,7 +24,8 @@ export interface InterpretInput {
 
 export interface AnalyzeInput {
   question: string;
-  image: string;
+  /** JPEG en base64, como bytes: convertirlo en cadena costaría más CPU de la que permite el plan gratuito. */
+  image: Uint8Array;
 }
 
 export function installId(header: string | null): string {
@@ -28,14 +33,15 @@ export function installId(header: string | null): string {
   return header;
 }
 
-/** Lee el cuerpo con un tope: nada se analiza sin saber antes cuánto ocupa. */
-export async function readObject(request: Request, maxBytes: number): Promise<Record<string, unknown>> {
-  if (!request.headers.get("Content-Type")?.toLowerCase().startsWith("application/json")) throw new ApiError("invalid_request");
+/** Nada se lee sin saber antes cuánto ocupa. */
+function checkEnvelope(request: Request, contentType: string, maxBytes: number): void {
+  if (!request.headers.get("Content-Type")?.toLowerCase().startsWith(contentType)) throw new ApiError("invalid_request");
   const declared = Number(request.headers.get("Content-Length"));
   if (!Number.isInteger(declared) || declared <= 0) throw new ApiError("invalid_request");
   if (declared > maxBytes) throw new ApiError("payload_too_large");
-  const raw = await request.text();
-  if (raw.length > maxBytes) throw new ApiError("payload_too_large");
+}
+
+function parseObject(raw: string): Record<string, unknown> {
   let body: unknown;
   try {
     body = JSON.parse(raw);
@@ -44,6 +50,13 @@ export async function readObject(request: Request, maxBytes: number): Promise<Re
   }
   if (typeof body !== "object" || body === null || Array.isArray(body)) throw new ApiError("invalid_request");
   return body as Record<string, unknown>;
+}
+
+export async function readObject(request: Request, maxBytes: number): Promise<Record<string, unknown>> {
+  checkEnvelope(request, "application/json", maxBytes);
+  const raw = await request.text();
+  if (raw.length > maxBytes) throw new ApiError("payload_too_large");
+  return parseObject(raw);
 }
 
 /** Un campo desconocido se rechaza: el cliente no puede elegir modelo, instrucciones ni URL. */
@@ -69,10 +82,10 @@ function describeNow(value: unknown): string {
 }
 
 /** Todo JPEG empieza por FF D8 FF, seguido del byte de un marcador (C0 a FE). */
-function hasJpegHeader(base64: string): boolean {
+function hasJpegHeader(base64: Uint8Array): boolean {
   let head: string;
   try {
-    head = atob(base64.slice(0, HEADER_CHARS));
+    head = atob(String.fromCharCode(...base64.subarray(0, HEADER_CHARS)));
   } catch {
     return false;
   }
@@ -80,22 +93,33 @@ function hasJpegHeader(base64: string): boolean {
   return head.startsWith("\xff\xd8\xff") && marker >= 0xc0 && marker <= 0xfe;
 }
 
-/** Comprueba tamaño, tipo declarado y cabecera. La imagen completa nunca se decodifica: el límite de CPU es de 10 ms. */
-function jpegBase64(value: unknown, declaredType: unknown): string {
-  if (typeof value !== "string" || declaredType !== JPEG_TYPE) throw new ApiError("invalid_request");
-  if (value.length > MAX_IMAGE_BASE64) throw new ApiError("payload_too_large");
-  if (value.length % 4 !== 0 || !hasJpegHeader(value)) throw new ApiError("invalid_request");
-  return value;
+/**
+ * Comprueba tamaño, tipo declarado y cabecera. La imagen nunca se decodifica: el límite de CPU es de 10 ms.
+ * Comillas y barras se rechazan porque estos bytes se insertan tal cual dentro del JSON que recibe Google.
+ */
+function checkJpegBase64(image: Uint8Array): void {
+  if (image.length > MAX_IMAGE_BASE64) throw new ApiError("payload_too_large");
+  if (image.length % 4 !== 0 || image.includes(QUOTE) || image.includes(BACKSLASH) || !hasJpegHeader(image)) throw new ApiError("invalid_request");
+}
+
+/** El cuerpo es una línea JSON con la pregunta y el tipo, y después la imagen en base64. */
+export async function readCapture(request: Request): Promise<AnalyzeInput> {
+  checkEnvelope(request, CAPTURE_CONTENT_TYPE, MAX_ANALYZE_BODY);
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (bytes.length > MAX_ANALYZE_BODY) throw new ApiError("payload_too_large");
+  const lineEnd = bytes.indexOf(NEWLINE);
+  if (lineEnd <= 0 || lineEnd > MAX_INTERPRET_BODY) throw new ApiError("invalid_request");
+  const fields = parseObject(new TextDecoder().decode(bytes.subarray(0, lineEnd)));
+  onlyFields(fields, "question", "imageType");
+  if (fields.imageType !== JPEG_TYPE) throw new ApiError("invalid_request");
+  const image = bytes.subarray(lineEnd + 1);
+  checkJpegBase64(image);
+  return { question: text(fields.question), image };
 }
 
 export function interpretInput(body: Record<string, unknown>): InterpretInput {
   onlyFields(body, "text", "now");
   return { text: text(body.text), now: describeNow(body.now) };
-}
-
-export function analyzeInput(body: Record<string, unknown>): AnalyzeInput {
-  onlyFields(body, "question", "imageType", "image");
-  return { question: text(body.question), image: jpegBase64(body.image, body.imageType) };
 }
 
 /** En IPv6 una persona controla como mínimo un /64: limitar la dirección completa no serviría. */

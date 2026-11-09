@@ -3,7 +3,7 @@ import { ApiError, errorResponse, errorStatus } from "./errors";
 import { analyzeRequest, callGemini, interpretRequest, type ModelAnswer } from "./gemini";
 import { enforceLimits } from "./limiter";
 import { assertRegionAllowed } from "./region";
-import { analyzeInput, installId, interpretInput, ipBucket, MAX_ANALYZE_BODY, MAX_INTERPRET_BODY, readObject } from "./validation";
+import { installId, interpretInput, ipBucket, MAX_INTERPRET_BODY, readCapture, readObject } from "./validation";
 
 export { UsageCounter } from "./limiter";
 
@@ -14,8 +14,7 @@ const OPERATIONS: Record<string, Operation> = { "/v1/interpret": "interpret", "/
 async function run(operation: Operation, request: Request, env: Env): Promise<ModelAnswer> {
   assertRegionAllowed(request.cf?.country);
   const install = installId(request.headers.get("X-Nexium-Install"));
-  const body = await readObject(request, operation === "interpret" ? MAX_INTERPRET_BODY : MAX_ANALYZE_BODY);
-  const upstream = operation === "interpret" ? interpretRequest(interpretInput(body)) : analyzeRequest(analyzeInput(body));
+  const upstream = operation === "interpret" ? interpretRequest(interpretInput(await readObject(request, MAX_INTERPRET_BODY))) : analyzeRequest(await readCapture(request));
   if (!env.GEMINI_API_KEY) throw new ApiError("unavailable");
   await enforceLimits(env, env.LIMITS[operation], operation, install, ipBucket(request.headers.get("CF-Connecting-IP") ?? "unknown"));
   return callGemini(upstream, env.GEMINI_API_KEY);
