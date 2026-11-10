@@ -52,7 +52,6 @@ HistoryService → SQLite
 | Tailwind / plugin de Vite | 4.3.4 | Configuración en CSS |
 | Vitest | 5.1.0 | Admite Vite 8 |
 | `rusqlite` | 0.41 con `bundled` | |
-| `keyring` | 4.2 | |
 | `sysinfo` | 0.40 | |
 | `starship-battery` | 0.12 | Bifurcación mantenida de `battery` |
 | `xcap` | 0.9 | |
@@ -69,7 +68,7 @@ HistoryService → SQLite
 | **React, TypeScript, Tailwind 4** | Requisito del proyecto. Tailwind 4 permite un tema único en CSS | |
 | **Rust** | Acceso nativo, y las claves nunca llegan a la interfaz | Lógica en TypeScript: expondría la clave a la vista web |
 | **`rusqlite` con `bundled`** | La misma versión de SQLite en los tres sistemas, y solo el backend accede a los datos | `tauri-plugin-sql`: abre SQL hacia la interfaz |
-| **`keyring`** | Usa Credential Manager, Keychain y Secret Service | Archivo cifrado: habría que gestionar otra clave |
+| **Servidor en Cloudflare Workers** | La clave de Gemini no puede ir en un instalador público. Plan gratuito suficiente y sin servidor que mantener | Que cada usuario pegue su clave: descartado para una app que debe funcionar sin configurar nada |
 | **Whisper local para voz** | Mismo motor en los tres sistemas, sin coste por uso, sin segunda clave y sin enviar la voz fuera | Ver abajo |
 | **`cpal` para el micrófono** | Captura nativa e igual en todos los sistemas | `getUserMedia`: depende de cada vista web |
 | **Gemini como proveedor inicial** | Decisión del propietario: capa gratuita, texto y visión en una sola API, salidas estructuradas | Cualquier otro se puede añadir tras `AiProvider` |
@@ -200,18 +199,18 @@ Antes de una distribución pública hay que revisar estas condiciones. Queda com
 - **Lista cerrada:** el modelo solo puede elegir entre intenciones de un `enum`. No hay herramientas ni acceso a comandos o archivos.
 - **Datos mínimos:** se envía el texto de la solicitud y la fecha y zona horaria actuales.
 - **Fechas:** el modelo devuelve la fecha resuelta y si existe ambigüedad. Rust comprueba que sea válida y futura. Si hay ambigüedad o falta la hora, se pide aclaración. El usuario confirma antes de guardar.
-- **Tiempos de espera y cancelación:** 20 s para interpretar y 60 s para visión, cancelables desde la interfaz.
-- **Cuota agotada:** `quota_exceeded` produce "Se agotó la cuota diaria gratuita de Google Gemini. Se renueva a medianoche, hora del Pacífico." `rate_limit_exceeded` y `too_many_requests` piden esperar un minuto. **No hay reintentos automáticos ante 429, ni cambio a un plan de pago.** Solo un 503 o 504 admite un único reintento.
+- **Tiempos de espera y cancelación:** en el servidor, 10 s por intento y 22 s en total para interpretar; 40 s y 85 s para visión. Cancelables desde la interfaz.
+- **Cuota agotada:** `quota_exceeded` produce "Se agotó la cuota diaria gratuita de Google Gemini. Se renueva a medianoche, hora del Pacífico." `rate_limit_exceeded` y `too_many_requests` piden esperar un minuto. **No hay reintentos automáticos ante 429, ni cambio a un plan de pago.** Solo un fallo pasajero (5xx, tiempo agotado o red caída) admite un único reintento, en el servidor.
 - **Sin gasto innecesario:** hora, CPU, RAM, batería, red y modo oscuro nunca llaman a la IA. Una frase que las reglas no entienden sí la usa.
 - **Costos:** límite diario de solicitudes configurable, contador de tokens en SQLite, `max_output_tokens` acotado y captura reducida a 1568 px como máximo en el lado largo.
 
 ### Claves
 
-- **Aplicación distribuida:** la clave se escribe en Ajustes, se guarda en el almacén seguro del sistema y nunca vuelve a la interfaz. Si Secret Service no existe en un Linux, la clave solo se conserva durante la sesión; nunca se guarda en claro.
-- **Desarrollo:** únicamente las compilaciones de desarrollo y las pruebas en vivo leen `GEMINI_API_KEY` desde `.env`, que Git ignora. El código de lectura no existe en la compilación de distribución.
-- **Registros:** la clave nunca aparece en registros ni en mensajes de error.
+- **Aplicación distribuida:** no contiene ninguna clave. Habla con el servidor de Nexium (`server/`), un Worker de Cloudflare que guarda la clave como secreto, fija modelo e instrucciones, valida cada solicitud y limita el uso por instalación, por IP y en total. Detalles en `server/README.md`.
+- **Desarrollo:** únicamente las compilaciones de desarrollo y las pruebas en vivo leen `GEMINI_API_KEY` desde `.env`, que Git ignora, y solo si no se indica `NEXIUM_AI_SERVER_URL`. El código de lectura no existe en la compilación de distribución.
+- **Registros:** la clave nunca aparece en registros ni en mensajes de error. El servidor solo registra métricas, sin contenido.
 
-**Servicio intermediario: evaluado y descartado para esta versión.** Protegería una clave compartida, pero exige servidor, cuentas, límites y un coste continuo: justo la plataforma que el documento pide no construir. Cada usuario usa su propia clave. `AiProvider` deja abierta la opción de añadirlo después.
+**Servicio intermediario:** se descartó al principio por exigir servidor y límites. Se adoptó después, porque la aplicación debe traer la IA integrada para cualquier persona y una clave en un instalador público se puede extraer.
 
 ## 6. Acceso multiplataforma al sistema
 
@@ -240,7 +239,6 @@ Salvo lo marcado en la leyenda, esta matriz es **lo que se espera según la docu
 | Micrófono | `cpal` | `cpal` | `cpal` con ALSA | macOS: `NSMicrophoneUsageDescription`. Linux: `libasound2-dev` |
 | Notificaciones | Plugin de Tauri | Plugin | Plugin | Windows: solo con identidad propia si está instalada |
 | Voz | Whisper | Whisper (Metal) | Whisper | Al compilar: CMake, C++ y `libclang` |
-| Clave segura | Credential Manager | Keychain | Secret Service | Linux: necesita un servicio de llaves |
 
 **Comprobado hasta ahora:** ver "Resultado de la prueba de viabilidad" en la sección 8. En este Windows, `netsh wlan` devuelve el SSID con la ubicación permitida. Faltan por verificar los casos con la ubicación desactivada, y todo macOS y Linux.
 
@@ -310,7 +308,7 @@ Prueba desechable ejecutada hoy en este equipo con Windows 11, fuera del reposit
 | `cpal` | Encontró un micrófono por defecto. No se grabó audio |
 | `starship-battery` | Detectó 1 batería |
 | `whisper-rs` | Compiló y enlazó. **Aún no ha transcrito audio** |
-| `keyring` | Solo compiló. Falta probar guardar y leer una clave |
+| `keyring` | Solo compiló. Se eliminó después: la clave ya no está en el equipo |
 
 **Lo que falló y cómo se resolvió, en orden:**
 

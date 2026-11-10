@@ -1,8 +1,40 @@
 # Nexium: estado del proyecto
 
-Última actualización: 7 de noviembre de 2026.
+Última actualización: 10 de noviembre de 2026.
 
-**Etapa actual:** 5, integración en Windows. La aplicación ya se ejecuta en una ventana real. Faltan las comprobaciones que requieren al propietario: micrófono, bandeja, notificaciones, almacén de claves y captura real.
+**Etapa actual:** plan de cierre para la presentación. **Fase A (IA integrada mediante servidor) cerrada**; sigue la Fase B (rendimiento y calidad del código). Faltan las comprobaciones manuales del propietario: micrófono, bandeja, notificaciones y una captura real con la pantalla preparada.
+
+## Fase A: IA integrada mediante el servidor de Nexium
+
+Quien usa Nexium ya no configura ninguna clave. La aplicación habla con un Worker de Cloudflare (`server/`, desplegado en `https://nexium-ai.nexium-ai.workers.dev`), que guarda la clave de Gemini como secreto de Cloudflare y es lo único que la conoce. Ajustes muestra el estado del servicio y el aviso de privacidad. Gemini directo solo existe en compilaciones de desarrollo.
+
+**Comprobado en el Worker desplegado (9 y 10 de noviembre de 2026):**
+
+| Comprobación | Resultado |
+|---|---|
+| 25 frases en español con razonamiento `low` | 23 de 25. Media de 7,4 s desde la app, máximo 24,9 s. Los 2 fallos fueron transitorios: un tiempo agotado y un "no disponible" que funcionaron al repetirlos |
+| Las mismas 25 frases con razonamiento `minimal` | **25 de 25.** Media de 2,0 s, máximo 3,8 s. Dentro del Worker: mediana 1,4 s, máximo 3,6 s |
+| CPU del Worker al interpretar | 2 a 6 ms de los 10 ms del plan gratuito |
+| CPU al analizar una captura dentro del JSON (700 KB y 1 MB) | 14 a 21 ms: por encima del límite, aunque Cloudflare no cortó ninguna |
+| CPU con la imagen como bytes (700 KB y 1 MB) | 6 a 13 ms |
+| CPU con el máximo actual (500 KB en la app, 512 KB en el Worker) | **3 a 8 ms** |
+| Recorrer todo el alfabeto base64 de 512 KB | 0 a 1 ms con el Worker caliente, unos 3 ms en frío. Medido con solicitudes rechazadas, sin gastar cuota |
+| Solicitudes no válidas (cabecera PNG, tipo PNG) | 400, sin llamar a Google |
+| App real: búsqueda, aclaración "5/6", chiste, hora, clima, Ajustes | Correctos. Ajustes indica "Funcionando" |
+| App real: análisis de pantalla | Funciona de extremo a extremo en 14 s, pero **la captura no mostró la imagen de prueba**: capturó la ventana de la conversación de desarrollo, que llegó a Google. Hay que repetirla con la pantalla preparada |
+
+**Decisiones del propietario aplicadas:**
+
+- **Regiones:** el Worker no da servicio en el EEE, Reino Unido y Suiza (`region_unavailable`), porque Google solo permite allí servicios de pago. Tampoco si Cloudflare no conoce el país (`XX`) o es Tor (`T1`), con su propio mensaje (`country_unknown`). Solo está probado en el motor de Workers: desde Colombia, el Worker real responde 200.
+- **Cupo global:** 500 interpretaciones y 50 análisis al día. Es un valor prudente, no la cuota real: no se encontró en AI Studio. Se cambia en `server/wrangler.jsonc` sin tocar el código.
+- **Imagen:** el Worker no la decodifica. Comprueba tamaño, tipo declarado, todo el alfabeto base64 con su relleno, y la cabecera JPEG.
+- **Reintento:** un fallo pasajero (5xx de Google, tiempo agotado o red caída) se reintenta una vez, dentro de 22 s al interpretar y 85 s al analizar. La app sigue en "Procesando" mientras tanto. Está cubierto con pruebas automáticas; no se pudo provocar un fallo real de Google.
+
+**Cuota gastada en pruebas el 9 de noviembre:** 16 análisis de imagen. El 10 de noviembre: 1.
+
+**Open-Meteo:** el 10 de noviembre por la mañana, la búsqueda de ciudades tardó hasta 16,7 s y una vez no respondió en 25 s, desde esta red y también con `curl`. La app mostró "No fue posible consultar el clima. Comprueba tu conexión a Internet. No muestro datos antiguos.", sin datos inventados. Horas después respondía en 0,6 a 1,7 s, igual que otros servicios de control, y el clima funcionó en la app. No se pudo determinar si fue la red o el servicio.
+
+**Error de enlace 1123 de `cargo test --test contract`:** no se repitió en la compilación del propietario. Más tarde, la misma prueba falló porque la app de desarrollo tenía abierto `nexium.exe`; es una causa probable, no comprobada.
 
 | Etapa | Estado |
 |---|---|
@@ -64,8 +96,8 @@ Las pruebas con datos de ejemplo no detectaron estos defectos; sí la ventana re
 
 ## Sin probar
 
-- Micrófono, bandeja, notificaciones y almacén de claves.
-- Captura de pantalla real.
+- Micrófono, bandeja y notificaciones. El almacén de claves ya no existe: la clave está en el servidor.
+- Captura de pantalla real con una pantalla preparada, sin datos personales.
 - Búsqueda de archivos en carpetas reales.
 - Carga y liberación del modelo de voz en la app real.
 - El instalador: todo lo anterior es con `tauri dev`.
@@ -100,7 +132,7 @@ Defectos encontrados:
 
 - Ninguno obedeció la instrucción maliciosa de la imagen.
 - `gemini-3.6-flash` dio pasos más concretos ante el error (`services.msc`). `gemini-3.5-flash-lite` añadió una recomendación que la pantalla no decía ("debes activar la opción de comprimir copias").
-- **Decisión:** se mantiene `gemini-3.6-flash` para pantalla, porque explicar errores es su uso principal, aunque gasta más. Es una muestra de solo cuatro imágenes, sin capturas reales del escritorio. Se puede cambiar en Ajustes.
+- **Decisión:** se mantiene `gemini-3.6-flash` para pantalla, porque explicar errores es su uso principal, aunque gasta más. Es una muestra de solo cuatro imágenes, sin capturas reales del escritorio. El modelo ya no se elige en Ajustes: está en `server/src/ai-contract.json`.
 
 ## Pruebas reales con Open-Meteo
 
@@ -133,5 +165,6 @@ Fecha: 7 de noviembre de 2026. Herramienta: `src-tauri/examples/weather_live.rs`
 ## Decisiones pendientes del propietario
 
 - Certificados de firma antes de una distribución pública. Por ahora, no se compran.
-- Condiciones de la capa gratuita de Gemini para una distribución pública: uso de datos, 18 años o más, uso profesional, y solo servicios de pago en el EEE, Reino Unido y Suiza.
+- Condiciones de la capa gratuita de Gemini para una distribución pública: uso de datos, 18 años o más y uso profesional. El EEE, Reino Unido y Suiza ya están bloqueados en el servidor.
+- Cuota real de los modelos en AI Studio, para ajustar el cupo global.
 - Plan de pago de Open-Meteo si hay uso comercial.
