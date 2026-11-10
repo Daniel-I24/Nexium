@@ -2,6 +2,7 @@ import { env, exports } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Env, OperationLimits } from "../src/env";
+import { callGemini } from "../src/gemini";
 import { handleRequest } from "../src/index";
 import { REAL_JPEG, REAL_PNG } from "./captures";
 import { CAPTURE_CONTENT_TYPE, MAX_IMAGE_BYTES, MAX_TEXT_CHARS } from "../src/validation";
@@ -382,18 +383,46 @@ describe("errores de Google", () => {
     expect((await handleRequest(interpret(), testEnv())).status).toBe(200);
   });
 
-  it("agotar el tiempo se informa aparte", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new DOMException("agotado", "TimeoutError"));
+  it("un tiempo agotado se reintenta una vez y después se informa aparte", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new DOMException("agotado", "TimeoutError"));
     const response = await handleRequest(interpret(), testEnv());
     expect(response.status).toBe(504);
     expect(await errorOf(response)).toBe("timeout");
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 
-  it("un fallo de red no filtra detalles", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("clave-de-prueba en el mensaje"));
+  it("tras un tiempo agotado, el reintento puede salir bien", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new DOMException("agotado", "TimeoutError")).mockResolvedValueOnce(success()());
+    expect((await handleRequest(interpret(), testEnv())).status).toBe(200);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("un fallo de red se reintenta una vez y no filtra detalles", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("clave-de-prueba en el mensaje"));
     const response = await handleRequest(interpret(), testEnv());
     expect(await response.clone().text()).not.toContain("clave-de-prueba");
     expect(await errorOf(response)).toBe("unavailable");
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("no reintenta si ya no queda tiempo suficiente", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      throw new DOMException("agotado", "TimeoutError");
+    });
+    await expect(callGemini({ body: "{}", timeoutMs: 100, totalTimeoutMs: 3500 }, "clave-de-prueba")).rejects.toMatchObject({ code: "timeout" });
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("el reintento usa como mucho el tiempo que queda", async () => {
+    const signals: AbortSignal[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      signals.push(init?.signal as AbortSignal);
+      if (signals.length === 1) throw new DOMException("agotado", "TimeoutError");
+      return success()();
+    });
+    await callGemini({ body: "{}", timeoutMs: 60_000, totalTimeoutMs: 10_000 }, "clave-de-prueba");
+    expect(signals).toHaveLength(2);
   });
 
   it("una respuesta sin texto o ilegible no se da por buena", async () => {
