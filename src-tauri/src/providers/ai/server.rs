@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use reqwest::{header::CONTENT_TYPE, RequestBuilder, Response};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::json;
 
 use super::{schema, AiAnswer, AiProvider, InterpretRequest, VisionRequest};
 use crate::{error::AiError, models::Intent};
@@ -132,6 +132,7 @@ impl AiProvider for NexiumServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
     use chrono::{FixedOffset, Local, TimeZone};
     use wiremock::{
         matchers::{body_json, body_string_contains, header, method, path},
