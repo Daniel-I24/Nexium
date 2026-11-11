@@ -54,6 +54,8 @@ jobs:
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - uses: swatinem/rust-cache@v2
         with:
@@ -63,6 +65,14 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+      - name: Formato de Rust
+        working-directory: src-tauri
+        run: cargo fmt --all --check
+
+      - name: Clippy, con advertencias como errores
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Pruebas de Rust
         working-directory: src-tauri
