@@ -96,6 +96,8 @@ describe("operaciones", () => {
     expect(await response.json()).toEqual({ output: "Un error de ruta.", tokens: 42 });
     const sent = JSON.parse(await ((spy.mock.calls[0] as [string, RequestInit])[1].body as Blob).text());
     expect(sent.model).toBe("gemini-3.6-flash");
+    expect(sent.response_format).toMatchObject({ mime_type: "application/json", schema: { required: ["summary", "cause", "steps"] } });
+    expect(sent.system_instruction).toContain("sin formato Markdown");
     expect(sent.input).toEqual([
       { type: "text", text: 'Dime "qué" es \\ esto' },
       { type: "image", data: JPEG, mime_type: "image/jpeg" },

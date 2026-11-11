@@ -50,7 +50,7 @@ export function interpretRequest({ text, now }: InterpretInput): Upstream {
 }
 
 export function analyzeRequest({ question, image }: AnalyzeInput): Upstream {
-  const { model, timeoutMs, totalTimeoutMs, maxOutputTokens, systemInstruction } = contract.analyze;
+  const { model, timeoutMs, totalTimeoutMs, maxOutputTokens, systemInstruction, responseSchema } = contract.analyze;
   // La imagen se empalma como bytes. La marca es aleatoria para que la pregunta no pueda coincidir con ella.
   const marker = crypto.randomUUID();
   const [before, after] = JSON.stringify({
@@ -62,6 +62,7 @@ export function analyzeRequest({ question, image }: AnalyzeInput): Upstream {
       { type: "image", data: marker, mime_type: "image/jpeg" },
     ],
     generation_config: { max_output_tokens: maxOutputTokens },
+    response_format: { type: "text", mime_type: "application/json", schema: responseSchema },
   }).split(marker) as [string, string];
   return { timeoutMs, totalTimeoutMs, body: new Blob([before, image, after]) };
 }

@@ -77,6 +77,35 @@ function ReminderDraft({ body, onSave }: { body: { content: string; dueAt: strin
   );
 }
 
+function ScreenAnalysisView({ summary, cause, steps }: { summary: string; cause: string | null; steps: string[] }) {
+  return (
+    <div className="flex max-w-reading flex-col gap-5">
+      <p className="m-0 text-lg font-semibold leading-snug">{summary}</p>
+      {cause && (
+        <section className="flex flex-col gap-1">
+          <h2 className="m-0 text-sm font-medium text-muted">Causa probable</h2>
+          <p className="m-0 text-md leading-normal">{cause}</p>
+        </section>
+      )}
+      {steps.length > 0 && (
+        <section className="flex flex-col gap-1">
+          <h2 className="m-0 text-sm font-medium text-muted">Qué hacer</h2>
+          <ol className="m-0 list-none p-0">
+            {steps.map((step, index) => (
+              <li key={index} className="flex gap-3 border-t border-hairline py-2 text-md">
+                <span aria-hidden="true" className="font-mono text-muted">
+                  {index + 1}
+                </span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+    </div>
+  );
+}
+
 function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions }) {
   switch (body.kind) {
     case "reading":
@@ -104,6 +133,8 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
       );
     case "text":
       return <p className="m-0 max-w-reading whitespace-pre-wrap text-lg leading-normal">{body.text}</p>;
+    case "screenAnalysis":
+      return <ScreenAnalysisView summary={body.summary} cause={body.cause} steps={body.steps} />;
     case "files":
       return (
         <>

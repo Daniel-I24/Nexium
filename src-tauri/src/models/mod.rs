@@ -152,6 +152,11 @@ pub enum ResponseBody {
     Text {
         text: String,
     },
+    ScreenAnalysis {
+        summary: String,
+        cause: Option<String>,
+        steps: Vec<String>,
+    },
     Files {
         summary: String,
         files: Vec<FileResult>,
@@ -182,6 +187,14 @@ pub enum ResponseBody {
         message: String,
         hint: Option<String>,
     },
+}
+
+/// Análisis de una captura, ya validado y en texto plano.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScreenAnalysis {
+    pub summary: String,
+    pub cause: Option<String>,
+    pub steps: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]

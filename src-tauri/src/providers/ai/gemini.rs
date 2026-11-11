@@ -9,7 +9,10 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use super::{schema, AiAnswer, AiProvider, InterpretRequest, VisionRequest};
-use crate::{error::AiError, models::Intent};
+use crate::{
+    error::AiError,
+    models::{Intent, ScreenAnalysis},
+};
 
 pub const DEV_KEY_VARIABLE: &str = "GEMINI_API_KEY";
 
@@ -183,7 +186,7 @@ impl AiProvider for GeminiProvider {
         Ok(AiAnswer { value, tokens: response.usage.total_tokens })
     }
 
-    async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<String>, AiError> {
+    async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<ScreenAnalysis>, AiError> {
         let contract = &CONTRACT["analyze"];
         let body = json!({
             "model": contract["model"],
@@ -193,10 +196,11 @@ impl AiProvider for GeminiProvider {
                 { "type": "text", "text": request.question },
                 { "type": "image", "data": STANDARD.encode(&request.image_jpeg), "mime_type": "image/jpeg" }
             ],
-            "generation_config": { "max_output_tokens": contract["maxOutputTokens"] }
+            "generation_config": { "max_output_tokens": contract["maxOutputTokens"] },
+            "response_format": { "type": "text", "mime_type": "application/json", "schema": contract["responseSchema"] }
         });
         let response = self.send(body, timeout_of(contract)).await?;
-        Ok(AiAnswer { value: Self::output_text(&response)?.trim().to_owned(), tokens: response.usage.total_tokens })
+        Ok(AiAnswer { value: schema::parse_screen_analysis(&Self::output_text(&response)?)?, tokens: response.usage.total_tokens })
     }
 }
 
@@ -293,7 +297,7 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(body_partial_json(json!({ "store": false, "input": [{ "type": "text", "text": "¿Qué es?" }, { "type": "image", "data": "AQID", "mime_type": "image/jpeg" }] })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(output("Un error de ruta.")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(output(r#"{"summary":"Un error de ruta.","cause":null,"steps":[]}"#)))
             .expect(1)
             .mount(&server)
             .await;
@@ -301,7 +305,7 @@ mod tests {
             .analyze_image(VisionRequest { image_jpeg: vec![1, 2, 3], question: "¿Qué es?".into() })
             .await
             .unwrap();
-        assert_eq!(answer.value, "Un error de ruta.");
+        assert_eq!(answer.value.summary, "Un error de ruta.");
     }
 
     #[test]

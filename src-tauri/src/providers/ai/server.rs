@@ -10,7 +10,10 @@ use serde::Deserialize;
 use serde_json::json;
 
 use super::{schema, AiAnswer, AiProvider, InterpretRequest, VisionRequest};
-use crate::{error::AiError, models::Intent};
+use crate::{
+    error::AiError,
+    models::{Intent, ScreenAnalysis},
+};
 
 /// Mayores que los del servidor, que puede reintentar una vez: quien corta primero es él.
 const INTERPRET_TIMEOUT: Duration = Duration::from_secs(45);
@@ -122,10 +125,10 @@ impl AiProvider for NexiumServer {
         Ok(AiAnswer { value, tokens: reply.tokens })
     }
 
-    async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<String>, AiError> {
+    async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<ScreenAnalysis>, AiError> {
         let body = capture_body(&request.question, &request.image_jpeg);
         let reply = Self::send(self.request("/v1/analyze", VISION_TIMEOUT)?.header(CONTENT_TYPE, CAPTURE_CONTENT_TYPE).body(body)).await?;
-        Ok(AiAnswer { value: reply.output.trim().to_owned(), tokens: reply.tokens })
+        Ok(AiAnswer { value: schema::parse_screen_analysis(&reply.output)?, tokens: reply.tokens })
     }
 }
 
@@ -191,11 +194,17 @@ mod tests {
             .and(body_string_contains("\"question\":\"¿Qué es?\""))
             .and(body_string_contains("\"imageType\":\"image/jpeg\""))
             .and(body_string_contains("}\nAQID"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "output": " Un error de ruta. ", "tokens": 9 })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "output": r#"{"summary":"Un error de ruta.","cause":null,"steps":[]}"#, "tokens": 9 })))
             .expect(1)
             .mount(&server)
             .await;
-        assert_eq!(provider(&server).analyze_image(vision()).await.unwrap().value, "Un error de ruta.");
+        assert_eq!(provider(&server).analyze_image(vision()).await.unwrap().value.summary, "Un error de ruta.");
+    }
+
+    #[tokio::test]
+    async fn a_free_text_analysis_is_rejected() {
+        let server = replying(200, json!({ "output": "### Error\n**Falta** un archivo", "tokens": 9 })).await;
+        assert_eq!(provider(&server).analyze_image(vision()).await.unwrap_err(), AiError::InvalidResponse);
     }
 
     #[tokio::test]

@@ -174,8 +174,13 @@ impl Assistant {
             Ok(answer) => {
                 let _ = self.usage.record(answer.tokens);
                 stage(Stage::Responding);
-                let summary: String = answer.value.chars().take(160).collect();
-                self.finish(question, Outcome::done(Category::Screen, summary, ResponseBody::Text { text: answer.value }), &format!("una captura analizada con IA ({provider}). Nexium ya descartó la imagen"))
+                let analysis = answer.value;
+                let body = ResponseBody::ScreenAnalysis { summary: analysis.summary.clone(), cause: analysis.cause, steps: analysis.steps };
+                self.finish(question, Outcome::done(Category::Screen, analysis.summary, body), &format!("una captura analizada con IA ({provider}). Nexium ya descartó la imagen"))
+            }
+            Err(AiError::InvalidResponse) => {
+                let outcome = Outcome::failed(Category::Screen, AiError::InvalidResponse.code(), "La IA devolvió un análisis con un formato que Nexium no puede mostrar.", Some("Vuelve a intentarlo. La captura ya se descartó.".into()));
+                self.finish(question, outcome, "sin datos")
             }
             Err(AiError::Cancelled) => self.finish(question, Outcome { status: InteractionStatus::Cancelled, ..Outcome::failed(Category::Screen, "cancelled", "Operación cancelada.", None) }, "sin datos"),
             Err(error) => self.finish(question, self.ai_failure(Category::Screen, &error), "sin datos"),
@@ -195,6 +200,7 @@ fn origin_label(source: Option<&str>, origin: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::ScreenAnalysis;
 
     #[test]
     fn the_origin_names_an_external_source() {
@@ -246,10 +252,13 @@ mod tests {
             self.calls.fetch_add(1, Ordering::SeqCst);
             self.answer.lock().unwrap().take().unwrap_or(Ok(Intent::Unknown)).map(|value| AiAnswer { value, tokens: 7 })
         }
-        async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<String>, AiError> {
+        async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<ScreenAnalysis>, AiError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             assert!(!request.image_jpeg.is_empty());
-            Ok(AiAnswer { value: "Un error de ruta".into(), tokens: 9 })
+            if request.question == "respuesta ilegible" {
+                return Err(AiError::InvalidResponse);
+            }
+            Ok(AiAnswer { value: ScreenAnalysis { summary: "Un error de ruta".into(), cause: Some("Falta un archivo.".into()), steps: vec!["Comprueba la carpeta.".into()] }, tokens: 9 })
         }
     }
 
@@ -507,10 +516,20 @@ mod tests {
         let h = harness(None, true, false);
         let response = h.assistant.analyze_screen("Explícame este error", CancellationToken::new(), silent()).await;
         assert_eq!(h.capture_calls.load(Ordering::SeqCst), 1);
-        assert!(matches!(response.body, ResponseBody::Text { .. }));
+        assert_eq!(response.body, ResponseBody::ScreenAnalysis { summary: "Un error de ruta".into(), cause: Some("Falta un archivo.".into()), steps: vec!["Comprueba la carpeta.".into()] });
         assert!(response.origin_label.contains("descartó la imagen"));
         let entries = h.assistant.history.list(None).unwrap();
         assert_eq!(entries[0].response, "Un error de ruta");
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_analysis_shows_a_clear_message() {
+        let h = harness(None, true, false);
+        let response = h.assistant.analyze_screen("respuesta ilegible", CancellationToken::new(), silent()).await;
+        let ResponseBody::Error { code, message, hint } = response.body else { panic!() };
+        assert_eq!(code, "invalidResponse");
+        assert!(message.contains("formato que Nexium no puede mostrar"));
+        assert!(hint.unwrap().contains("ya se descartó"));
     }
 
     #[tokio::test]

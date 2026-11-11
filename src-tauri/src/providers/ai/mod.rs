@@ -11,7 +11,10 @@ use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use serde::Serialize;
 
-use crate::{error::AiError, models::Intent};
+use crate::{
+    error::AiError,
+    models::{Intent, ScreenAnalysis},
+};
 
 pub struct InterpretRequest {
     pub text: String,
@@ -38,7 +41,7 @@ pub trait AiProvider: Send + Sync {
     fn quota_message(&self) -> String;
     fn is_configured(&self) -> bool;
     async fn interpret(&self, request: InterpretRequest) -> Result<AiAnswer<Intent>, AiError>;
-    async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<String>, AiError>;
+    async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<ScreenAnalysis>, AiError>;
 }
 
 /// Estado del servicio según su último uso real: consultarlo aparte gastaría cuota.

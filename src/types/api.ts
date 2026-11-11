@@ -47,6 +47,7 @@ export type ResponseBody =
   | { kind: "reading"; value: string; unit: string; context: string; percent: number | null; rows: DataRowContent[]; attribution: Attribution | null }
   | { kind: "rows"; rows: DataRowContent[]; note: string | null; attribution: Attribution | null }
   | { kind: "text"; text: string }
+  | { kind: "screenAnalysis"; summary: string; cause: string | null; steps: string[] }
   | { kind: "files"; summary: string; files: FileResult[]; note: string | null }
   | { kind: "reminderDraft"; content: string; dueAt: string | null; question: string | null; options: ReminderOption[] }
   | { kind: "reminderSaved"; reminder: Reminder }

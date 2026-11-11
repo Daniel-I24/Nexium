@@ -1,16 +1,56 @@
-//! Validación de la interpretación. La salida del modelo es entrada no confiable:
-//! solo se convierte en `Intent` si cada campo es válido.
+//! Validación de las respuestas del modelo. Son entrada no confiable:
+//! solo se convierten en datos de Nexium si cada campo es válido.
+
+use std::sync::LazyLock;
 
 use chrono::{NaiveDate, NaiveTime};
+use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
     error::AiError,
-    models::{FileQuery, Intent, ReminderRequest, SystemMetric, WeatherWhen},
+    models::{FileQuery, Intent, ReminderRequest, ScreenAnalysis, SystemMetric, WeatherWhen},
 };
 
 const MAX_TERMS: usize = 8;
 const MAX_TEXT: usize = 300;
+const MAX_CAUSE: usize = 600;
+const MAX_STEPS: usize = 3;
+
+/// Marcas de bloque al inicio de una línea: títulos, citas, viñetas y numeración.
+static BLOCK_MARK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*(?:#{1,6}\s+|>\s*|[-*+•]\s+|\d{1,2}[.)]\s+)").unwrap());
+/// Enlaces: se conserva el texto y se descarta la dirección.
+static LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap());
+
+/// La interfaz muestra texto plano: cualquier Markdown que devuelva el modelo se quita antes.
+/// Los guiones bajos sueltos se conservan, porque aparecen en nombres de archivo.
+pub fn plain_text(text: &str) -> String {
+    let lines: Vec<String> = text
+        .lines()
+        .map(|line| {
+            let line = BLOCK_MARK.replace(line, "");
+            let line = LINK.replace_all(&line, "$1");
+            line.replace("**", "").replace("__", "").replace(['*', '`'], "")
+        })
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    lines.join(" ").split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Recorta por palabras, sin cortar una a la mitad.
+fn shorten(text: String, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text;
+    }
+    let cut: String = text.chars().take(max).collect();
+    let kept = cut.rsplit_once(' ').map_or(cut.as_str(), |(head, _)| head);
+    format!("{}…", kept.trim_end_matches([',', ';', ':', ' ']))
+}
+
+/// Texto que la interfaz muestra tal cual: sin Markdown y con longitud acotada.
+fn prose(text: Option<String>, max: usize) -> Option<String> {
+    text.map(|value| shorten(plain_text(&value), max)).filter(|value| !value.is_empty())
+}
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(default)]
@@ -76,7 +116,7 @@ pub fn parse_interpretation(text: &str, fallback_question: &str) -> Result<Inten
             Intent::SearchFiles(FileQuery { exact_name, terms })
         }
         "create_reminder" => {
-            let content = clean(raw.reminder_content).ok_or(AiError::InvalidResponse)?;
+            let content = prose(raw.reminder_content, MAX_TEXT).ok_or(AiError::InvalidResponse)?;
             let date_text = clean(raw.reminder_date);
             let time_text = clean(raw.reminder_time);
             let date = date_text.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
@@ -84,19 +124,44 @@ pub fn parse_interpretation(text: &str, fallback_question: &str) -> Result<Inten
             // Una fecha que no se entiende se pregunta: nunca se adivina.
             let unreadable = (date_text.is_some() && date.is_none()) || (time_text.is_some() && time.is_none());
             // La aclaración se muestra tal cual: si el modelo no devuelve una pregunta, se usa la genérica.
-            let model_doubt = clean(raw.reminder_ambiguity);
+            let model_doubt = prose(raw.reminder_ambiguity, MAX_TEXT);
             let is_question = model_doubt.as_deref().is_some_and(|doubt| doubt.contains('?'));
             let ambiguity = if is_question { model_doubt } else { (unreadable || model_doubt.is_some()).then(|| "¿Puedes indicarme la fecha y la hora exactas?".to_owned()) };
             Intent::CreateReminder(ReminderRequest { content, date, time, ambiguity })
         }
         "list_reminders" => Intent::ListReminders,
-        "analyze_screen" => Intent::AnalyzeScreen { question: clean(raw.screen_question).unwrap_or_else(|| fallback_question.to_owned()) },
+        "analyze_screen" => Intent::AnalyzeScreen { question: prose(raw.screen_question, MAX_TEXT).unwrap_or_else(|| fallback_question.to_owned()) },
         "clarify" => Intent::Clarify {
-            question: clean(raw.clarification_question).ok_or(AiError::InvalidResponse)?,
-            suggestions: raw.suggestions.into_iter().filter_map(|s| clean(Some(s))).take(3).collect(),
+            question: prose(raw.clarification_question, MAX_TEXT).ok_or(AiError::InvalidResponse)?,
+            suggestions: raw.suggestions.into_iter().filter_map(|s| prose(Some(s), MAX_TEXT)).take(3).collect(),
         },
         "unknown" => Intent::Unknown,
         _ => return Err(AiError::InvalidResponse),
+    })
+}
+
+#[derive(Deserialize)]
+struct RawScreenAnalysis {
+    summary: String,
+    cause: Option<String>,
+    steps: Vec<String>,
+}
+
+/// Resumen de una frase, causa probable y hasta tres pasos. Cualquier otra forma se rechaza.
+pub fn parse_screen_analysis(text: &str) -> Result<ScreenAnalysis, AiError> {
+    let value: serde_json::Value = serde_json::from_str(text.trim()).map_err(|_| AiError::InvalidResponse)?;
+    // Los tres campos son obligatorios, como en el esquema: una causa ausente no equivale a "sin causa".
+    if !["summary", "cause", "steps"].iter().all(|field| value.get(field).is_some()) {
+        return Err(AiError::InvalidResponse);
+    }
+    let raw: RawScreenAnalysis = serde_json::from_value(value).map_err(|_| AiError::InvalidResponse)?;
+    if raw.steps.len() > MAX_STEPS {
+        return Err(AiError::InvalidResponse);
+    }
+    Ok(ScreenAnalysis {
+        summary: prose(Some(raw.summary), MAX_TEXT).ok_or(AiError::InvalidResponse)?,
+        cause: prose(raw.cause, MAX_CAUSE),
+        steps: raw.steps.into_iter().filter_map(|step| prose(Some(step), MAX_TEXT)).collect(),
     })
 }
 
@@ -132,6 +197,68 @@ mod tests {
         let intent = parse(r#"{"intent":"create_reminder","reminder_content":"estudiar","reminder_ambiguity":"pronto"}"#).unwrap();
         let Intent::CreateReminder(reminder) = intent else { panic!() };
         assert_eq!(reminder.ambiguity.as_deref(), Some("¿Puedes indicarme la fecha y la hora exactas?"));
+    }
+
+    #[test]
+    fn markdown_never_reaches_the_interface() {
+        let cases = [
+            ("**Error de ruta**", "Error de ruta"),
+            ("### ¿Qué significa?", "¿Qué significa?"),
+            ("1. Abre `services.msc`", "Abre services.msc"),
+            ("- Reinicia el *servicio*", "Reinicia el servicio"),
+            ("> cita\n\n__aviso__", "cita aviso"),
+            ("Mira [la ayuda](https://ejemplo.test)", "Mira la ayuda"),
+            ("El archivo mi_informe_final.docx", "El archivo mi_informe_final.docx"),
+            ("Texto   con\nsaltos", "Texto con saltos"),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(plain_text(input), expected, "{input}");
+        }
+    }
+
+    #[test]
+    fn interpretation_texts_are_shown_without_markdown() {
+        let intent = parse(r####"{"intent":"clarify","clarification_question":"**¿Qué** quieres abrir?","suggestions":["- Buscar un archivo"]}"####).unwrap();
+        assert_eq!(intent, Intent::Clarify { question: "¿Qué quieres abrir?".into(), suggestions: vec!["Buscar un archivo".into()] });
+        let Intent::CreateReminder(reminder) = parse(r####"{"intent":"create_reminder","reminder_content":"**pagar** el arriendo","reminder_ambiguity":"### ¿A qué hora?"}"####).unwrap() else { panic!() };
+        assert_eq!(reminder.content, "pagar el arriendo");
+        assert_eq!(reminder.ambiguity.as_deref(), Some("¿A qué hora?"));
+    }
+
+    #[test]
+    fn a_screen_analysis_has_a_summary_a_cause_and_up_to_three_steps() {
+        let analysis = parse_screen_analysis(r####"{"summary":"**Falta** configuracion.ini.","cause":"El programa no encuentra su archivo.","steps":["1. Comprueba la carpeta.","- Reinstala el programa."]}"####).unwrap();
+        assert_eq!(analysis.summary, "Falta configuracion.ini.");
+        assert_eq!(analysis.cause.as_deref(), Some("El programa no encuentra su archivo."));
+        assert_eq!(analysis.steps, ["Comprueba la carpeta.", "Reinstala el programa."]);
+    }
+
+    #[test]
+    fn a_screen_without_problems_has_no_cause_or_steps() {
+        let analysis = parse_screen_analysis(r#"{"summary":"Un escritorio sin ventanas abiertas.","cause":null,"steps":[]}"#).unwrap();
+        assert_eq!(analysis.cause, None);
+        assert!(analysis.steps.is_empty());
+    }
+
+    #[test]
+    fn an_invalid_screen_analysis_is_rejected() {
+        for text in [
+            "Un texto libre con **Markdown**",
+            r#"{"summary":"","cause":null,"steps":[]}"#,
+            r#"{"summary":"x","steps":[]}"#,
+            r#"{"summary":"x","cause":null,"steps":["a","b","c","d"]}"#,
+            r#"{"summary":"x","cause":null,"steps":"uno"}"#,
+        ] {
+            assert_eq!(parse_screen_analysis(text), Err(AiError::InvalidResponse), "{text}");
+        }
+    }
+
+    #[test]
+    fn long_texts_are_cut_between_words() {
+        let long = format!(r#"{{"summary":"{}","cause":null,"steps":[]}}"#, "palabra ".repeat(80));
+        let summary = parse_screen_analysis(&long).unwrap().summary;
+        assert!(summary.chars().count() <= MAX_TEXT + 1);
+        assert!(summary.ends_with("palabra…"));
     }
 
     #[test]
