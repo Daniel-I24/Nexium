@@ -21,8 +21,8 @@ async function run(operation: Operation, request: Request, env: Env): Promise<Mo
 }
 
 /** Solo métricas: nunca el texto, la imagen, la dirección IP ni el identificador de instalación. */
-function logMetric(operation: Operation | "unknown", code: string, status: number, startedAt: number, tokens: number): void {
-  console.log(JSON.stringify({ operation, code, status, durationMs: Date.now() - startedAt, tokens }));
+function logMetric(operation: Operation | "unknown", code: string, status: number, startedAt: number, tokens: number, upstream?: unknown): void {
+  console.log(JSON.stringify({ operation, code, status, durationMs: Date.now() - startedAt, tokens, upstream }));
 }
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
@@ -36,7 +36,8 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     return Response.json(answer);
   } catch (error) {
     const known = error instanceof ApiError ? error : new ApiError("unavailable");
-    logMetric(operation ?? "unknown", error instanceof ApiError ? known.code : "internal", errorStatus(known.code), startedAt, 0);
+    const upstream = error instanceof ApiError && "upstream" in error ? error.upstream : undefined;
+    logMetric(operation ?? "unknown", error instanceof ApiError ? known.code : "internal", errorStatus(known.code), startedAt, 0, upstream);
     return errorResponse(known);
   }
 }

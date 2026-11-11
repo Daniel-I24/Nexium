@@ -436,6 +436,15 @@ describe("errores de Google", () => {
 });
 
 describe("registros", () => {
+  it("un error de Google registra su estado y su código, nunca su mensaje", async () => {
+    const log = vi.spyOn(console, "log");
+    geminiReplies(failure(400, "invalid_argument", "detalle interno de Google con datos"));
+    await handleRequest(interpret(), testEnv());
+    const written = log.mock.calls.flat().join(" ");
+    expect(JSON.parse(written)).toMatchObject({ code: "unavailable", upstream: { status: 400, code: "invalid_argument" } });
+    expect(written).not.toContain("detalle interno");
+  });
+
   it("solo contienen métricas, nunca datos del usuario", async () => {
     const log = vi.spyOn(console, "log");
     geminiReplies(success("respuesta privada"));

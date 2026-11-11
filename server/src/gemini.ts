@@ -67,9 +67,23 @@ export function analyzeRequest({ question, image }: AnalyzeInput): Upstream {
   return { timeoutMs, totalTimeoutMs, body: new Blob([before, image, after]) };
 }
 
-async function errorCode(response: Response): Promise<ErrorCode> {
-  if (response.status !== 429) return "unavailable";
-  const envelope = await response.json<{ error?: { code?: unknown; status?: unknown; message?: unknown } }>().catch(() => undefined);
+interface GoogleError {
+  error?: { code?: unknown; status?: unknown; message?: unknown };
+}
+
+/** Lo que se registra de un error de Google: el estado HTTP y su código. Nunca el mensaje, que puede repetir datos. */
+export interface UpstreamFailure {
+  status: number;
+  code: string | undefined;
+}
+
+function identifier(value: unknown): string | undefined {
+  const text = String(value ?? "").toLowerCase();
+  return /^[a-z0-9_]{1,40}$/.test(text) ? text : undefined;
+}
+
+function errorCode(status: number, envelope: GoogleError | undefined): ErrorCode {
+  if (status !== 429) return "unavailable";
   const code = String(envelope?.error?.code ?? envelope?.error?.status ?? "").toLowerCase();
   const daily = code === "quota_exceeded" || (code === "resource_exhausted" && String(envelope?.error?.message).toLowerCase().includes("per day"));
   return daily ? "service_quota" : "rate_limited";
@@ -87,8 +101,12 @@ async function send(upstream: Upstream, key: string, timeoutMs: number): Promise
   } catch (error) {
     throw transient(error instanceof Error && error.name === "TimeoutError" ? "timeout" : "unavailable");
   }
-  if (response.status >= 500) throw transient("unavailable");
-  if (!response.ok) throw new ApiError(await errorCode(response));
+  if (!response.ok) {
+    const envelope = await response.json<GoogleError>().catch(() => undefined);
+    const upstream: UpstreamFailure = { status: response.status, code: identifier(envelope?.error?.status) ?? identifier(envelope?.error?.code) };
+    const error = response.status >= 500 ? transient("unavailable") : new ApiError(errorCode(response.status, envelope));
+    throw Object.assign(error, { upstream });
+  }
   const answer = await response.json<InteractionResponse>().catch(() => {
     throw new ApiError("unavailable");
   });
