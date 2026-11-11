@@ -134,10 +134,16 @@ impl Assistant {
         };
         stage(Stage::Executing);
         let context = HandlerContext { request: text.to_owned(), now: Local::now(), cancel: cancel.clone() };
-        let Some(handler) = self.handlers.iter().find(|handler| handler.can_handle(&intent)) else {
+        let mut handled = None;
+        for handler in &self.handlers {
+            handled = handler.handle(&intent, &context).await;
+            if handled.is_some() {
+                break;
+            }
+        }
+        let Some(mut outcome) = handled else {
             return self.finish(text, Outcome::failed(Category::General, "noHandler", "No sé hacer esa operación.", None), "sin datos");
         };
-        let mut outcome = handler.handle(&intent, &context).await;
         if cancel.is_cancelled() {
             outcome = Outcome { status: InteractionStatus::Cancelled, ..Outcome::failed(outcome.category, "cancelled", "Operación cancelada.", None) };
         }

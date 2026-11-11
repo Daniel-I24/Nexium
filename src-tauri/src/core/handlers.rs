@@ -60,19 +60,14 @@ pub struct HandlerContext {
 
 #[async_trait]
 pub trait CommandHandler: Send + Sync {
-    fn can_handle(&self, intent: &Intent) -> bool;
-    async fn handle(&self, intent: &Intent, context: &HandlerContext) -> Outcome;
+    /// Atiende la intención si le corresponde. Si no, devuelve `None` y el asistente prueba el siguiente.
+    async fn handle(&self, intent: &Intent, context: &HandlerContext) -> Option<Outcome>;
 }
 
 pub struct TimeHandler;
 
-#[async_trait]
-impl CommandHandler for TimeHandler {
-    fn can_handle(&self, intent: &Intent) -> bool {
-        matches!(intent, Intent::Time)
-    }
-
-    async fn handle(&self, _: &Intent, context: &HandlerContext) -> Outcome {
+impl TimeHandler {
+    fn answer(context: &HandlerContext) -> Outcome {
         let time = clock(&context.now);
         let date = long_date(context.now.date_naive());
         Outcome::done(
@@ -80,6 +75,13 @@ impl CommandHandler for TimeHandler {
             format!("{time} · {date}"),
             ResponseBody::Reading { value: time, unit: String::new(), context: date, percent: None, rows: vec![], attribution: None },
         )
+    }
+}
+
+#[async_trait]
+impl CommandHandler for TimeHandler {
+    async fn handle(&self, intent: &Intent, context: &HandlerContext) -> Option<Outcome> {
+        matches!(intent, Intent::Time).then(|| Self::answer(context))
     }
 }
 
@@ -146,14 +148,8 @@ impl SystemHandler {
     }
 }
 
-#[async_trait]
-impl CommandHandler for SystemHandler {
-    fn can_handle(&self, intent: &Intent) -> bool {
-        matches!(intent, Intent::System(_))
-    }
-
-    async fn handle(&self, intent: &Intent, _: &HandlerContext) -> Outcome {
-        let Intent::System(metric) = intent else { unreachable!("el enrutador comprueba la intención") };
+impl SystemHandler {
+    async fn answer(&self, metric: &SystemMetric) -> Outcome {
         match metric {
             SystemMetric::Cpu => match self.system.cpu_percent().await {
                 Reading::Value(percent) => Outcome::done(
@@ -216,6 +212,14 @@ impl CommandHandler for SystemHandler {
     }
 }
 
+#[async_trait]
+impl CommandHandler for SystemHandler {
+    async fn handle(&self, intent: &Intent, _: &HandlerContext) -> Option<Outcome> {
+        let Intent::System(metric) = intent else { return None };
+        Some(self.answer(metric).await)
+    }
+}
+
 pub struct FilesHandler {
     pub search: Arc<dyn FileSearchProvider>,
     pub settings: SettingsService,
@@ -232,14 +236,8 @@ fn describe_query(query: &FileQuery) -> String {
     query.exact_name.clone().unwrap_or_else(|| query.terms.join(", "))
 }
 
-#[async_trait]
-impl CommandHandler for FilesHandler {
-    fn can_handle(&self, intent: &Intent) -> bool {
-        matches!(intent, Intent::SearchFiles(_))
-    }
-
-    async fn handle(&self, intent: &Intent, context: &HandlerContext) -> Outcome {
-        let Intent::SearchFiles(query) = intent else { unreachable!("el enrutador comprueba la intención") };
+impl FilesHandler {
+    async fn answer(&self, query: &FileQuery, context: &HandlerContext) -> Outcome {
         let settings = match self.settings.get() {
             Ok(settings) => settings,
             Err(error) => return Outcome::failed(Category::Files, "settings", error.to_string(), None),
@@ -271,6 +269,14 @@ impl CommandHandler for FilesHandler {
     }
 }
 
+#[async_trait]
+impl CommandHandler for FilesHandler {
+    async fn handle(&self, intent: &Intent, context: &HandlerContext) -> Option<Outcome> {
+        let Intent::SearchFiles(query) = intent else { return None };
+        Some(self.answer(query, context).await)
+    }
+}
+
 pub struct WeatherHandler {
     pub weather: Arc<dyn WeatherProvider>,
     pub settings: SettingsService,
@@ -280,16 +286,10 @@ fn attribution() -> Option<Attribution> {
     Some(Attribution { text: ATTRIBUTION_TEXT.into(), url: ATTRIBUTION_URL.into() })
 }
 
-#[async_trait]
-impl CommandHandler for WeatherHandler {
-    fn can_handle(&self, intent: &Intent) -> bool {
-        matches!(intent, Intent::Weather { .. })
-    }
-
-    async fn handle(&self, intent: &Intent, _: &HandlerContext) -> Outcome {
-        let Intent::Weather { city, when } = intent else { unreachable!("el enrutador comprueba la intención") };
+impl WeatherHandler {
+    async fn answer(&self, city: Option<&String>, when: WeatherWhen) -> Outcome {
         let configured = self.settings.get().map(|settings| settings.weather_city).unwrap_or_default();
-        let Some(city) = city.clone().or_else(|| (!configured.trim().is_empty()).then_some(configured)) else {
+        let Some(city) = city.cloned().or_else(|| (!configured.trim().is_empty()).then_some(configured)) else {
             return Outcome::pending(
                 Category::Weather,
                 "Falta la ciudad",
@@ -319,6 +319,14 @@ impl CommandHandler for WeatherHandler {
             source: Some("Open-Meteo".into()),
             ..Outcome::done(Category::Weather, summary, ResponseBody::Reading { value: outcome_value, unit, context, percent: None, rows, attribution: attribution() })
         }
+    }
+}
+
+#[async_trait]
+impl CommandHandler for WeatherHandler {
+    async fn handle(&self, intent: &Intent, _: &HandlerContext) -> Option<Outcome> {
+        let Intent::Weather { city, when } = intent else { return None };
+        Some(self.answer(city.as_ref(), *when).await)
     }
 }
 
@@ -361,18 +369,14 @@ pub fn draft_reminder(request: &ReminderRequest, now: DateTime<Local>) -> Respon
 
 #[async_trait]
 impl CommandHandler for ReminderIntentHandler {
-    fn can_handle(&self, intent: &Intent) -> bool {
-        matches!(intent, Intent::CreateReminder(_) | Intent::ListReminders)
-    }
-
-    async fn handle(&self, intent: &Intent, context: &HandlerContext) -> Outcome {
+    async fn handle(&self, intent: &Intent, context: &HandlerContext) -> Option<Outcome> {
         match intent {
             Intent::CreateReminder(request) => {
                 let body = draft_reminder(request, context.now);
                 let summary = if let ResponseBody::ReminderDraft { question: Some(question), .. } = &body { question.clone() } else { format!("Por confirmar: {}", request.content) };
-                Outcome::pending(Category::Reminders, summary, body)
+                Some(Outcome::pending(Category::Reminders, summary, body))
             }
-            _ => match self.reminders.list() {
+            Intent::ListReminders => Some(match self.reminders.list() {
                 Ok(items) if items.is_empty() => Outcome::done(Category::Reminders, "Sin recordatorios", ResponseBody::Text { text: "No tienes recordatorios pendientes.".into() }),
                 Ok(items) => {
                     let count = items.len();
@@ -389,7 +393,8 @@ impl CommandHandler for ReminderIntentHandler {
                     Outcome::done(Category::Reminders, format!("{count} recordatorios"), ResponseBody::Rows { rows, note: None, attribution: None })
                 }
                 Err(AppError::Database(_) | AppError::Operation(_) | AppError::Validation(_)) => Outcome::failed(Category::Reminders, "database", "No pude leer tus recordatorios.", None),
-            },
+            }),
+            _ => None,
         }
     }
 }
@@ -399,13 +404,9 @@ pub struct ScreenHandler;
 
 #[async_trait]
 impl CommandHandler for ScreenHandler {
-    fn can_handle(&self, intent: &Intent) -> bool {
-        matches!(intent, Intent::AnalyzeScreen { .. })
-    }
-
-    async fn handle(&self, intent: &Intent, _: &HandlerContext) -> Outcome {
-        let Intent::AnalyzeScreen { question } = intent else { unreachable!("el enrutador comprueba la intención") };
-        Outcome::pending(Category::Screen, "Pendiente de tu permiso para capturar", ResponseBody::CaptureRequest { question: question.clone() })
+    async fn handle(&self, intent: &Intent, _: &HandlerContext) -> Option<Outcome> {
+        let Intent::AnalyzeScreen { question } = intent else { return None };
+        Some(Outcome::pending(Category::Screen, "Pendiente de tu permiso para capturar", ResponseBody::CaptureRequest { question: question.clone() }))
     }
 }
 
@@ -413,24 +414,21 @@ pub struct ClarifyHandler;
 
 #[async_trait]
 impl CommandHandler for ClarifyHandler {
-    fn can_handle(&self, intent: &Intent) -> bool {
-        matches!(intent, Intent::Clarify { .. } | Intent::Unknown)
-    }
-
-    async fn handle(&self, intent: &Intent, _: &HandlerContext) -> Outcome {
+    async fn handle(&self, intent: &Intent, _: &HandlerContext) -> Option<Outcome> {
         match intent {
             Intent::Clarify { question, suggestions } => {
                 let suggestions = suggestions.iter().map(|request| SuggestedRequest { label: request.clone(), request: request.clone() }).collect();
-                Outcome::pending(Category::General, question.clone(), ResponseBody::Clarification { question: question.clone(), suggestions })
+                Some(Outcome::pending(Category::General, question.clone(), ResponseBody::Clarification { question: question.clone(), suggestions }))
             }
-            _ => Outcome {
+            Intent::Unknown => Some(Outcome {
                 status: InteractionStatus::Failed,
                 ..Outcome::done(
                     Category::General,
                     "No entendí la solicitud",
                     ResponseBody::Text { text: "No entendí tu solicitud. Puedo decirte la hora, el clima o el estado de tu equipo, buscar archivos, crear recordatorios y analizar tu pantalla.".into() },
                 )
-            },
+            }),
+            _ => None,
         }
     }
 }
@@ -503,7 +501,16 @@ mod tests {
     #[tokio::test]
     async fn the_time_comes_from_the_clock() {
         let context = HandlerContext { request: "hora".into(), now: now() + Duration::hours(4), cancel: CancellationToken::new() };
-        let outcome = TimeHandler.handle(&Intent::Time, &context).await;
+        let outcome = TimeHandler.handle(&Intent::Time, &context).await.unwrap();
         assert_eq!(outcome.summary, "14:00 · jueves 5 de noviembre");
+    }
+
+    #[tokio::test]
+    async fn a_handler_declines_the_intents_of_others() {
+        let context = HandlerContext { request: "x".into(), now: now(), cancel: CancellationToken::new() };
+        assert!(TimeHandler.handle(&Intent::Unknown, &context).await.is_none());
+        assert!(ScreenHandler.handle(&Intent::Time, &context).await.is_none());
+        assert!(ClarifyHandler.handle(&Intent::ListReminders, &context).await.is_none());
+        assert!(ClarifyHandler.handle(&Intent::Unknown, &context).await.is_some());
     }
 }
