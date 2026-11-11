@@ -28,7 +28,7 @@ use crate::{
     models::Reading,
     providers::{
         ai::{server::NexiumServer, AiProvider, AiStatusTracker},
-        capture::{CaptureError, NativeScreenCapture, ScreenCaptureProvider},
+        capture::{capture_behind, CaptureError, ConcealableWindow, NativeScreenCapture, ScreenCaptureProvider},
         files::{AuthorizedFolder, LocalFileSearch},
         notification::{NotificationProvider, TauriNotifications},
         speech::{SpeechProvider, WhisperSpeech},
@@ -52,20 +52,30 @@ struct WindowAwareCapture<R: Runtime> {
     inner: NativeScreenCapture,
 }
 
+struct MainWindow<R: Runtime>(tauri::WebviewWindow<R>);
+
+impl<R: Runtime> ConcealableWindow for MainWindow<R> {
+    fn hide(&self) -> bool {
+        self.0.hide().is_ok()
+    }
+
+    fn is_visible(&self) -> Option<bool> {
+        self.0.is_visible().ok()
+    }
+
+    fn show(&self) {
+        let _ = self.0.show();
+        let _ = self.0.set_focus();
+    }
+}
+
 #[async_trait]
 impl<R: Runtime> ScreenCaptureProvider for WindowAwareCapture<R> {
     async fn capture_once(&self) -> Result<Vec<u8>, CaptureError> {
-        let window = self.app.get_webview_window("main");
-        if let Some(window) = &window {
-            let _ = window.hide();
+        match self.app.get_webview_window("main") {
+            Some(window) => capture_behind(&MainWindow(window), self.inner.capture_once()).await,
+            None => self.inner.capture_once().await,
         }
-        tokio::time::sleep(Duration::from_millis(300)).await;
-        let result = self.inner.capture_once().await;
-        if let Some(window) = &window {
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-        result
     }
 }
 

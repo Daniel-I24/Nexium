@@ -1,6 +1,6 @@
 //! Una sola captura bajo demanda, siempre en memoria: nunca se escribe en disco.
 
-use std::io::Cursor;
+use std::{future::Future, io::Cursor, time::Duration};
 
 use async_trait::async_trait;
 use image::{imageops::FilterType, DynamicImage};
@@ -10,6 +10,11 @@ const REDUCED_SIDE: u32 = 1024;
 const JPEG_QUALITIES: [u8; 4] = [80, 65, 50, 35];
 /// Por debajo del máximo del servidor, y barato de validar con su límite de CPU.
 pub const MAX_ENCODED_BYTES: usize = 500_000;
+/// Cuánto se espera a que el sistema confirme que la ventana ya no se ve.
+const HIDE_TIMEOUT: Duration = Duration::from_millis(1500);
+const HIDE_POLL: Duration = Duration::from_millis(25);
+/// Margen tras la confirmación: el compositor puede tardar un fotograma más en retirarla de la pantalla.
+const HIDE_MARGIN: Duration = Duration::from_millis(250);
 
 #[derive(Debug, PartialEq)]
 pub enum CaptureError {
@@ -23,6 +28,44 @@ pub trait ScreenCaptureProvider: Send + Sync {
 }
 
 pub struct NativeScreenCapture;
+
+/// La ventana de Nexium vista desde la captura. Existe para poder probar el orden sin una ventana real.
+pub trait ConcealableWindow {
+    fn hide(&self) -> bool;
+    fn is_visible(&self) -> Option<bool>;
+    fn show(&self);
+}
+
+async fn hide_and_confirm(window: &impl ConcealableWindow) -> Result<(), CaptureError> {
+    let not_hidden = || CaptureError::Failed("No se pudo ocultar Nexium antes de la captura. No se tomó ninguna imagen.".into());
+    if !window.hide() {
+        return Err(not_hidden());
+    }
+    let started = tokio::time::Instant::now();
+    while window.is_visible() != Some(false) {
+        if started.elapsed() >= HIDE_TIMEOUT {
+            return Err(not_hidden());
+        }
+        tokio::time::sleep(HIDE_POLL).await;
+    }
+    tokio::time::sleep(HIDE_MARGIN).await;
+    Ok(())
+}
+
+/// Captura lo que hay detrás de Nexium: solo después de que el sistema confirme que su ventana está oculta.
+/// La ventana vuelve a mostrarse siempre, también si algo falla.
+pub async fn capture_behind<W, F>(window: &W, capture: F) -> Result<Vec<u8>, CaptureError>
+where
+    W: ConcealableWindow,
+    F: Future<Output = Result<Vec<u8>, CaptureError>>,
+{
+    let result = match hide_and_confirm(window).await {
+        Ok(()) => capture.await,
+        Err(error) => Err(error),
+    };
+    window.show();
+    result
+}
 
 fn jpeg(image: &DynamicImage, quality: u8) -> Result<Vec<u8>, CaptureError> {
     let mut buffer = Cursor::new(Vec::new());
@@ -125,6 +168,79 @@ mod tests {
         let bytes = encode_for_analysis(DynamicImage::ImageRgb8(noise)).unwrap();
         assert!(bytes.len() <= MAX_ENCODED_BYTES, "{}", bytes.len());
         assert_eq!(&bytes[..2], &[0xFF, 0xD8]);
+    }
+
+    use std::sync::Mutex;
+
+    /// Ventana simulada que registra el orden de las llamadas.
+    struct FakeWindow {
+        log: Mutex<Vec<&'static str>>,
+        hides: bool,
+        visible_reads_before_hidden: Mutex<u32>,
+    }
+
+    impl FakeWindow {
+        fn new(hides: bool, visible_reads_before_hidden: u32) -> Self {
+            Self { log: Mutex::new(Vec::new()), hides, visible_reads_before_hidden: Mutex::new(visible_reads_before_hidden) }
+        }
+
+        fn log(&self) -> Vec<&'static str> {
+            self.log.lock().unwrap().clone()
+        }
+    }
+
+    impl ConcealableWindow for FakeWindow {
+        fn hide(&self) -> bool {
+            self.log.lock().unwrap().push("hide");
+            true
+        }
+
+        fn is_visible(&self) -> Option<bool> {
+            let mut pending = self.visible_reads_before_hidden.lock().unwrap();
+            if !self.hides || *pending > 0 {
+                *pending = pending.saturating_sub(1);
+                return Some(true);
+            }
+            self.log.lock().unwrap().push("hidden");
+            Some(false)
+        }
+
+        fn show(&self) {
+            self.log.lock().unwrap().push("show");
+        }
+    }
+
+    async fn capture(window: &FakeWindow, result: Result<Vec<u8>, CaptureError>) -> Result<Vec<u8>, CaptureError> {
+        capture_behind(window, async {
+            window.log.lock().unwrap().push("capture");
+            result
+        })
+        .await
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn captures_only_after_the_window_is_confirmed_hidden_and_shows_it_again() {
+        let window = FakeWindow::new(true, 3);
+        let started = tokio::time::Instant::now();
+        assert_eq!(capture(&window, Ok(vec![1])).await.unwrap(), vec![1]);
+        assert_eq!(window.log(), ["hide", "hidden", "capture", "show"]);
+        assert!(started.elapsed() >= HIDE_MARGIN + HIDE_POLL * 3);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_window_that_does_not_hide_is_never_captured_and_comes_back() {
+        let window = FakeWindow::new(false, 0);
+        let error = capture(&window, Ok(vec![1])).await.unwrap_err();
+        assert!(matches!(error, CaptureError::Failed(message) if message.contains("No se tomó ninguna imagen")));
+        assert_eq!(window.log(), ["hide", "show"]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_window_comes_back_when_the_capture_fails() {
+        let window = FakeWindow::new(true, 0);
+        let error = capture(&window, Err(CaptureError::PermissionDenied("sin permiso".into()))).await.unwrap_err();
+        assert_eq!(error, CaptureError::PermissionDenied("sin permiso".into()));
+        assert_eq!(window.log(), ["hide", "hidden", "capture", "show"]);
     }
 
     #[test]
