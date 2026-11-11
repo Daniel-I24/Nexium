@@ -40,3 +40,24 @@ Búsqueda de texto en `nexium.exe`:
 | URL del servidor de Nexium | 1 |
 | URL de la API de Gemini | 0 |
 | Prefijo de las claves de Google (`AIza`) | 0 |
+
+## Auditoría de dependencias
+
+11 de noviembre de 2026.
+
+| Herramienta | Alcance | Resultado |
+|---|---|---|
+| `npm audit --omit=dev` | Dependencias de la app | 0 vulnerabilidades |
+| `npm audit` en `server/` | Worker | 0 vulnerabilidades |
+| `npm audit` | Incluye las herramientas de desarrollo | 1 moderada, ver abajo |
+| `cargo audit` 0.23.0 | 618 crates de `Cargo.lock` | 0 vulnerabilidades, 5 avisos |
+
+**Vulnerabilidad moderada de desarrollo, no corregida:** `minimatch` 7.0.0 a 11.0.0 puede consumir mucha CPU con ciertos patrones de búsqueda de archivos ([GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)). Llega a través de ESLint y `typescript-eslint`, que solo se usan para analizar el código. No forma parte de la app ni del Worker, y solo recibe los patrones del propio proyecto. La corrección que propone `npm audit fix --force` degrada ESLint a la versión 9, un cambio incompatible, así que no se aplica. Se revisará cuando ESLint publique una versión corregida.
+
+**Avisos de `cargo audit`:** todos llegan a través de Tauri y solo se compilan en Linux. No hay versión corregida que Nexium pueda elegir sin que Tauri la adopte.
+
+| Crate | Aviso | Origen |
+|---|---|---|
+| `glib` 0.18.5 | Implementación insegura en `VariantStrIter` ([RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429)). El código de Nexium no lo usa directamente; Tauri no se ha comprobado | GTK 0.18, para el icono de bandeja de Tauri |
+| `proc-macro-error` 1.0.4 | Sin mantenimiento ([RUSTSEC-2024-0370](https://rustsec.org/advisories/RUSTSEC-2024-0370)). Solo actúa al compilar | Macros de `glib` |
+| `zbus_names`, `zvariant`, `zvariant_derive` | Sin mantenimiento (RUSTSEC-2026-0370 a 0372) | `zbus`, para las notificaciones de Tauri en Linux |
