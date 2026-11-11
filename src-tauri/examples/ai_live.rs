@@ -135,7 +135,13 @@ async fn image(provider: &dyn AiProvider, path: &str, question: &str) {
     println!("imagen: {} KB", image_jpeg.len() / 1024);
     let start = Instant::now();
     match provider.analyze_image(VisionRequest { image_jpeg, question: question.to_owned() }).await {
-        Ok(answer) => println!("ms={} tokens={}\n{}", start.elapsed().as_millis(), answer.tokens, answer.value),
+        Ok(answer) => {
+            let analysis = answer.value;
+            println!("ms={} tokens={}\nResumen: {}\nCausa: {}", start.elapsed().as_millis(), answer.tokens, analysis.summary, analysis.cause.as_deref().unwrap_or("ninguna"));
+            for (number, step) in analysis.steps.iter().enumerate() {
+                println!("{}. {step}", number + 1);
+            }
+        }
         Err(error) => println!("error={} ({error})", error.code()),
     }
 }
