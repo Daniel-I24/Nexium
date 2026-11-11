@@ -66,9 +66,12 @@ impl Assistant {
             AiError::LocalLimitReached => ("Alcanzaste el límite diario de solicitudes de IA configurado en Nexium.".into(), Some(format!("Puedes cambiarlo en Ajustes. {local_hint}"))),
             AiError::RegionUnavailable => ("El servicio de IA de Nexium no está disponible en tu región.".into(), Some(format!("No se ofrece en el Espacio Económico Europeo, Reino Unido ni Suiza. {local_hint}"))),
             AiError::RegionUnknown => ("No se pudo determinar tu país, y el servicio de IA de Nexium no se ofrece sin conocerlo.".into(), Some(format!("Si usas Tor o una conexión que oculte tu ubicación, prueba con otra conexión. {local_hint}"))),
-            AiError::Unavailable => ("El servicio de IA no está disponible en este momento.".into(), Some(local_hint)),
-            AiError::Network => ("No pude conectar con el servicio de IA.".into(), Some(format!("Comprueba tu conexión a Internet. {local_hint}"))),
-            AiError::Timeout => ("El servicio de IA tardó demasiado en responder.".into(), Some(local_hint)),
+            AiError::Unavailable => (
+                "El servidor de IA no responde en este momento.".into(),
+                Some(format!("El fallo está en el servicio (Google o el servidor de Nexium), no en tu equipo ni en tu conexión. Vuelve a intentarlo en unos minutos. {local_hint}")),
+            ),
+            AiError::Network => ("Sin conexión con el servidor de IA de Nexium.".into(), Some(format!("Comprueba tu conexión a Internet. {local_hint}"))),
+            AiError::Timeout => ("El servidor de IA tardó demasiado en responder.".into(), Some(format!("Suele ser una saturación pasajera del servicio. Vuelve a intentarlo. {local_hint}"))),
             AiError::InvalidResponse => ("No pude interpretar la respuesta del modelo.".into(), Some("Prueba a escribir la solicitud de otra forma.".into())),
             AiError::Rejected(reason) => (format!("El servicio de IA rechazó la solicitud. {reason}"), None),
             AiError::Cancelled => ("Operación cancelada.".into(), None),
@@ -444,6 +447,32 @@ mod tests {
         assert_eq!(code, "regionUnknown");
         assert!(message.contains("No se pudo determinar tu país"));
         assert!(hint.unwrap().contains("Tor"));
+    }
+
+    #[test]
+    fn each_cause_of_failure_has_its_own_message() {
+        let h = harness(None, true, false);
+        let message = |error: AiError| h.assistant.describe_ai_error(&error).0;
+        let messages = [
+            message(AiError::Network),
+            message(AiError::NotConfigured),
+            message(AiError::Unavailable),
+            message(AiError::Timeout),
+            message(AiError::QuotaExhausted),
+            message(AiError::RegionUnavailable),
+            message(AiError::RegionUnknown),
+        ];
+        assert!(messages[0].contains("Sin conexión"));
+        assert!(messages[1].contains("no incluye el servicio de IA"));
+        assert!(messages[2].contains("no responde"));
+        assert!(messages[3].contains("tardó demasiado"));
+        assert!(messages[4].contains("Cuota agotada"));
+        assert!(messages[5].contains("tu región"));
+        assert!(messages[6].contains("tu país"));
+        let unique: std::collections::HashSet<_> = messages.iter().collect();
+        assert_eq!(unique.len(), messages.len());
+        assert!(messages.iter().all(|message| !message.contains("no está disponible en este momento")));
+        assert!(h.assistant.describe_ai_error(&AiError::Unavailable).1.unwrap().contains("no en tu equipo ni en tu conexión"));
     }
 
     #[tokio::test]

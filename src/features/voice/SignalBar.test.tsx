@@ -67,7 +67,13 @@ describe("SignalBar", () => {
     const notice = "En la capa gratuita, Google puede usar lo que envías para mejorar sus productos.";
     const handlers = setup({ kind: "captureConsent", provider: "Google Gemini", notice });
     expect(status()).toHaveTextContent("Esperando permiso");
-    expect(screen.getByText(/se enviará a Google Gemini/)).toHaveTextContent(notice);
+    expect(screen.getByText(/se enviará a Google Gemini/)).toHaveTextContent("No captures información personal.");
+    expect(screen.queryByText(notice, { exact: false })).not.toBeInTheDocument();
+    const more = screen.getByRole("button", { name: "Más información" });
+    expect(more).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(more);
+    expect(screen.getByText(notice, { exact: false })).toHaveTextContent("Nexium no guarda la imagen.");
+    expect(screen.getByRole("button", { name: "Menos información" })).toHaveAttribute("aria-expanded", "true");
     expect(handlers.onConfirmCapture).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Capturar" }));
     expect(handlers.onConfirmCapture).toHaveBeenCalledTimes(1);

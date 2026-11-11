@@ -188,7 +188,7 @@ export function ResponseView({ response, actions }: { response: AssistantRespons
         <span className="font-mono text-sm text-muted">{time}</span>
       </div>
       <Body body={response.body} actions={actions} />
-      <p className="m-0 text-sm text-muted">Origen: {response.originLabel}</p>
+      {response.body.kind !== "error" && <p className="m-0 text-sm text-muted">Origen: {response.originLabel}</p>}
     </article>
   );
 }

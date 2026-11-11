@@ -43,6 +43,30 @@ function Frame({ tone, status, statusClass, children }: { tone: Tone; status: st
 
 const voiceKey = "h-16 w-34 shrink-0";
 
+/** Una frase basta para decidir. El aviso completo de privacidad queda a un clic. */
+function CaptureConsent({ provider, notice, onConfirm, onCancel }: { provider: string; notice: string; onConfirm: () => void; onCancel: () => void }) {
+  const [details, setDetails] = useState(false);
+  return (
+    <Frame tone="signal" status="Esperando permiso" statusClass="font-medium">
+      <Button variant="signal" className={voiceKey} onClick={onConfirm}>
+        Capturar
+      </Button>
+      <div className="min-w-48 flex-1">
+        <p className="m-0">
+          Se tomará una sola imagen de tu pantalla y se enviará a {provider}. No captures información personal.{" "}
+          <button type="button" aria-expanded={details} onClick={() => setDetails(!details)} className="bg-transparent p-0 font-semibold underline">
+            {details ? "Menos información" : "Más información"}
+          </button>
+        </p>
+        {details && <p className="m-0 mt-2 text-sm">{notice} Nexium no guarda la imagen.</p>}
+      </div>
+      <Button variant="onSignal" onClick={onCancel}>
+        Cancelar
+      </Button>
+    </Frame>
+  );
+}
+
 function IdleBar({ onSpeak, onSubmitText, onAnalyzeScreen }: Pick<SignalBarProps, "onSpeak" | "onSubmitText" | "onAnalyzeScreen">) {
   const [text, setText] = useState("");
   const submit = (event: FormEvent) => {
@@ -115,20 +139,7 @@ export function SignalBar(props: SignalBarProps) {
     case "responding":
       return <ProgressBar step="Escribiendo la respuesta" filled status="Respondiendo" onCancel={onCancel} />;
     case "captureConsent":
-      return (
-        <Frame tone="signal" status="Esperando permiso" statusClass="font-medium">
-          <Button variant="signal" className={voiceKey} onClick={props.onConfirmCapture}>
-            Capturar
-          </Button>
-          <p className="m-0 min-w-48 flex-1">
-            Se tomará una sola imagen de tu pantalla y se enviará a {state.provider} para analizarla. {state.notice} Nexium no
-            guarda la imagen.
-          </p>
-          <Button variant="onSignal" onClick={onCancel}>
-            Cancelar
-          </Button>
-        </Frame>
-      );
+      return <CaptureConsent provider={state.provider} notice={state.notice} onConfirm={props.onConfirmCapture} onCancel={onCancel} />;
     case "clarify":
       return (
         <Frame tone="query" status="Pendiente" statusClass="text-query">

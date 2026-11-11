@@ -20,6 +20,19 @@ const response = (body: ResponseBody): AssistantResponse => ({
 
 const actions = { onSaveReminder: vi.fn(), onAuthorizeFolders: vi.fn() };
 
+describe("errores", () => {
+  it("no muestran un origen sin datos: el mensaje ya explica la causa", () => {
+    render(<ResponseView response={{ ...response({ kind: "error", code: "unavailable", message: "El servidor de IA no responde en este momento.", hint: "Vuelve a intentarlo." }), originLabel: "sin datos" }} actions={actions} />);
+    expect(screen.getByText("El servidor de IA no responde en este momento.")).toBeInTheDocument();
+    expect(screen.queryByText(/Origen/)).not.toBeInTheDocument();
+  });
+
+  it("una respuesta correcta sí muestra su origen", () => {
+    render(<ResponseView response={response({ kind: "text", text: "Hola" })} actions={actions} />);
+    expect(screen.getByText(/Origen: una captura analizada/)).toBeInTheDocument();
+  });
+});
+
 describe("análisis de pantalla", () => {
   it("muestra el resumen, la causa y los pasos numerados", () => {
     render(<ResponseView response={response({ kind: "screenAnalysis", summary: "Falta configuracion.ini.", cause: "El programa no encuentra su archivo.", steps: ["Comprueba la carpeta.", "Reinstala el programa."] })} actions={actions} />);
