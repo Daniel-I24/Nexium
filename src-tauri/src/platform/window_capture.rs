@@ -4,7 +4,9 @@
 use async_trait::async_trait;
 use tauri::{AppHandle, Manager, Runtime};
 
-use crate::providers::capture::{capture_behind, CaptureError, ConcealableWindow, NativeScreenCapture, ScreenCaptureProvider};
+use crate::providers::capture::{
+    capture_behind, CaptureError, ConcealableWindow, NativeScreenCapture, ScreenCaptureProvider,
+};
 
 /// Oculta Nexium durante la captura para que el análisis trate de lo que hay detrás.
 pub struct WindowAwareCapture<R: Runtime> {
@@ -14,7 +16,10 @@ pub struct WindowAwareCapture<R: Runtime> {
 
 impl<R: Runtime> WindowAwareCapture<R> {
     pub fn new(app: AppHandle<R>) -> Self {
-        Self { app, inner: NativeScreenCapture }
+        Self {
+            app,
+            inner: NativeScreenCapture,
+        }
     }
 }
 

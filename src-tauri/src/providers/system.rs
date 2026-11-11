@@ -3,7 +3,9 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System, MINIMUM_CPU_UPDATE_INTERVAL};
+use sysinfo::{
+    CpuRefreshKind, MemoryRefreshKind, RefreshKind, System, MINIMUM_CPU_UPDATE_INTERVAL,
+};
 
 use crate::{
     models::{BatteryInfo, MemoryInfo, Reading, WifiInfo},
@@ -35,9 +37,14 @@ impl NativeSystemProvider {
 fn read_battery() -> Reading<BatteryInfo> {
     let manager = match starship_battery::Manager::new() {
         Ok(manager) => manager,
-        Err(_) => return Reading::Unavailable("El sistema no permite consultar la batería.".into()),
+        Err(_) => {
+            return Reading::Unavailable("El sistema no permite consultar la batería.".into())
+        }
     };
-    let first = manager.batteries().ok().and_then(|mut batteries| batteries.next());
+    let first = manager
+        .batteries()
+        .ok()
+        .and_then(|mut batteries| batteries.next());
     match first {
         Some(Ok(battery)) => {
             let percent = f64::from(battery.state_of_charge().value) * 100.0;
@@ -48,7 +55,10 @@ fn read_battery() -> Reading<BatteryInfo> {
                 starship_battery::State::Empty => "Vacía",
                 _ => "Sin información",
             };
-            Reading::Value(BatteryInfo { percent, state: state.into() })
+            Reading::Value(BatteryInfo {
+                percent,
+                state: state.into(),
+            })
         }
         Some(Err(_)) => Reading::Unavailable("El sistema no permite consultar la batería.".into()),
         None => Reading::Unavailable("Este equipo no tiene batería.".into()),
@@ -73,11 +83,17 @@ impl SystemProvider for NativeSystemProvider {
         let Ok(system) = System::new_with_specifics(refresh) else {
             return Reading::Unavailable("El sistema no permite consultar la memoria.".into());
         };
-        Reading::Value(MemoryInfo { used_bytes: system.used_memory(), available_bytes: system.available_memory(), total_bytes: system.total_memory() })
+        Reading::Value(MemoryInfo {
+            used_bytes: system.used_memory(),
+            available_bytes: system.available_memory(),
+            total_bytes: system.total_memory(),
+        })
     }
 
     async fn battery(&self) -> Reading<BatteryInfo> {
-        tokio::task::spawn_blocking(read_battery).await.unwrap_or_else(|_| Reading::Unavailable("No se pudo consultar la batería.".into()))
+        tokio::task::spawn_blocking(read_battery)
+            .await
+            .unwrap_or_else(|_| Reading::Unavailable("No se pudo consultar la batería.".into()))
     }
 
     async fn internet(&self) -> Reading<bool> {
@@ -85,7 +101,12 @@ impl SystemProvider for NativeSystemProvider {
         const PROBES: [([u8; 4], u16); 2] = [([1, 1, 1, 1], 443), ([8, 8, 8, 8], 443)];
         for (ip, port) in PROBES {
             let address = SocketAddr::from((ip, port));
-            if let Ok(Ok(_)) = tokio::time::timeout(Duration::from_secs(3), tokio::net::TcpStream::connect(address)).await {
+            if let Ok(Ok(_)) = tokio::time::timeout(
+                Duration::from_secs(3),
+                tokio::net::TcpStream::connect(address),
+            )
+            .await
+            {
                 return Reading::Value(true);
             }
         }
@@ -93,7 +114,9 @@ impl SystemProvider for NativeSystemProvider {
     }
 
     async fn wifi(&self) -> Reading<WifiInfo> {
-        tokio::task::spawn_blocking(platform::wifi_status).await.unwrap_or_else(|_| Reading::Unavailable("No se pudo consultar el Wi-Fi.".into()))
+        tokio::task::spawn_blocking(platform::wifi_status)
+            .await
+            .unwrap_or_else(|_| Reading::Unavailable("No se pudo consultar el Wi-Fi.".into()))
     }
 
     async fn dark_mode(&self) -> Reading<bool> {
@@ -111,7 +134,9 @@ mod tests {
 
     #[tokio::test]
     async fn memory_values_are_consistent() {
-        let Reading::Value(memory) = provider().memory().await else { panic!("sin memoria") };
+        let Reading::Value(memory) = provider().memory().await else {
+            panic!("sin memoria")
+        };
         assert!(memory.total_bytes > 0);
         assert!(memory.used_bytes <= memory.total_bytes);
         assert!(memory.available_bytes <= memory.total_bytes);
@@ -119,7 +144,9 @@ mod tests {
 
     #[tokio::test]
     async fn cpu_is_a_percentage() {
-        let Reading::Value(cpu) = provider().cpu_percent().await else { panic!("sin CPU") };
+        let Reading::Value(cpu) = provider().cpu_percent().await else {
+            panic!("sin CPU")
+        };
         assert!((0.0..=100.0).contains(&cpu));
     }
 

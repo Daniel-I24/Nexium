@@ -11,7 +11,9 @@ use super::{
 };
 use crate::{
     error::AiError,
-    models::{AssistantResponse, Category, FileQuery, Intent, InteractionStatus, ResponseBody, Stage},
+    models::{
+        AssistantResponse, Category, FileQuery, Intent, InteractionStatus, ResponseBody, Stage,
+    },
     providers::{
         ai::{AiProvider, AiStatusTracker, InterpretRequest, VisionRequest},
         capture::{CaptureError, ScreenCaptureProvider},
@@ -47,7 +49,10 @@ impl Assistant {
         if !self.ai.is_configured() {
             return Err(AiError::NotConfigured);
         }
-        let limit = self.settings.get().map_or(u32::MAX, |settings| settings.daily_ai_limit);
+        let limit = self
+            .settings
+            .get()
+            .map_or(u32::MAX, |settings| settings.daily_ai_limit);
         let (requests, _) = self.usage.today_totals().unwrap_or((0, 0));
         if requests >= limit {
             return Err(AiError::LocalLimitReached);
@@ -91,7 +96,10 @@ impl Assistant {
             Err(error) => Err(error),
             Ok(()) => {
                 stage(Stage::Interpreting);
-                let request = InterpretRequest { text: text.to_owned(), now: Local::now() };
+                let request = InterpretRequest {
+                    text: text.to_owned(),
+                    now: Local::now(),
+                };
                 tokio::select! {
                     answer = self.ai.interpret(request) => answer,
                     () = cancel.cancelled() => Err(AiError::Cancelled),
@@ -103,40 +111,80 @@ impl Assistant {
             Ok(answer) => {
                 let _ = self.usage.record(answer.tokens);
                 // La fecha que elija el modelo no cuenta: si admite dos lecturas, se pregunta.
-                let doubt = matches!(answer.value, Intent::CreateReminder(_)).then(|| rules::ambiguous_date_question(text)).flatten();
+                let doubt = matches!(answer.value, Intent::CreateReminder(_))
+                    .then(|| rules::ambiguous_date_question(text))
+                    .flatten();
                 Resolved::Ai(doubt.unwrap_or(answer.value))
             }
-            Err(AiError::Cancelled) => Resolved::Failed(Outcome { status: InteractionStatus::Cancelled, ..Outcome::failed(Category::General, "cancelled", "Operación cancelada.", None) }),
+            Err(AiError::Cancelled) => Resolved::Failed(Outcome {
+                status: InteractionStatus::Cancelled,
+                ..Outcome::failed(Category::General, "cancelled", "Operación cancelada.", None)
+            }),
             Err(error) if rules::is_search_request(text) => {
                 let terms = rules::local_search_terms(text);
                 if terms.is_empty() {
                     return Resolved::Failed(self.ai_failure(Category::Files, &error));
                 }
                 let (message, _) = self.describe_ai_error(&error);
-                Resolved::Degraded(Intent::SearchFiles(FileQuery { exact_name: None, terms }), format!("Búsqueda básica sin IA. {message}"))
+                Resolved::Degraded(
+                    Intent::SearchFiles(FileQuery {
+                        exact_name: None,
+                        terms,
+                    }),
+                    format!("Búsqueda básica sin IA. {message}"),
+                )
             }
             Err(error) => Resolved::Failed(self.ai_failure(Category::General, &error)),
         }
     }
 
     fn finish(&self, request: &str, outcome: Outcome, origin: &str) -> AssistantResponse {
-        let (id, created_at) = self.history.record(request, outcome.category, outcome.status, &outcome.summary).unwrap_or_else(|_| (0, Local::now().to_rfc3339()));
+        let (id, created_at) = self
+            .history
+            .record(request, outcome.category, outcome.status, &outcome.summary)
+            .unwrap_or_else(|_| (0, Local::now().to_rfc3339()));
         let origin_label = origin_label(outcome.source.as_deref(), origin);
-        AssistantResponse { id, request: request.to_owned(), created_at, category: outcome.category, status: outcome.status, origin_label, summary: outcome.summary, body: outcome.body }
+        AssistantResponse {
+            id,
+            request: request.to_owned(),
+            created_at,
+            category: outcome.category,
+            status: outcome.status,
+            origin_label,
+            summary: outcome.summary,
+            body: outcome.body,
+        }
     }
 
-    pub async fn process(&self, text: &str, cancel: CancellationToken, stage: StageSink) -> AssistantResponse {
+    pub async fn process(
+        &self,
+        text: &str,
+        cancel: CancellationToken,
+        stage: StageSink,
+    ) -> AssistantResponse {
         let text = text.trim();
         let provider = self.ai.display_name().to_owned();
         let (intent, origin, note) = match self.resolve(text, &cancel, &stage).await {
-            Resolved::Local(intent @ Intent::Clarify { .. }) => (intent, "reglas locales, sin IA".to_owned(), None),
+            Resolved::Local(intent @ Intent::Clarify { .. }) => {
+                (intent, "reglas locales, sin IA".to_owned(), None)
+            }
             Resolved::Local(intent) => (intent, ORIGIN_LOCAL.to_owned(), None),
-            Resolved::Ai(intent) => (intent, format!("solicitud interpretada con IA ({provider})"), None),
-            Resolved::Degraded(intent, note) => (intent, "reglas locales, sin IA".to_owned(), Some(note)),
+            Resolved::Ai(intent) => (
+                intent,
+                format!("solicitud interpretada con IA ({provider})"),
+                None,
+            ),
+            Resolved::Degraded(intent, note) => {
+                (intent, "reglas locales, sin IA".to_owned(), Some(note))
+            }
             Resolved::Failed(outcome) => return self.finish(text, outcome, "sin datos"),
         };
         stage(Stage::Executing);
-        let context = HandlerContext { request: text.to_owned(), now: Local::now(), cancel: cancel.clone() };
+        let context = HandlerContext {
+            request: text.to_owned(),
+            now: Local::now(),
+            cancel: cancel.clone(),
+        };
         let mut handled = None;
         for handler in &self.handlers {
             handled = handler.handle(&intent, &context).await;
@@ -145,12 +193,30 @@ impl Assistant {
             }
         }
         let Some(mut outcome) = handled else {
-            return self.finish(text, Outcome::failed(Category::General, "noHandler", "No sé hacer esa operación.", None), "sin datos");
+            return self.finish(
+                text,
+                Outcome::failed(
+                    Category::General,
+                    "noHandler",
+                    "No sé hacer esa operación.",
+                    None,
+                ),
+                "sin datos",
+            );
         };
         if cancel.is_cancelled() {
-            outcome = Outcome { status: InteractionStatus::Cancelled, ..Outcome::failed(outcome.category, "cancelled", "Operación cancelada.", None) };
+            outcome = Outcome {
+                status: InteractionStatus::Cancelled,
+                ..Outcome::failed(outcome.category, "cancelled", "Operación cancelada.", None)
+            };
         }
-        if let (Some(extra), ResponseBody::Files { note: file_note, .. }) = (note, &mut outcome.body) {
+        if let (
+            Some(extra),
+            ResponseBody::Files {
+                note: file_note, ..
+            },
+        ) = (note, &mut outcome.body)
+        {
             *file_note = Some(extra);
         }
         stage(Stage::Responding);
@@ -158,22 +224,47 @@ impl Assistant {
     }
 
     /// Una captura por confirmación expresa del usuario. La imagen solo vive en esta función.
-    pub async fn analyze_screen(&self, question: &str, cancel: CancellationToken, stage: StageSink) -> AssistantResponse {
+    pub async fn analyze_screen(
+        &self,
+        question: &str,
+        cancel: CancellationToken,
+        stage: StageSink,
+    ) -> AssistantResponse {
         let question = question.trim();
         let provider = self.ai.display_name().to_owned();
         if let Err(error) = self.check_ai_available() {
-            return self.finish(question, self.ai_failure(Category::Screen, &error), "sin datos");
+            return self.finish(
+                question,
+                self.ai_failure(Category::Screen, &error),
+                "sin datos",
+            );
         }
         stage(Stage::Capturing);
         let image = match self.capture.capture_once().await {
             Ok(image) => image,
-            Err(CaptureError::PermissionDenied(message) | CaptureError::Failed(message)) => return self.finish(question, Outcome::failed(Category::Screen, "capture", message, None), "sin datos"),
+            Err(CaptureError::PermissionDenied(message) | CaptureError::Failed(message)) => {
+                return self.finish(
+                    question,
+                    Outcome::failed(Category::Screen, "capture", message, None),
+                    "sin datos",
+                )
+            }
         };
         if cancel.is_cancelled() {
-            return self.finish(question, Outcome { status: InteractionStatus::Cancelled, ..Outcome::failed(Category::Screen, "cancelled", "Operación cancelada.", None) }, "sin datos");
+            return self.finish(
+                question,
+                Outcome {
+                    status: InteractionStatus::Cancelled,
+                    ..Outcome::failed(Category::Screen, "cancelled", "Operación cancelada.", None)
+                },
+                "sin datos",
+            );
         }
         stage(Stage::Analyzing);
-        let request = VisionRequest { image_jpeg: image, question: question.to_owned() };
+        let request = VisionRequest {
+            image_jpeg: image,
+            question: question.to_owned(),
+        };
         let answer = tokio::select! {
             answer = self.ai.analyze_image(request) => answer,
             () = cancel.cancelled() => Err(AiError::Cancelled),
@@ -184,15 +275,41 @@ impl Assistant {
                 let _ = self.usage.record(answer.tokens);
                 stage(Stage::Responding);
                 let analysis = answer.value;
-                let body = ResponseBody::ScreenAnalysis { summary: analysis.summary.clone(), cause: analysis.cause, steps: analysis.steps };
-                self.finish(question, Outcome::done(Category::Screen, analysis.summary, body), &format!("una captura analizada con IA ({provider}). Nexium ya descartó la imagen"))
+                let body = ResponseBody::ScreenAnalysis {
+                    summary: analysis.summary.clone(),
+                    cause: analysis.cause,
+                    steps: analysis.steps,
+                };
+                self.finish(
+                    question,
+                    Outcome::done(Category::Screen, analysis.summary, body),
+                    &format!(
+                        "una captura analizada con IA ({provider}). Nexium ya descartó la imagen"
+                    ),
+                )
             }
             Err(AiError::InvalidResponse) => {
-                let outcome = Outcome::failed(Category::Screen, AiError::InvalidResponse.code(), "La IA devolvió un análisis con un formato que Nexium no puede mostrar.", Some("Vuelve a intentarlo. La captura ya se descartó.".into()));
+                let outcome = Outcome::failed(
+                    Category::Screen,
+                    AiError::InvalidResponse.code(),
+                    "La IA devolvió un análisis con un formato que Nexium no puede mostrar.",
+                    Some("Vuelve a intentarlo. La captura ya se descartó.".into()),
+                );
                 self.finish(question, outcome, "sin datos")
             }
-            Err(AiError::Cancelled) => self.finish(question, Outcome { status: InteractionStatus::Cancelled, ..Outcome::failed(Category::Screen, "cancelled", "Operación cancelada.", None) }, "sin datos"),
-            Err(error) => self.finish(question, self.ai_failure(Category::Screen, &error), "sin datos"),
+            Err(AiError::Cancelled) => self.finish(
+                question,
+                Outcome {
+                    status: InteractionStatus::Cancelled,
+                    ..Outcome::failed(Category::Screen, "cancelled", "Operación cancelada.", None)
+                },
+                "sin datos",
+            ),
+            Err(error) => self.finish(
+                question,
+                self.ai_failure(Category::Screen, &error),
+                "sin datos",
+            ),
         }
     }
 }
@@ -213,12 +330,21 @@ mod tests {
 
     #[test]
     fn the_origin_names_an_external_source() {
-        assert_eq!(origin_label(Some("Open-Meteo"), ORIGIN_LOCAL), "Open-Meteo, sin IA");
-        assert_eq!(origin_label(Some("Open-Meteo"), "solicitud interpretada con IA (Gemini)"), "Open-Meteo; solicitud interpretada con IA (Gemini)");
+        assert_eq!(
+            origin_label(Some("Open-Meteo"), ORIGIN_LOCAL),
+            "Open-Meteo, sin IA"
+        );
+        assert_eq!(
+            origin_label(Some("Open-Meteo"), "solicitud interpretada con IA (Gemini)"),
+            "Open-Meteo; solicitud interpretada con IA (Gemini)"
+        );
         assert_eq!(origin_label(None, ORIGIN_LOCAL), ORIGIN_LOCAL);
     }
     use crate::{
-        core::handlers::{ClarifyHandler, FilesHandler, ReminderIntentHandler, ScreenHandler, SystemHandler, TimeHandler},
+        core::handlers::{
+            ClarifyHandler, FilesHandler, ReminderIntentHandler, ScreenHandler, SystemHandler,
+            TimeHandler,
+        },
         database::Database,
         error::AiError,
         models::{BatteryInfo, MemoryInfo, Reading, ReminderRequest, WifiInfo},
@@ -259,15 +385,30 @@ mod tests {
         }
         async fn interpret(&self, _: InterpretRequest) -> Result<AiAnswer<Intent>, AiError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            self.answer.lock().unwrap().take().unwrap_or(Ok(Intent::Unknown)).map(|value| AiAnswer { value, tokens: 7 })
+            self.answer
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap_or(Ok(Intent::Unknown))
+                .map(|value| AiAnswer { value, tokens: 7 })
         }
-        async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<ScreenAnalysis>, AiError> {
+        async fn analyze_image(
+            &self,
+            request: VisionRequest,
+        ) -> Result<AiAnswer<ScreenAnalysis>, AiError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             assert!(!request.image_jpeg.is_empty());
             if request.question == "respuesta ilegible" {
                 return Err(AiError::InvalidResponse);
             }
-            Ok(AiAnswer { value: ScreenAnalysis { summary: "Un error de ruta".into(), cause: Some("Falta un archivo.".into()), steps: vec!["Comprueba la carpeta.".into()] }, tokens: 9 })
+            Ok(AiAnswer {
+                value: ScreenAnalysis {
+                    summary: "Un error de ruta".into(),
+                    cause: Some("Falta un archivo.".into()),
+                    steps: vec!["Comprueba la carpeta.".into()],
+                },
+                tokens: 9,
+            })
         }
     }
 
@@ -279,7 +420,11 @@ mod tests {
             Reading::Value(25.0)
         }
         async fn memory(&self) -> Reading<MemoryInfo> {
-            Reading::Value(MemoryInfo { used_bytes: 8 << 30, available_bytes: 8 << 30, total_bytes: 16 << 30 })
+            Reading::Value(MemoryInfo {
+                used_bytes: 8 << 30,
+                available_bytes: 8 << 30,
+                total_bytes: 16 << 30,
+            })
         }
         async fn battery(&self) -> Reading<BatteryInfo> {
             Reading::Unavailable("Este equipo no tiene batería.".into())
@@ -288,7 +433,10 @@ mod tests {
             Reading::Value(true)
         }
         async fn wifi(&self) -> Reading<WifiInfo> {
-            Reading::Value(WifiInfo { connected: true, ssid: Reading::Unavailable("oculto".into()) })
+            Reading::Value(WifiInfo {
+                connected: true,
+                ssid: Reading::Unavailable("oculto".into()),
+            })
         }
         async fn dark_mode(&self) -> Reading<bool> {
             Reading::Value(false)
@@ -319,7 +467,11 @@ mod tests {
         _folder: tempfile::TempDir,
     }
 
-    fn harness(answer: Option<Result<Intent, AiError>>, configured: bool, capture_fails: bool) -> Harness {
+    fn harness(
+        answer: Option<Result<Intent, AiError>>,
+        configured: bool,
+        capture_fails: bool,
+    ) -> Harness {
         let db = Database::in_memory().unwrap();
         let settings = SettingsService::new(db.clone());
         let ai_calls = Arc::new(AtomicUsize::new(0));
@@ -328,26 +480,45 @@ mod tests {
         std::fs::write(folder.path().join("informe programacion.txt"), "x").unwrap();
         let handlers: Vec<Box<dyn CommandHandler>> = vec![
             Box::new(TimeHandler),
-            Box::new(SystemHandler { system: Arc::new(FakeSystem) }),
+            Box::new(SystemHandler {
+                system: Arc::new(FakeSystem),
+            }),
             Box::new(FilesHandler {
                 search: Arc::new(LocalFileSearch),
                 settings: settings.clone(),
-                known_folders: vec![AuthorizedFolder { path: folder.path().to_path_buf(), label: "Documentos".into() }],
+                known_folders: vec![AuthorizedFolder {
+                    path: folder.path().to_path_buf(),
+                    label: "Documentos".into(),
+                }],
             }),
-            Box::new(ReminderIntentHandler { reminders: ReminderService::new(db.clone()) }),
+            Box::new(ReminderIntentHandler {
+                reminders: ReminderService::new(db.clone()),
+            }),
             Box::new(ScreenHandler),
             Box::new(ClarifyHandler),
         ];
         let assistant = Assistant {
-            ai: Arc::new(FakeAi { calls: ai_calls.clone(), answer: Mutex::new(answer), configured }),
+            ai: Arc::new(FakeAi {
+                calls: ai_calls.clone(),
+                answer: Mutex::new(answer),
+                configured,
+            }),
             ai_status: AiStatusTracker::default(),
-            capture: Arc::new(FakeCapture { calls: capture_calls.clone(), fail: capture_fails }),
+            capture: Arc::new(FakeCapture {
+                calls: capture_calls.clone(),
+                fail: capture_fails,
+            }),
             handlers,
             settings,
             history: HistoryService::new(db.clone()),
             usage: UsageService::new(db),
         };
-        Harness { assistant, ai_calls, capture_calls, _folder: folder }
+        Harness {
+            assistant,
+            ai_calls,
+            capture_calls,
+            _folder: folder,
+        }
     }
 
     fn silent() -> StageSink {
@@ -355,7 +526,9 @@ mod tests {
     }
 
     async fn ask(assistant: &Assistant, text: &str) -> AssistantResponse {
-        assistant.process(text, CancellationToken::new(), silent()).await
+        assistant
+            .process(text, CancellationToken::new(), silent())
+            .await
     }
 
     fn authorize(harness: &Harness) {
@@ -368,7 +541,14 @@ mod tests {
     #[tokio::test]
     async fn local_questions_never_spend_quota() {
         let h = harness(None, true, false);
-        for phrase in ["¿Qué hora es?", "¿Cuánta RAM uso?", "uso de CPU", "¿Cuánta batería tengo?", "¿Estoy conectado a Internet?", "¿A qué red Wi-Fi estoy conectado?"] {
+        for phrase in [
+            "¿Qué hora es?",
+            "¿Cuánta RAM uso?",
+            "uso de CPU",
+            "¿Cuánta batería tengo?",
+            "¿Estoy conectado a Internet?",
+            "¿A qué red Wi-Fi estoy conectado?",
+        ] {
             let response = ask(&h.assistant, phrase).await;
             assert_eq!(response.origin_label, ORIGIN_LOCAL, "{phrase}");
         }
@@ -390,7 +570,9 @@ mod tests {
     async fn unavailable_data_is_not_invented() {
         let h = harness(None, true, false);
         let response = ask(&h.assistant, "¿Cuánta batería tengo?").await;
-        let ResponseBody::Rows { rows, note, .. } = response.body else { panic!() };
+        let ResponseBody::Rows { rows, note, .. } = response.body else {
+            panic!()
+        };
         assert!(rows[0].unavailable);
         assert_eq!(rows[0].value, "No disponible");
         assert_eq!(note.as_deref(), Some("Este equipo no tiene batería."));
@@ -398,10 +580,21 @@ mod tests {
 
     #[tokio::test]
     async fn ai_intent_runs_the_controlled_handler_and_counts_usage() {
-        let reminder = ReminderRequest { content: "Entregar".into(), date: NaiveDate::from_ymd_opt(2099, 1, 1), time: None, ambiguity: None };
+        let reminder = ReminderRequest {
+            content: "Entregar".into(),
+            date: NaiveDate::from_ymd_opt(2099, 1, 1),
+            time: None,
+            ambiguity: None,
+        };
         let h = harness(Some(Ok(Intent::CreateReminder(reminder))), true, false);
         let response = ask(&h.assistant, "Recuérdame entregar algo").await;
-        assert!(matches!(response.body, ResponseBody::ReminderDraft { question: Some(_), .. }));
+        assert!(matches!(
+            response.body,
+            ResponseBody::ReminderDraft {
+                question: Some(_),
+                ..
+            }
+        ));
         assert_eq!(response.status, InteractionStatus::Pending);
         assert!(response.origin_label.contains("Proveedor de prueba"));
         assert_eq!(h.assistant.usage.today_totals().unwrap(), (1, 7));
@@ -411,27 +604,56 @@ mod tests {
     async fn an_ambiguous_numeric_date_needs_neither_ai_nor_key() {
         let h = harness(None, false, false);
         let response = ask(&h.assistant, "Recuérdame pagar el 5/6").await;
-        let ResponseBody::Clarification { question, suggestions } = response.body else { panic!() };
+        let ResponseBody::Clarification {
+            question,
+            suggestions,
+        } = response.body
+        else {
+            panic!()
+        };
         assert_eq!(question, "¿Te refieres al 5 de junio o al 6 de mayo?");
-        assert_eq!(suggestions.iter().map(|s| s.request.as_str()).collect::<Vec<_>>(), ["Recuérdame pagar el 5 de junio", "Recuérdame pagar el 6 de mayo"]);
+        assert_eq!(
+            suggestions
+                .iter()
+                .map(|s| s.request.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Recuérdame pagar el 5 de junio",
+                "Recuérdame pagar el 6 de mayo"
+            ]
+        );
         assert_eq!(response.origin_label, "reglas locales, sin IA");
         assert_eq!(h.ai_calls.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]
     async fn the_model_cannot_settle_an_ambiguous_numeric_date() {
-        let chosen = ReminderRequest { content: "Pagar".into(), date: NaiveDate::from_ymd_opt(2099, 6, 5), time: NaiveTime::from_hms_opt(10, 0, 0), ambiguity: None };
+        let chosen = ReminderRequest {
+            content: "Pagar".into(),
+            date: NaiveDate::from_ymd_opt(2099, 6, 5),
+            time: NaiveTime::from_hms_opt(10, 0, 0),
+            ambiguity: None,
+        };
         let h = harness(Some(Ok(Intent::CreateReminder(chosen))), true, false);
         let response = ask(&h.assistant, "No me dejes olvidar pagar el 5/6").await;
         assert_eq!(h.ai_calls.load(Ordering::SeqCst), 1);
-        assert!(matches!(response.body, ResponseBody::Clarification { ref question, .. } if question == "¿Te refieres al 5 de junio o al 6 de mayo?"));
+        assert!(
+            matches!(response.body, ResponseBody::Clarification { ref question, .. } if question == "¿Te refieres al 5 de junio o al 6 de mayo?")
+        );
     }
 
     #[tokio::test]
     async fn a_region_without_service_says_so_and_keeps_local_features() {
         let h = harness(Some(Err(AiError::RegionUnavailable)), true, false);
         let response = ask(&h.assistant, "cuéntame algo sobre el proyecto").await;
-        let ResponseBody::Error { code, message, hint } = response.body else { panic!() };
+        let ResponseBody::Error {
+            code,
+            message,
+            hint,
+        } = response.body
+        else {
+            panic!()
+        };
         assert_eq!(code, "regionUnavailable");
         assert!(message.contains("no está disponible en tu región"));
         let hint = hint.unwrap();
@@ -443,7 +665,14 @@ mod tests {
     async fn an_unknown_country_is_explained_apart_from_a_blocked_region() {
         let h = harness(Some(Err(AiError::RegionUnknown)), true, false);
         let response = ask(&h.assistant, "cuéntame algo sobre el proyecto").await;
-        let ResponseBody::Error { code, message, hint } = response.body else { panic!() };
+        let ResponseBody::Error {
+            code,
+            message,
+            hint,
+        } = response.body
+        else {
+            panic!()
+        };
         assert_eq!(code, "regionUnknown");
         assert!(message.contains("No se pudo determinar tu país"));
         assert!(hint.unwrap().contains("Tor"));
@@ -471,15 +700,29 @@ mod tests {
         assert!(messages[6].contains("tu país"));
         let unique: std::collections::HashSet<_> = messages.iter().collect();
         assert_eq!(unique.len(), messages.len());
-        assert!(messages.iter().all(|message| !message.contains("no está disponible en este momento")));
-        assert!(h.assistant.describe_ai_error(&AiError::Unavailable).1.unwrap().contains("no en tu equipo ni en tu conexión"));
+        assert!(messages
+            .iter()
+            .all(|message| !message.contains("no está disponible en este momento")));
+        assert!(h
+            .assistant
+            .describe_ai_error(&AiError::Unavailable)
+            .1
+            .unwrap()
+            .contains("no en tu equipo ni en tu conexión"));
     }
 
     #[tokio::test]
     async fn quota_exhausted_shows_a_clear_message_without_retrying() {
         let h = harness(Some(Err(AiError::QuotaExhausted)), true, false);
         let response = ask(&h.assistant, "cuéntame algo sobre el proyecto").await;
-        let ResponseBody::Error { code, message, hint } = response.body else { panic!() };
+        let ResponseBody::Error {
+            code,
+            message,
+            hint,
+        } = response.body
+        else {
+            panic!()
+        };
         assert_eq!(code, "quotaExhausted");
         assert_eq!(message, "Cuota agotada de prueba");
         assert!(hint.unwrap().contains("siguen funcionando"));
@@ -491,20 +734,36 @@ mod tests {
     async fn without_the_service_no_call_is_made() {
         let h = harness(None, false, false);
         let response = ask(&h.assistant, "cuéntame algo").await;
-        assert!(matches!(response.body, ResponseBody::Error { ref code, .. } if code == "notConfigured"));
+        assert!(
+            matches!(response.body, ResponseBody::Error { ref code, .. } if code == "notConfigured")
+        );
         assert_eq!(h.ai_calls.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]
     async fn the_service_status_comes_from_real_use() {
         let h = harness(Some(Err(AiError::QuotaExhausted)), true, false);
-        assert_eq!(h.assistant.ai_status.current(true), AiServiceStatus::NotUsedYet);
+        assert_eq!(
+            h.assistant.ai_status.current(true),
+            AiServiceStatus::NotUsedYet
+        );
         ask(&h.assistant, "¿Qué hora es?").await;
-        assert_eq!(h.assistant.ai_status.current(true), AiServiceStatus::NotUsedYet);
+        assert_eq!(
+            h.assistant.ai_status.current(true),
+            AiServiceStatus::NotUsedYet
+        );
         ask(&h.assistant, "cuéntame algo").await;
-        assert_eq!(h.assistant.ai_status.current(true), AiServiceStatus::QuotaExhausted);
-        h.assistant.analyze_screen("x", CancellationToken::new(), silent()).await;
-        assert_eq!(h.assistant.ai_status.current(true), AiServiceStatus::Working);
+        assert_eq!(
+            h.assistant.ai_status.current(true),
+            AiServiceStatus::QuotaExhausted
+        );
+        h.assistant
+            .analyze_screen("x", CancellationToken::new(), silent())
+            .await;
+        assert_eq!(
+            h.assistant.ai_status.current(true),
+            AiServiceStatus::Working
+        );
     }
 
     #[tokio::test]
@@ -515,7 +774,9 @@ mod tests {
         h.assistant.settings.save(&settings).unwrap();
         h.assistant.usage.record(1).unwrap();
         let response = ask(&h.assistant, "cuéntame algo").await;
-        assert!(matches!(response.body, ResponseBody::Error { ref code, .. } if code == "localLimit"));
+        assert!(
+            matches!(response.body, ResponseBody::Error { ref code, .. } if code == "localLimit")
+        );
         assert_eq!(h.ai_calls.load(Ordering::SeqCst), 0);
     }
 
@@ -531,7 +792,9 @@ mod tests {
         let h = harness(None, false, false);
         authorize(&h);
         let response = ask(&h.assistant, "Busca mi informe de programación").await;
-        let ResponseBody::Files { files, note, .. } = response.body else { panic!("{:?}", response.body) };
+        let ResponseBody::Files { files, note, .. } = response.body else {
+            panic!("{:?}", response.body)
+        };
         assert_eq!(files.len(), 1);
         assert!(note.unwrap().contains("sin IA"));
         assert_eq!(response.origin_label, "reglas locales, sin IA");
@@ -549,9 +812,19 @@ mod tests {
     #[tokio::test]
     async fn analysis_captures_once_and_does_not_keep_the_image() {
         let h = harness(None, true, false);
-        let response = h.assistant.analyze_screen("Explícame este error", CancellationToken::new(), silent()).await;
+        let response = h
+            .assistant
+            .analyze_screen("Explícame este error", CancellationToken::new(), silent())
+            .await;
         assert_eq!(h.capture_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(response.body, ResponseBody::ScreenAnalysis { summary: "Un error de ruta".into(), cause: Some("Falta un archivo.".into()), steps: vec!["Comprueba la carpeta.".into()] });
+        assert_eq!(
+            response.body,
+            ResponseBody::ScreenAnalysis {
+                summary: "Un error de ruta".into(),
+                cause: Some("Falta un archivo.".into()),
+                steps: vec!["Comprueba la carpeta.".into()]
+            }
+        );
         assert!(response.origin_label.contains("descartó la imagen"));
         let entries = h.assistant.history.list(None).unwrap();
         assert_eq!(entries[0].response, "Un error de ruta");
@@ -560,8 +833,18 @@ mod tests {
     #[tokio::test]
     async fn an_unreadable_analysis_shows_a_clear_message() {
         let h = harness(None, true, false);
-        let response = h.assistant.analyze_screen("respuesta ilegible", CancellationToken::new(), silent()).await;
-        let ResponseBody::Error { code, message, hint } = response.body else { panic!() };
+        let response = h
+            .assistant
+            .analyze_screen("respuesta ilegible", CancellationToken::new(), silent())
+            .await;
+        let ResponseBody::Error {
+            code,
+            message,
+            hint,
+        } = response.body
+        else {
+            panic!()
+        };
         assert_eq!(code, "invalidResponse");
         assert!(message.contains("formato que Nexium no puede mostrar"));
         assert!(hint.unwrap().contains("ya se descartó"));
@@ -570,15 +853,22 @@ mod tests {
     #[tokio::test]
     async fn without_the_service_no_capture_is_taken() {
         let h = harness(None, false, false);
-        h.assistant.analyze_screen("x", CancellationToken::new(), silent()).await;
+        h.assistant
+            .analyze_screen("x", CancellationToken::new(), silent())
+            .await;
         assert_eq!(h.capture_calls.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]
     async fn a_capture_permission_error_is_explained() {
         let h = harness(None, true, true);
-        let response = h.assistant.analyze_screen("x", CancellationToken::new(), silent()).await;
-        assert!(matches!(response.body, ResponseBody::Error { ref message, .. } if message == "sin permiso"));
+        let response = h
+            .assistant
+            .analyze_screen("x", CancellationToken::new(), silent())
+            .await;
+        assert!(
+            matches!(response.body, ResponseBody::Error { ref message, .. } if message == "sin permiso")
+        );
         assert_eq!(h.ai_calls.load(Ordering::SeqCst), 0);
     }
 
@@ -596,7 +886,16 @@ mod tests {
         let h = harness(None, true, false);
         let seen = Arc::new(Mutex::new(Vec::new()));
         let sink = seen.clone();
-        h.assistant.process("¿Qué hora es?", CancellationToken::new(), Arc::new(move |stage| sink.lock().unwrap().push(stage))).await;
-        assert_eq!(*seen.lock().unwrap(), vec![Stage::Executing, Stage::Responding]);
+        h.assistant
+            .process(
+                "¿Qué hora es?",
+                CancellationToken::new(),
+                Arc::new(move |stage| sink.lock().unwrap().push(stage)),
+            )
+            .await;
+        assert_eq!(
+            *seen.lock().unwrap(),
+            vec![Stage::Executing, Stage::Responding]
+        );
     }
 }

@@ -17,6 +17,12 @@ impl<R: Runtime> TauriNotifications<R> {
 
 impl<R: Runtime> NotificationProvider for TauriNotifications<R> {
     fn notify(&self, title: &str, body: &str) -> Result<(), String> {
-        self.app.notification().builder().title(title).body(body).show().map_err(|error| error.to_string())
+        self.app
+            .notification()
+            .builder()
+            .title(title)
+            .body(body)
+            .show()
+            .map_err(|error| error.to_string())
     }
 }

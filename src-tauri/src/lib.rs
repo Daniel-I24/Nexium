@@ -21,7 +21,10 @@ use crate::{
     commands::AppState,
     core::{
         assistant::Assistant,
-        handlers::{ClarifyHandler, CommandHandler, FilesHandler, ReminderIntentHandler, ScreenHandler, SystemHandler, TimeHandler, WeatherHandler},
+        handlers::{
+            ClarifyHandler, CommandHandler, FilesHandler, ReminderIntentHandler, ScreenHandler,
+            SystemHandler, TimeHandler, WeatherHandler,
+        },
     },
     database::Database,
     models::Reading,
@@ -35,9 +38,7 @@ use crate::{
         weather::OpenMeteo,
     },
     services::{
-        history::HistoryService,
-        reminders::ReminderService,
-        settings::SettingsService,
+        history::HistoryService, reminders::ReminderService, settings::SettingsService,
         usage::UsageService,
     },
 };
@@ -47,10 +48,18 @@ const SPEECH_IDLE_CHECK_INTERVAL: Duration = Duration::from_secs(30);
 
 fn known_folders<R: Runtime>(app: &AppHandle<R>) -> Vec<AuthorizedFolder> {
     let paths = app.path();
-    [(paths.document_dir(), "Documentos"), (paths.desktop_dir(), "Escritorio")]
-        .into_iter()
-        .filter_map(|(path, label)| path.ok().map(|path| AuthorizedFolder { path, label: label.into() }))
-        .collect()
+    [
+        (paths.document_dir(), "Documentos"),
+        (paths.desktop_dir(), "Escritorio"),
+    ]
+    .into_iter()
+    .filter_map(|(path, label)| {
+        path.ok().map(|path| AuthorizedFolder {
+            path,
+            label: label.into(),
+        })
+    })
+    .collect()
 }
 
 /// La dirección del servidor se fija al compilar. El adaptador directo solo existe en desarrollo y solo actúa sin servidor.
@@ -75,7 +84,10 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
     let folders = known_folders(app);
 
     let theme_app = app.clone();
-    let system = Arc::new(NativeSystemProvider::new(Arc::new(move || match theme_app.get_webview_window("main").map(|window| window.theme()) {
+    let system = Arc::new(NativeSystemProvider::new(Arc::new(move || match theme_app
+        .get_webview_window("main")
+        .map(|window| window.theme())
+    {
         Some(Ok(Theme::Dark)) => Reading::Value(true),
         Some(Ok(_)) => Reading::Value(false),
         _ => Reading::Unavailable("Este sistema no indica si el modo oscuro está activo.".into()),
@@ -83,9 +95,18 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
     let handlers: Vec<Box<dyn CommandHandler>> = vec![
         Box::new(TimeHandler),
         Box::new(SystemHandler { system }),
-        Box::new(FilesHandler { search: Arc::new(LocalFileSearch), settings: settings.clone(), known_folders: folders.clone() }),
-        Box::new(WeatherHandler { weather: Arc::new(OpenMeteo::default()), settings: settings.clone() }),
-        Box::new(ReminderIntentHandler { reminders: reminders.clone() }),
+        Box::new(FilesHandler {
+            search: Arc::new(LocalFileSearch),
+            settings: settings.clone(),
+            known_folders: folders.clone(),
+        }),
+        Box::new(WeatherHandler {
+            weather: Arc::new(OpenMeteo::default()),
+            settings: settings.clone(),
+        }),
+        Box::new(ReminderIntentHandler {
+            reminders: reminders.clone(),
+        }),
         Box::new(ScreenHandler),
         Box::new(ClarifyHandler),
     ];
@@ -137,7 +158,9 @@ fn start_speech_release(speech: Arc<dyn SpeechProvider>, settings: SettingsServi
         loop {
             tokio::time::sleep(SPEECH_IDLE_CHECK_INTERVAL).await;
             if let Ok(current) = settings.get() {
-                speech.release_idle(Duration::from_secs(u64::from(current.speech_idle_minutes) * 60));
+                speech.release_idle(Duration::from_secs(
+                    u64::from(current.speech_idle_minutes) * 60,
+                ));
             }
         }
     });
@@ -165,7 +188,12 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
                 show_main_window(tray.app_handle());
             }
         });
@@ -178,7 +206,9 @@ fn build_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| show_main_window(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            show_main_window(app)
+        }))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {

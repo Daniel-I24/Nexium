@@ -2,7 +2,20 @@
 
 use chrono::{DateTime, Datelike, Local, Timelike, Weekday};
 
-pub const MONTHS: [&str; 12] = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+pub const MONTHS: [&str; 12] = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+];
 
 pub fn weekday_name(day: Weekday) -> &'static str {
     match day {
@@ -17,7 +30,12 @@ pub fn weekday_name(day: Weekday) -> &'static str {
 }
 
 pub fn long_date(date: impl Datelike) -> String {
-    format!("{} {} de {}", weekday_name(date.weekday()), date.day(), MONTHS[date.month0() as usize])
+    format!(
+        "{} {} de {}",
+        weekday_name(date.weekday()),
+        date.day(),
+        MONTHS[date.month0() as usize]
+    )
 }
 
 pub fn clock(now: &DateTime<Local>) -> String {
@@ -43,7 +61,10 @@ mod tests {
 
     #[test]
     fn dates_are_in_spanish() {
-        assert_eq!(long_date(NaiveDate::from_ymd_opt(2026, 11, 5).unwrap()), "jueves 5 de noviembre");
+        assert_eq!(
+            long_date(NaiveDate::from_ymd_opt(2026, 11, 5).unwrap()),
+            "jueves 5 de noviembre"
+        );
     }
 
     #[test]

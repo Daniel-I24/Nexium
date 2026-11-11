@@ -81,15 +81,30 @@ pub struct DataRow {
 
 impl DataRow {
     pub fn value(label: &str, value: impl Into<String>) -> Self {
-        Self { label: label.into(), value: value.into(), mono: true, unavailable: false }
+        Self {
+            label: label.into(),
+            value: value.into(),
+            mono: true,
+            unavailable: false,
+        }
     }
 
     pub fn text(label: &str, value: impl Into<String>) -> Self {
-        Self { label: label.into(), value: value.into(), mono: false, unavailable: false }
+        Self {
+            label: label.into(),
+            value: value.into(),
+            mono: false,
+            unavailable: false,
+        }
     }
 
     pub fn unavailable(label: &str) -> Self {
-        Self { label: label.into(), value: "No disponible".into(), mono: false, unavailable: true }
+        Self {
+            label: label.into(),
+            value: "No disponible".into(),
+            mono: false,
+            unavailable: true,
+        }
     }
 }
 
@@ -134,7 +149,11 @@ pub struct Reminder {
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
-#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ResponseBody {
     Reading {
         value: String,
@@ -297,12 +316,20 @@ pub struct ReminderRequest {
 pub enum Intent {
     Time,
     System(SystemMetric),
-    Weather { city: Option<String>, when: WeatherWhen },
+    Weather {
+        city: Option<String>,
+        when: WeatherWhen,
+    },
     SearchFiles(FileQuery),
     CreateReminder(ReminderRequest),
     ListReminders,
-    AnalyzeScreen { question: String },
-    Clarify { question: String, suggestions: Vec<String> },
+    AnalyzeScreen {
+        question: String,
+    },
+    Clarify {
+        question: String,
+        suggestions: Vec<String>,
+    },
     Unknown,
 }
 

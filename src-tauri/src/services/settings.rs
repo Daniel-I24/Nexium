@@ -37,22 +37,38 @@ impl Default for Settings {
 }
 
 impl Settings {
-    pub fn validate(&self, known_folders: &[String], known_speech_models: &[&str]) -> AppResult<()> {
+    pub fn validate(
+        &self,
+        known_folders: &[String],
+        known_speech_models: &[&str],
+    ) -> AppResult<()> {
         if !(1..=10_000).contains(&self.daily_ai_limit) {
-            return Err(AppError::Validation("El límite diario debe estar entre 1 y 10 000.".into()));
+            return Err(AppError::Validation(
+                "El límite diario debe estar entre 1 y 10 000.".into(),
+            ));
         }
         if !known_speech_models.contains(&self.speech_model.as_str()) {
             return Err(AppError::Validation("Ese modelo de voz no existe.".into()));
         }
         if !(1..=240).contains(&self.speech_idle_minutes) {
-            return Err(AppError::Validation("El tiempo para liberar el modelo de voz debe estar entre 1 y 240 minutos.".into()));
+            return Err(AppError::Validation(
+                "El tiempo para liberar el modelo de voz debe estar entre 1 y 240 minutos.".into(),
+            ));
         }
         if self.weather_city.chars().count() > 100 {
-            return Err(AppError::Validation("El nombre de la ciudad es demasiado largo.".into()));
+            return Err(AppError::Validation(
+                "El nombre de la ciudad es demasiado largo.".into(),
+            ));
         }
         let known: HashSet<&String> = known_folders.iter().collect();
-        if self.authorized_folders.iter().any(|folder| !known.contains(folder)) {
-            return Err(AppError::Validation("Solo se pueden autorizar las carpetas que ofrece Nexium.".into()));
+        if self
+            .authorized_folders
+            .iter()
+            .any(|folder| !known.contains(folder))
+        {
+            return Err(AppError::Validation(
+                "Solo se pueden autorizar las carpetas que ofrece Nexium.".into(),
+            ));
         }
         Ok(())
     }
@@ -69,12 +85,21 @@ impl SettingsService {
     }
 
     pub fn get(&self) -> AppResult<Settings> {
-        let stored: Option<String> = self.db.lock()?.query_row("SELECT value FROM settings WHERE key = 'app'", [], |row| row.get(0)).optional()?;
-        Ok(stored.and_then(|json| serde_json::from_str(&json).ok()).unwrap_or_default())
+        let stored: Option<String> = self
+            .db
+            .lock()?
+            .query_row("SELECT value FROM settings WHERE key = 'app'", [], |row| {
+                row.get(0)
+            })
+            .optional()?;
+        Ok(stored
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default())
     }
 
     pub fn save(&self, settings: &Settings) -> AppResult<()> {
-        let json = serde_json::to_string(settings).map_err(|e| AppError::Operation(e.to_string()))?;
+        let json =
+            serde_json::to_string(settings).map_err(|e| AppError::Operation(e.to_string()))?;
         self.db.lock()?.execute("INSERT INTO settings (key, value) VALUES ('app', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1", params![json])?;
         Ok(())
     }
@@ -82,12 +107,24 @@ impl SettingsService {
     /// Identificador anónimo y aleatorio de esta instalación, creado la primera vez. Solo sirve para limitar el uso.
     pub fn install_id(&self) -> AppResult<String> {
         let db = self.db.lock()?;
-        db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('install_id', ?1)", params![Uuid::new_v4().to_string()])?;
-        Ok(db.query_row("SELECT value FROM settings WHERE key = 'install_id'", [], |row| row.get(0))?)
+        db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES ('install_id', ?1)",
+            params![Uuid::new_v4().to_string()],
+        )?;
+        Ok(db.query_row(
+            "SELECT value FROM settings WHERE key = 'install_id'",
+            [],
+            |row| row.get(0),
+        )?)
     }
 
     pub fn authorized_paths(&self) -> AppResult<Vec<PathBuf>> {
-        Ok(self.get()?.authorized_folders.into_iter().map(PathBuf::from).collect())
+        Ok(self
+            .get()?
+            .authorized_folders
+            .into_iter()
+            .map(PathBuf::from)
+            .collect())
     }
 }
 
@@ -111,7 +148,10 @@ mod tests {
 
     #[test]
     fn settings_saved_by_older_versions_still_load() {
-        let stored: Settings = serde_json::from_str(r#"{"aiProvider":"gemini","interpretModel":"x","visionModel":"y","dailyAiLimit":7}"#).unwrap();
+        let stored: Settings = serde_json::from_str(
+            r#"{"aiProvider":"gemini","interpretModel":"x","visionModel":"y","dailyAiLimit":7}"#,
+        )
+        .unwrap();
         assert_eq!(stored.daily_ai_limit, 7);
     }
 
@@ -139,7 +179,12 @@ mod tests {
 
     #[test]
     fn rejects_folders_nexium_did_not_offer() {
-        let settings = Settings { authorized_folders: vec!["C:\\".into()], ..Settings::default() };
-        assert!(settings.validate(&["C:\\Users\\a\\Documents".into()], &["small"]).is_err());
+        let settings = Settings {
+            authorized_folders: vec!["C:\\".into()],
+            ..Settings::default()
+        };
+        assert!(settings
+            .validate(&["C:\\Users\\a\\Documents".into()], &["small"])
+            .is_err());
     }
 }

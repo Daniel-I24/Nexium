@@ -5,8 +5,9 @@ use std::{ffi::c_void, ptr::null_mut};
 use windows::Win32::{
     Foundation::{ERROR_SERVICE_NOT_ACTIVE, HANDLE, WIN32_ERROR},
     NetworkManagement::WiFi::{
-        wlan_interface_state_connected, wlan_intf_opcode_current_connection, WlanCloseHandle, WlanEnumInterfaces, WlanFreeMemory, WlanOpenHandle,
-        WlanQueryInterface, WLAN_CONNECTION_ATTRIBUTES, WLAN_INTERFACE_INFO_LIST,
+        wlan_interface_state_connected, wlan_intf_opcode_current_connection, WlanCloseHandle,
+        WlanEnumInterfaces, WlanFreeMemory, WlanOpenHandle, WlanQueryInterface,
+        WLAN_CONNECTION_ATTRIBUTES, WLAN_INTERFACE_INFO_LIST,
     },
 };
 
@@ -38,7 +39,9 @@ pub fn wifi_status() -> Reading<WifiInfo> {
 
     let mut list: *mut WLAN_INTERFACE_INFO_LIST = null_mut();
     // SAFETY: `list` recibe memoria de la API, liberada abajo con WlanFreeMemory.
-    if WIN32_ERROR(unsafe { WlanEnumInterfaces(handle.0, None, &mut list) }).is_err() || list.is_null() {
+    if WIN32_ERROR(unsafe { WlanEnumInterfaces(handle.0, None, &mut list) }).is_err()
+        || list.is_null()
+    {
         return Reading::Unavailable("Windows no permite consultar el Wi-Fi.".into());
     }
     // SAFETY: la API devolvió una lista válida con `dwNumberOfItems` elementos consecutivos.
@@ -47,10 +50,19 @@ pub fn wifi_status() -> Reading<WifiInfo> {
         let items = std::slice::from_raw_parts((*list).InterfaceInfo.as_ptr(), count);
         if items.is_empty() {
             Reading::Unavailable("Este equipo no tiene adaptador Wi-Fi.".into())
-        } else if let Some(item) = items.iter().find(|item| item.isState == wlan_interface_state_connected) {
-            Reading::Value(WifiInfo { connected: true, ssid: current_ssid(&handle, &item.InterfaceGuid) })
+        } else if let Some(item) = items
+            .iter()
+            .find(|item| item.isState == wlan_interface_state_connected)
+        {
+            Reading::Value(WifiInfo {
+                connected: true,
+                ssid: current_ssid(&handle, &item.InterfaceGuid),
+            })
         } else {
-            Reading::Value(WifiInfo { connected: false, ssid: Reading::Unavailable("Sin conexión Wi-Fi.".into()) })
+            Reading::Value(WifiInfo {
+                connected: false,
+                ssid: Reading::Unavailable("Sin conexión Wi-Fi.".into()),
+            })
         }
     };
     // SAFETY: `list` no se vuelve a usar después de liberarla.
@@ -62,7 +74,17 @@ fn current_ssid(handle: &WlanHandle, guid: &windows::core::GUID) -> Reading<Stri
     let mut size = 0u32;
     let mut data: *mut c_void = null_mut();
     // SAFETY: `data` recibe memoria de la API, liberada abajo.
-    let status = WIN32_ERROR(unsafe { WlanQueryInterface(handle.0, guid, wlan_intf_opcode_current_connection, None, &mut size, &mut data, None) });
+    let status = WIN32_ERROR(unsafe {
+        WlanQueryInterface(
+            handle.0,
+            guid,
+            wlan_intf_opcode_current_connection,
+            None,
+            &mut size,
+            &mut data,
+            None,
+        )
+    });
     if status.is_err() || data.is_null() {
         return Reading::Unavailable(SSID_HIDDEN_NOTE.into());
     }

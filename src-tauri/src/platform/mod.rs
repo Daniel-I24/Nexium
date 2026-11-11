@@ -4,9 +4,9 @@
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+mod window_capture;
 #[cfg(target_os = "windows")]
 mod windows;
-mod window_capture;
 
 #[cfg(target_os = "linux")]
 pub use linux::wifi_status;

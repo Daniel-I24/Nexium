@@ -15,17 +15,27 @@ pub struct ReminderService {
 }
 
 fn from_row(row: &Row<'_>) -> rusqlite::Result<Reminder> {
-    Ok(Reminder { id: row.get(0)?, content: row.get(1)?, due_at: row.get(2)?, status: row.get(3)? })
+    Ok(Reminder {
+        id: row.get(0)?,
+        content: row.get(1)?,
+        due_at: row.get(2)?,
+        status: row.get(3)?,
+    })
 }
 
 fn validate(content: &str, due_at: &str, now: DateTime<Utc>) -> AppResult<(String, String)> {
     let content = content.trim();
     if content.is_empty() || content.chars().count() > MAX_CONTENT {
-        return Err(AppError::Validation("El recordatorio debe tener entre 1 y 300 caracteres.".into()));
+        return Err(AppError::Validation(
+            "El recordatorio debe tener entre 1 y 300 caracteres.".into(),
+        ));
     }
-    let due = DateTime::parse_from_rfc3339(due_at).map_err(|_| AppError::Validation("La fecha del recordatorio no es válida.".into()))?;
+    let due = DateTime::parse_from_rfc3339(due_at)
+        .map_err(|_| AppError::Validation("La fecha del recordatorio no es válida.".into()))?;
     if due.with_timezone(&Utc) <= now {
-        return Err(AppError::Validation("La fecha del recordatorio ya pasó.".into()));
+        return Err(AppError::Validation(
+            "La fecha del recordatorio ya pasó.".into(),
+        ));
     }
     Ok((content.to_owned(), due.with_timezone(&Utc).to_rfc3339()))
 }
@@ -42,29 +52,50 @@ impl ReminderService {
             "INSERT INTO reminders (content, due_at, status, created_at) VALUES (?1, ?2, 'pending', ?3)",
             params![content, due_at, Local::now().to_rfc3339()],
         )?;
-        Ok(Reminder { id: connection.last_insert_rowid(), content, due_at, status: "pending".into() })
+        Ok(Reminder {
+            id: connection.last_insert_rowid(),
+            content,
+            due_at,
+            status: "pending".into(),
+        })
     }
 
-    pub fn update(&self, id: i64, content: &str, due_at: &str, now: DateTime<Utc>) -> AppResult<Reminder> {
+    pub fn update(
+        &self,
+        id: i64,
+        content: &str,
+        due_at: &str,
+        now: DateTime<Utc>,
+    ) -> AppResult<Reminder> {
         let (content, due_at) = validate(content, due_at, now)?;
         let changed = self.db.lock()?.execute(
             "UPDATE reminders SET content = ?1, due_at = ?2, status = 'pending' WHERE id = ?3",
             params![content, due_at, id],
         )?;
         if changed == 0 {
-            return Err(AppError::Validation("Ese recordatorio ya no existe.".into()));
+            return Err(AppError::Validation(
+                "Ese recordatorio ya no existe.".into(),
+            ));
         }
-        Ok(Reminder { id, content, due_at, status: "pending".into() })
+        Ok(Reminder {
+            id,
+            content,
+            due_at,
+            status: "pending".into(),
+        })
     }
 
     pub fn delete(&self, id: i64) -> AppResult<()> {
-        self.db.lock()?.execute("DELETE FROM reminders WHERE id = ?1", params![id])?;
+        self.db
+            .lock()?
+            .execute("DELETE FROM reminders WHERE id = ?1", params![id])?;
         Ok(())
     }
 
     pub fn list(&self) -> AppResult<Vec<Reminder>> {
         let connection = self.db.lock()?;
-        let mut statement = connection.prepare("SELECT id, content, due_at, status FROM reminders ORDER BY due_at")?;
+        let mut statement = connection
+            .prepare("SELECT id, content, due_at, status FROM reminders ORDER BY due_at")?;
         let rows = statement.query_map([], from_row)?;
         rows.collect::<Result<_, _>>().map_err(AppError::from)
     }
@@ -78,7 +109,10 @@ impl ReminderService {
             rows.collect::<Result<_, _>>()?
         };
         for reminder in &due {
-            connection.execute("UPDATE reminders SET status = 'notified' WHERE id = ?1", params![reminder.id])?;
+            connection.execute(
+                "UPDATE reminders SET status = 'notified' WHERE id = ?1",
+                params![reminder.id],
+            )?;
         }
         Ok(due)
     }
@@ -106,7 +140,9 @@ mod tests {
         let reminders = service();
         let created = reminders.create(" Entregar ", &at(2), now()).unwrap();
         assert_eq!(created.content, "Entregar");
-        reminders.update(created.id, "Entregar ya", &at(3), now()).unwrap();
+        reminders
+            .update(created.id, "Entregar ya", &at(3), now())
+            .unwrap();
         assert_eq!(reminders.list().unwrap()[0].content, "Entregar ya");
         reminders.delete(created.id).unwrap();
         assert!(reminders.list().unwrap().is_empty());
@@ -141,8 +177,19 @@ mod tests {
     #[test]
     fn comparison_works_across_time_zones() {
         let reminders = service();
-        reminders.create("zona", "2026-11-05T09:00:00-05:00", now()).unwrap();
-        assert!(reminders.take_due(Utc.with_ymd_and_hms(2026, 11, 5, 13, 59, 0).unwrap()).unwrap().is_empty());
-        assert_eq!(reminders.take_due(Utc.with_ymd_and_hms(2026, 11, 5, 14, 0, 1).unwrap()).unwrap().len(), 1);
+        reminders
+            .create("zona", "2026-11-05T09:00:00-05:00", now())
+            .unwrap();
+        assert!(reminders
+            .take_due(Utc.with_ymd_and_hms(2026, 11, 5, 13, 59, 0).unwrap())
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            reminders
+                .take_due(Utc.with_ymd_and_hms(2026, 11, 5, 14, 0, 1).unwrap())
+                .unwrap()
+                .len(),
+            1
+        );
     }
 }

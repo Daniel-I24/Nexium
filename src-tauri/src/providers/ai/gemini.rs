@@ -16,13 +16,18 @@ use crate::{
 
 pub const DEV_KEY_VARIABLE: &str = "GEMINI_API_KEY";
 
-static CONTRACT: LazyLock<Value> = LazyLock::new(|| serde_json::from_str(include_str!("../../../../server/src/ai-contract.json")).expect("contrato de IA válido"));
+static CONTRACT: LazyLock<Value> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../../../server/src/ai-contract.json"))
+        .expect("contrato de IA válido")
+});
 
 /// Clave de `.env`. Nunca se muestra ni se guarda.
 pub fn dev_key() -> Option<String> {
     let _ = dotenvy::from_filename("../.env");
     let _ = dotenvy::dotenv();
-    std::env::var(DEV_KEY_VARIABLE).ok().filter(|value| !value.trim().is_empty())
+    std::env::var(DEV_KEY_VARIABLE)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
 }
 
 pub struct GeminiProvider {
@@ -83,7 +88,11 @@ impl GeminiProvider {
     }
 
     pub fn with_base_url(key: String, base_url: &str) -> Self {
-        Self { http: reqwest::Client::new(), base_url: base_url.trim_end_matches('/').to_owned(), key }
+        Self {
+            http: reqwest::Client::new(),
+            base_url: base_url.trim_end_matches('/').to_owned(),
+            key,
+        }
     }
 
     async fn send(&self, body: Value, timeout: Duration) -> Result<InteractionResponse, AiError> {
@@ -97,20 +106,36 @@ impl GeminiProvider {
         }
     }
 
-    async fn send_once(&self, body: &Value, timeout: Duration) -> Result<InteractionResponse, AiError> {
+    async fn send_once(
+        &self,
+        body: &Value,
+        timeout: Duration,
+    ) -> Result<InteractionResponse, AiError> {
         let response = self
             .http
             .post(format!("{}/interactions", self.base_url))
             .header("x-goog-api-key", &self.key)
-            .header("Api-Revision", CONTRACT["apiRevision"].as_str().unwrap_or_default())
+            .header(
+                "Api-Revision",
+                CONTRACT["apiRevision"].as_str().unwrap_or_default(),
+            )
             .timeout(timeout)
             .json(body)
             .send()
             .await
-            .map_err(|error| if error.is_timeout() { AiError::Timeout } else { AiError::Network })?;
+            .map_err(|error| {
+                if error.is_timeout() {
+                    AiError::Timeout
+                } else {
+                    AiError::Network
+                }
+            })?;
         let status = response.status();
         if status.is_success() {
-            return response.json::<InteractionResponse>().await.map_err(|_| AiError::InvalidResponse);
+            return response
+                .json::<InteractionResponse>()
+                .await
+                .map_err(|_| AiError::InvalidResponse);
         }
         let envelope: ErrorEnvelope = response.json().await.unwrap_or_default();
         Err(map_error(status.as_u16(), &envelope.error))
@@ -133,7 +158,11 @@ impl GeminiProvider {
 }
 
 fn map_error(status: u16, error: &ErrorDetail) -> AiError {
-    let code = error.code.as_str().unwrap_or(&error.status).to_ascii_lowercase();
+    let code = error
+        .code
+        .as_str()
+        .unwrap_or(&error.status)
+        .to_ascii_lowercase();
     match (status, code.as_str()) {
         (429, "quota_exceeded") => AiError::QuotaExhausted,
         // RESOURCE_EXHAUSTED es el código de la API heredada: tampoco distingue minuto de día si el mensaje no lo dice.
@@ -171,7 +200,10 @@ impl AiProvider for GeminiProvider {
     }
 
     async fn interpret(&self, request: InterpretRequest) -> Result<AiAnswer<Intent>, AiError> {
-        let now = request.now.format("%A %Y-%m-%d %H:%M, zona %:z").to_string();
+        let now = request
+            .now
+            .format("%A %Y-%m-%d %H:%M, zona %:z")
+            .to_string();
         let contract = &CONTRACT["interpret"];
         let body = json!({
             "model": contract["model"],
@@ -183,10 +215,16 @@ impl AiProvider for GeminiProvider {
         });
         let response = self.send(body, timeout_of(contract)).await?;
         let value = schema::parse_interpretation(&Self::output_text(&response)?, &request.text)?;
-        Ok(AiAnswer { value, tokens: response.usage.total_tokens })
+        Ok(AiAnswer {
+            value,
+            tokens: response.usage.total_tokens,
+        })
     }
 
-    async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<ScreenAnalysis>, AiError> {
+    async fn analyze_image(
+        &self,
+        request: VisionRequest,
+    ) -> Result<AiAnswer<ScreenAnalysis>, AiError> {
         let contract = &CONTRACT["analyze"];
         let body = json!({
             "model": contract["model"],
@@ -200,7 +238,10 @@ impl AiProvider for GeminiProvider {
             "response_format": { "type": "text", "mime_type": "application/json", "schema": contract["responseSchema"] }
         });
         let response = self.send(body, timeout_of(contract)).await?;
-        Ok(AiAnswer { value: schema::parse_screen_analysis(&Self::output_text(&response)?)?, tokens: response.usage.total_tokens })
+        Ok(AiAnswer {
+            value: schema::parse_screen_analysis(&Self::output_text(&response)?)?,
+            tokens: response.usage.total_tokens,
+        })
     }
 }
 
@@ -218,7 +259,10 @@ mod tests {
     }
 
     fn request() -> InterpretRequest {
-        InterpretRequest { text: "Busca mi informe".into(), now: Local::now() }
+        InterpretRequest {
+            text: "Busca mi informe".into(),
+            now: Local::now(),
+        }
     }
 
     fn output(text: &str) -> Value {
@@ -232,7 +276,10 @@ mod tests {
     async fn failing_server(status: u16, code: &str, expected_calls: u64) -> MockServer {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
-            .respond_with(ResponseTemplate::new(status).set_body_json(json!({ "error": { "code": code, "message": "m" } })))
+            .respond_with(
+                ResponseTemplate::new(status)
+                    .set_body_json(json!({ "error": { "code": code, "message": "m" } })),
+            )
             .expect(expected_calls)
             .mount(&server)
             .await;
@@ -245,8 +292,12 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/interactions"))
             .and(header("x-goog-api-key", "clave-de-prueba"))
-            .and(body_partial_json(json!({ "store": false, "model": CONTRACT["interpret"]["model"] })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(output(r#"{"intent":"search_files","search_terms":["informe"]}"#)))
+            .and(body_partial_json(
+                json!({ "store": false, "model": CONTRACT["interpret"]["model"] }),
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(output(
+                r#"{"intent":"search_files","search_terms":["informe"]}"#,
+            )))
             .expect(1)
             .mount(&server)
             .await;
@@ -258,38 +309,61 @@ mod tests {
     #[tokio::test]
     async fn daily_quota_is_reported_and_not_retried() {
         let server = failing_server(429, "quota_exceeded", 1).await;
-        assert_eq!(provider(&server).interpret(request()).await.unwrap_err(), AiError::QuotaExhausted);
+        assert_eq!(
+            provider(&server).interpret(request()).await.unwrap_err(),
+            AiError::QuotaExhausted
+        );
     }
 
     #[tokio::test]
     async fn per_minute_limit_is_reported_and_not_retried() {
         let server = failing_server(429, "rate_limit_exceeded", 1).await;
-        assert_eq!(provider(&server).interpret(request()).await.unwrap_err(), AiError::RateLimited);
+        assert_eq!(
+            provider(&server).interpret(request()).await.unwrap_err(),
+            AiError::RateLimited
+        );
     }
 
     #[tokio::test]
     async fn an_outage_is_retried_only_once() {
         let server = failing_server(503, "service_unavailable", 2).await;
-        assert_eq!(provider(&server).interpret(request()).await.unwrap_err(), AiError::Unavailable);
+        assert_eq!(
+            provider(&server).interpret(request()).await.unwrap_err(),
+            AiError::Unavailable
+        );
     }
 
     #[tokio::test]
     async fn invalid_key_is_not_retried() {
         let server = failing_server(401, "authentication", 1).await;
-        assert!(matches!(provider(&server).interpret(request()).await.unwrap_err(), AiError::Rejected(_)));
+        assert!(matches!(
+            provider(&server).interpret(request()).await.unwrap_err(),
+            AiError::Rejected(_)
+        ));
     }
 
     #[tokio::test]
     async fn unknown_model_is_reported() {
         let server = failing_server(404, "model_not_found", 1).await;
-        assert!(matches!(provider(&server).interpret(request()).await.unwrap_err(), AiError::Rejected(_)));
+        assert!(matches!(
+            provider(&server).interpret(request()).await.unwrap_err(),
+            AiError::Rejected(_)
+        ));
     }
 
     #[tokio::test]
     async fn an_invalid_model_answer_is_rejected() {
         let server = MockServer::start().await;
-        Mock::given(method("POST")).respond_with(ResponseTemplate::new(200).set_body_json(output(r#"{"intent":"format_disk"}"#))).mount(&server).await;
-        assert_eq!(provider(&server).interpret(request()).await.unwrap_err(), AiError::InvalidResponse);
+        Mock::given(method("POST"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(output(r#"{"intent":"format_disk"}"#)),
+            )
+            .mount(&server)
+            .await;
+        assert_eq!(
+            provider(&server).interpret(request()).await.unwrap_err(),
+            AiError::InvalidResponse
+        );
     }
 
     #[tokio::test]
@@ -302,7 +376,10 @@ mod tests {
             .mount(&server)
             .await;
         let answer = provider(&server)
-            .analyze_image(VisionRequest { image_jpeg: vec![1, 2, 3], question: "¿Qué es?".into() })
+            .analyze_image(VisionRequest {
+                image_jpeg: vec![1, 2, 3],
+                question: "¿Qué es?".into(),
+            })
             .await
             .unwrap();
         assert_eq!(answer.value.summary, "Un error de ruta.");
@@ -310,8 +387,14 @@ mod tests {
 
     #[test]
     fn the_shared_contract_can_be_used() {
-        assert!(CONTRACT["interpret"]["systemInstruction"].as_str().unwrap().contains("{now}"));
-        assert_eq!(CONTRACT["interpret"]["responseSchema"]["properties"]["intent"]["type"], "string");
+        assert!(CONTRACT["interpret"]["systemInstruction"]
+            .as_str()
+            .unwrap()
+            .contains("{now}"));
+        assert_eq!(
+            CONTRACT["interpret"]["responseSchema"]["properties"]["intent"]["type"],
+            "string"
+        );
         assert!(CONTRACT["analyze"]["model"].is_string());
     }
 

@@ -50,17 +50,29 @@ impl Database {
     fn prepare(mut connection: Connection) -> AppResult<Self> {
         connection.pragma_update(None, "journal_mode", "WAL")?;
         let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
-        for (index, migration) in MIGRATIONS.iter().enumerate().skip(usize::try_from(version).unwrap_or(0)) {
+        for (index, migration) in MIGRATIONS
+            .iter()
+            .enumerate()
+            .skip(usize::try_from(version).unwrap_or(0))
+        {
             let transaction = connection.transaction()?;
             transaction.execute_batch(migration)?;
-            transaction.pragma_update(None, "user_version", i64::try_from(index + 1).unwrap_or(i64::MAX))?;
+            transaction.pragma_update(
+                None,
+                "user_version",
+                i64::try_from(index + 1).unwrap_or(i64::MAX),
+            )?;
             transaction.commit()?;
         }
-        Ok(Self { connection: Arc::new(Mutex::new(connection)) })
+        Ok(Self {
+            connection: Arc::new(Mutex::new(connection)),
+        })
     }
 
     pub fn lock(&self) -> AppResult<MutexGuard<'_, Connection>> {
-        self.connection.lock().map_err(|_| AppError::Operation("La base de datos local quedó bloqueada.".into()))
+        self.connection
+            .lock()
+            .map_err(|_| AppError::Operation("La base de datos local quedó bloqueada.".into()))
     }
 }
 
@@ -74,10 +86,17 @@ mod tests {
         let path = dir.path().join("nexium.db");
         {
             let db = Database::open(&path).unwrap();
-            db.lock().unwrap().execute("INSERT INTO settings VALUES ('a', 'b')", []).unwrap();
+            db.lock()
+                .unwrap()
+                .execute("INSERT INTO settings VALUES ('a', 'b')", [])
+                .unwrap();
         }
         let db = Database::open(&path).unwrap();
-        let value: String = db.lock().unwrap().query_row("SELECT value FROM settings WHERE key='a'", [], |r| r.get(0)).unwrap();
+        let value: String = db
+            .lock()
+            .unwrap()
+            .query_row("SELECT value FROM settings WHERE key='a'", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(value, "b");
     }
 

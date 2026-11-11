@@ -47,7 +47,13 @@ struct Measurement {
 fn normalize(text: &str) -> Vec<String> {
     text.to_lowercase()
         .chars()
-        .map(|c| if c.is_alphanumeric() || c.is_whitespace() { c } else { ' ' })
+        .map(|c| {
+            if c.is_alphanumeric() || c.is_whitespace() {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect::<String>()
         .split_whitespace()
         .map(str::to_owned)
@@ -60,7 +66,9 @@ fn edit_distance(a: &[String], b: &[String]) -> usize {
         let mut prev = row[0];
         row[0] = i + 1;
         for (j, wb) in b.iter().enumerate() {
-            let next = (row[j + 1] + 1).min(row[j] + 1).min(prev + usize::from(wa != wb));
+            let next = (row[j + 1] + 1)
+                .min(row[j] + 1)
+                .min(prev + usize::from(wa != wb));
             prev = row[j + 1];
             row[j + 1] = next;
         }
@@ -70,8 +78,15 @@ fn edit_distance(a: &[String], b: &[String]) -> usize {
 
 fn read_wav(path: &Path) -> Vec<f32> {
     let bytes = std::fs::read(path).expect("wav");
-    let data = bytes.windows(4).position(|w| w == b"data").expect("chunk data") + 8;
-    bytes[data..].chunks_exact(2).map(|s| f32::from(i16::from_le_bytes([s[0], s[1]])) / 32768.0).collect()
+    let data = bytes
+        .windows(4)
+        .position(|w| w == b"data")
+        .expect("chunk data")
+        + 8;
+    bytes[data..]
+        .chunks_exact(2)
+        .map(|s| f32::from(i16::from_le_bytes([s[0], s[1]])) / 32768.0)
+        .collect()
 }
 
 /// Vigila la memoria durante la transcripción, no solo entre clips.
@@ -80,7 +95,11 @@ fn watch_memory(peak_rss: Arc<AtomicU64>, min_free: Arc<AtomicU64>) {
     let mut sys = System::new().expect("sysinfo");
     std::thread::spawn(move || loop {
         sys.refresh_memory();
-        sys.refresh_processes_specifics(ProcessesToUpdate::Some(&[pid]), true, ProcessRefreshKind::nothing().with_memory());
+        sys.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[pid]),
+            true,
+            ProcessRefreshKind::nothing().with_memory(),
+        );
         let free = sys.available_memory() / 1_048_576;
         min_free.fetch_min(free, Ordering::Relaxed);
         if let Some(process) = sys.process(pid) {
@@ -101,13 +120,18 @@ fn percentile(sorted: &[f64], fraction: f64) -> f64 {
 
 fn summarize(results: &Path, expected: usize) {
     let content = std::fs::read_to_string(results).unwrap_or_default();
-    let rows: Vec<Measurement> = content.lines().map(|line| serde_json::from_str(line).expect("resultado")).collect();
+    let rows: Vec<Measurement> = content
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("resultado"))
+        .collect();
     if rows.is_empty() {
         return;
     }
     let mut times: Vec<f64> = rows.iter().map(|row| row.elapsed).collect();
     times.sort_by(f64::total_cmp);
-    let (errors, words) = rows.iter().fold((0, 0), |(e, w), row| (e + row.errors, w + row.words));
+    let (errors, words) = rows
+        .iter()
+        .fold((0, 0), |(e, w), row| (e + row.errors, w + row.words));
     let audio: f64 = rows.iter().map(|row| row.seconds).sum();
     println!(
         "TOTAL clips={}/{expected} audio={audio:.0}s wer={:.2}% latencia_media={:.2}s mediana={:.2}s p95={:.2}s max={:.2}s rtf={:.3} carga_ms={} rss_pico_mb={} libre_min_mb={}",
@@ -130,12 +154,18 @@ fn main() {
     let threads: i32 = args[3].parse().expect("hilos");
     let auto_context = args[4] == "auto";
     let results = Path::new(&args[5]);
-    let clips: Vec<Clip> = serde_json::from_slice(&std::fs::read(dir.join("manifest.json")).expect("manifest")).expect("json");
+    let clips: Vec<Clip> =
+        serde_json::from_slice(&std::fs::read(dir.join("manifest.json")).expect("manifest"))
+            .expect("json");
 
     let done: HashSet<String> = std::fs::read_to_string(results)
         .unwrap_or_default()
         .lines()
-        .map(|line| serde_json::from_str::<Measurement>(line).expect("resultado").id)
+        .map(|line| {
+            serde_json::from_str::<Measurement>(line)
+                .expect("resultado")
+                .id
+        })
         .collect();
     if clips.iter().all(|clip| done.contains(&clip.id)) {
         summarize(results, clips.len());
@@ -147,11 +177,19 @@ fn main() {
     watch_memory(peak_rss.clone(), min_free.clone());
 
     let load = Instant::now();
-    let ctx = WhisperContext::new_with_params(model, WhisperContextParameters::default()).expect("modelo");
+    let ctx = WhisperContext::new_with_params(model, WhisperContextParameters::default())
+        .expect("modelo");
     let load_ms = load.elapsed().as_millis();
-    println!("modelo={model} hilos={threads} auto={auto_context} carga_ms={load_ms} ya_medidos={}", done.len());
+    println!(
+        "modelo={model} hilos={threads} auto={auto_context} carga_ms={load_ms} ya_medidos={}",
+        done.len()
+    );
 
-    let mut output = OpenOptions::new().create(true).append(true).open(results).expect("resultados");
+    let mut output = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(results)
+        .expect("resultados");
     for clip in clips.iter().filter(|clip| !done.contains(&clip.id)) {
         let audio = read_wav(&dir.join(&clip.file));
         // La app crea un estado por transcripción, así que forma parte de su latencia.
@@ -184,7 +222,10 @@ fn main() {
         };
         writeln!(output, "{}", serde_json::to_string(&row).expect("json")).expect("escritura");
         output.flush().expect("escritura");
-        println!("{} {:.1}s -> {elapsed:.2}s | {}", row.id, row.seconds, row.text);
+        println!(
+            "{} {:.1}s -> {elapsed:.2}s | {}",
+            row.id, row.seconds, row.text
+        );
     }
     summarize(results, clips.len());
 }

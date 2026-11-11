@@ -33,8 +33,20 @@ pub struct SpeechModel {
 }
 
 pub const CATALOG: &[SpeechModel] = &[
-    SpeechModel { id: "small", display_name: "Preciso (recomendado)", file: "ggml-small-q5_1.bin", size_mb: 190, sha256: "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb" },
-    SpeechModel { id: "base", display_name: "Rápido, para equipos modestos", file: "ggml-base-q5_1.bin", size_mb: 60, sha256: "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898" },
+    SpeechModel {
+        id: "small",
+        display_name: "Preciso (recomendado)",
+        file: "ggml-small-q5_1.bin",
+        size_mb: 190,
+        sha256: "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
+    },
+    SpeechModel {
+        id: "base",
+        display_name: "Rápido, para equipos modestos",
+        file: "ggml-base-q5_1.bin",
+        size_mb: 60,
+        sha256: "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+    },
 ];
 
 pub fn find_model(id: &str) -> Option<&'static SpeechModel> {
@@ -84,7 +96,9 @@ pub enum SpeechError {
 impl std::fmt::Display for SpeechError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ModelMissing => f.write_str("Falta el modelo de voz. Descárgalo en Ajustes, sección Voz."),
+            Self::ModelMissing => {
+                f.write_str("Falta el modelo de voz. Descárgalo en Ajustes, sección Voz.")
+            }
             Self::NoMicrophone(reason) | Self::Failed(reason) => f.write_str(reason),
             Self::Cancelled => f.write_str("Operación cancelada."),
         }
@@ -93,7 +107,12 @@ impl std::fmt::Display for SpeechError {
 
 #[async_trait]
 pub trait SpeechProvider: Send + Sync {
-    async fn transcribe(&self, samples: Vec<f32>, model_path: PathBuf, cancel: CancellationToken) -> Result<String, SpeechError>;
+    async fn transcribe(
+        &self,
+        samples: Vec<f32>,
+        model_path: PathBuf,
+        cancel: CancellationToken,
+    ) -> Result<String, SpeechError>;
     /// Libera de la memoria un modelo que lleve al menos `max_idle` sin usarse.
     fn release_idle(&self, max_idle: Duration);
 }
@@ -111,13 +130,23 @@ pub struct ModelCache<T> {
 
 impl<T> Default for ModelCache<T> {
     fn default() -> Self {
-        Self { slot: Mutex::new(None) }
+        Self {
+            slot: Mutex::new(None),
+        }
     }
 }
 
 impl<T> ModelCache<T> {
-    pub fn get_or_load<E>(&self, path: &Path, now: Instant, load: impl FnOnce() -> Result<T, E>) -> Result<Arc<T>, E> {
-        let mut slot = self.slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    pub fn get_or_load<E>(
+        &self,
+        path: &Path,
+        now: Instant,
+        load: impl FnOnce() -> Result<T, E>,
+    ) -> Result<Arc<T>, E> {
+        let mut slot = self
+            .slot
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(cached) = slot.as_mut().filter(|cached| cached.path == path) {
             cached.last_used = now;
             return Ok(cached.model.clone());
@@ -125,20 +154,33 @@ impl<T> ModelCache<T> {
         // El anterior se libera antes de cargar: nunca hay dos modelos en memoria.
         *slot = None;
         let model = Arc::new(load()?);
-        *slot = Some(CachedModel { path: path.to_owned(), model: model.clone(), last_used: now });
+        *slot = Some(CachedModel {
+            path: path.to_owned(),
+            model: model.clone(),
+            last_used: now,
+        });
         Ok(model)
     }
 
     pub fn touch(&self, now: Instant) {
-        if let Some(cached) = self.slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_mut() {
+        if let Some(cached) = self
+            .slot
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_mut()
+        {
             cached.last_used = now;
         }
     }
 
     /// Si el modelo se está cargando, no espera: lo revisará en la siguiente pasada.
     pub fn release_if_idle(&self, now: Instant, max_idle: Duration) -> bool {
-        let Ok(mut slot) = self.slot.try_lock() else { return false };
-        let idle = slot.as_ref().is_some_and(|cached| now.saturating_duration_since(cached.last_used) >= max_idle);
+        let Ok(mut slot) = self.slot.try_lock() else {
+            return false;
+        };
+        let idle = slot
+            .as_ref()
+            .is_some_and(|cached| now.saturating_duration_since(cached.last_used) >= max_idle);
         if idle {
             *slot = None;
         }
@@ -152,22 +194,39 @@ pub struct WhisperSpeech {
 }
 
 fn load_whisper(model_path: &Path) -> Result<WhisperContext, SpeechError> {
-    let path = model_path.to_str().ok_or_else(|| SpeechError::Failed("La ruta del modelo no es válida.".into()))?;
-    WhisperContext::new_with_params(path, WhisperContextParameters::default()).map_err(|_| SpeechError::Failed("No se pudo cargar el modelo de voz. Vuelve a descargarlo en Ajustes.".into()))
+    let path = model_path
+        .to_str()
+        .ok_or_else(|| SpeechError::Failed("La ruta del modelo no es válida.".into()))?;
+    WhisperContext::new_with_params(path, WhisperContextParameters::default()).map_err(|_| {
+        SpeechError::Failed(
+            "No se pudo cargar el modelo de voz. Vuelve a descargarlo en Ajustes.".into(),
+        )
+    })
 }
 
 /// Whisper procesa 30 s aunque el audio dure menos. Ajustarlo a la duración real reduce la espera de 6,5 a 1,5 s
 /// en frases cortas (`docs/PRUEBA_VOZ.md`). 1500 unidades equivalen a 30 s; el margen evita cortar el final.
 pub fn audio_context(samples: usize) -> i32 {
-    i32::try_from(samples / 320 + 128).unwrap_or(1500).clamp(256, 1500)
+    i32::try_from(samples / 320 + 128)
+        .unwrap_or(1500)
+        .clamp(256, 1500)
 }
 
-fn run_whisper(samples: &[f32], context: &WhisperContext, cancelled: Arc<AtomicBool>) -> Result<String, SpeechError> {
-    let mut state = context.create_state().map_err(|_| SpeechError::Failed("No se pudo preparar la transcripción.".into()))?;
+fn run_whisper(
+    samples: &[f32],
+    context: &WhisperContext,
+    cancelled: Arc<AtomicBool>,
+) -> Result<String, SpeechError> {
+    let mut state = context
+        .create_state()
+        .map_err(|_| SpeechError::Failed("No se pudo preparar la transcripción.".into()))?;
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     params.set_language(Some("es"));
     params.set_audio_ctx(audio_context(samples.len()));
-    params.set_n_threads(std::thread::available_parallelism().map_or(4, |n| i32::try_from(n.get() / 2).unwrap_or(4).clamp(1, 8)));
+    params.set_n_threads(
+        std::thread::available_parallelism()
+            .map_or(4, |n| i32::try_from(n.get() / 2).unwrap_or(4).clamp(1, 8)),
+    );
     params.set_print_progress(false);
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
@@ -179,7 +238,12 @@ fn run_whisper(samples: &[f32], context: &WhisperContext, cancelled: Arc<AtomicB
         return Err(SpeechError::Cancelled);
     }
     outcome.map_err(|_| SpeechError::Failed("No se pudo transcribir el audio.".into()))?;
-    Ok(state.as_iter().map(|segment| segment.to_string()).collect::<String>().trim().to_owned())
+    Ok(state
+        .as_iter()
+        .map(|segment| segment.to_string())
+        .collect::<String>()
+        .trim()
+        .to_owned())
 }
 
 /// Quita las marcas que Whisper usa para el silencio, como "[Música]" o "(risas)".
@@ -199,7 +263,12 @@ pub fn clean_transcript(text: &str) -> String {
 
 #[async_trait]
 impl SpeechProvider for WhisperSpeech {
-    async fn transcribe(&self, samples: Vec<f32>, model_path: PathBuf, cancel: CancellationToken) -> Result<String, SpeechError> {
+    async fn transcribe(
+        &self,
+        samples: Vec<f32>,
+        model_path: PathBuf,
+        cancel: CancellationToken,
+    ) -> Result<String, SpeechError> {
         if !model_path.exists() {
             return Err(SpeechError::ModelMissing);
         }
@@ -207,7 +276,8 @@ impl SpeechProvider for WhisperSpeech {
         let flag = cancelled.clone();
         let models = self.models.clone();
         let task = tokio::task::spawn_blocking(move || {
-            let context = models.get_or_load(&model_path, Instant::now(), || load_whisper(&model_path))?;
+            let context =
+                models.get_or_load(&model_path, Instant::now(), || load_whisper(&model_path))?;
             let outcome = run_whisper(&samples, &context, flag);
             models.touch(Instant::now());
             outcome
@@ -273,7 +343,11 @@ pub struct Recording {
 impl Recording {
     pub fn finish(mut self) -> Vec<f32> {
         self.close();
-        let samples = self.buffer.lock().map(|mut buffer| std::mem::take(&mut buffer.samples)).unwrap_or_default();
+        let samples = self
+            .buffer
+            .lock()
+            .map(|mut buffer| std::mem::take(&mut buffer.samples))
+            .unwrap_or_default();
         resample(&samples, self.sample_rate)
     }
 
@@ -300,8 +374,17 @@ fn no_microphone() -> SpeechError {
     SpeechError::NoMicrophone("No puedo usar el micrófono: no hay ninguno disponible o el sistema le ha negado el permiso a Nexium. Revísalo en la configuración de privacidad.".into())
 }
 
-fn push_samples<T: Copy>(buffer: &Mutex<CaptureBuffer>, data: &[T], convert: impl Fn(T) -> f32, on_level: &LevelCallback, on_limit: &LimitCallback, chunk: usize) {
-    let Ok(mut buffer) = buffer.lock() else { return };
+fn push_samples<T: Copy>(
+    buffer: &Mutex<CaptureBuffer>,
+    data: &[T],
+    convert: impl Fn(T) -> f32,
+    on_level: &LevelCallback,
+    on_limit: &LimitCallback,
+    chunk: usize,
+) {
+    let Ok(mut buffer) = buffer.lock() else {
+        return;
+    };
     if buffer.limit_reached {
         return;
     }
@@ -322,12 +405,18 @@ fn push_samples<T: Copy>(buffer: &Mutex<CaptureBuffer>, data: &[T], convert: imp
 }
 
 /// Abre el micrófono en un hilo propio: el flujo de cpal no se puede mover entre hilos en todos los sistemas.
-pub fn start_recording(on_level: LevelCallback, on_limit: LimitCallback) -> Result<Recording, SpeechError> {
+pub fn start_recording(
+    on_level: LevelCallback,
+    on_limit: LimitCallback,
+) -> Result<Recording, SpeechError> {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
-    let (ready_tx, ready_rx) = mpsc::channel::<Result<(Arc<Mutex<CaptureBuffer>>, u32), SpeechError>>();
+    let (ready_tx, ready_rx) =
+        mpsc::channel::<Result<(Arc<Mutex<CaptureBuffer>>, u32), SpeechError>>();
     let thread = std::thread::spawn(move || {
         let opened = (|| {
-            let device = cpal::default_host().default_input_device().ok_or_else(no_microphone)?;
+            let device = cpal::default_host()
+                .default_input_device()
+                .ok_or_else(no_microphone)?;
             let supported = device.default_input_config().map_err(|_| no_microphone())?;
             let format = supported.sample_format();
             let config: cpal::StreamConfig = supported.into();
@@ -344,10 +433,49 @@ pub fn start_recording(on_level: LevelCallback, on_limit: LimitCallback) -> Resu
             let (level, limit) = (on_level.clone(), on_limit.clone());
             let on_error = |_| {};
             let stream = match format {
-                cpal::SampleFormat::F32 => device.build_input_stream(config, move |data: &[f32], _: &_| push_samples(&target, data, |s| s, &level, &limit, chunk), on_error, None),
-                cpal::SampleFormat::I16 => device.build_input_stream(config, move |data: &[i16], _: &_| push_samples(&target, data, |s| f32::from(s) / 32768.0, &level, &limit, chunk), on_error, None),
-                cpal::SampleFormat::U16 => device.build_input_stream(config, move |data: &[u16], _: &_| push_samples(&target, data, |s| (f32::from(s) - 32768.0) / 32768.0, &level, &limit, chunk), on_error, None),
-                _ => return Err(SpeechError::NoMicrophone("El micrófono usa un formato de audio que Nexium no admite.".into())),
+                cpal::SampleFormat::F32 => device.build_input_stream(
+                    config,
+                    move |data: &[f32], _: &_| {
+                        push_samples(&target, data, |s| s, &level, &limit, chunk)
+                    },
+                    on_error,
+                    None,
+                ),
+                cpal::SampleFormat::I16 => device.build_input_stream(
+                    config,
+                    move |data: &[i16], _: &_| {
+                        push_samples(
+                            &target,
+                            data,
+                            |s| f32::from(s) / 32768.0,
+                            &level,
+                            &limit,
+                            chunk,
+                        )
+                    },
+                    on_error,
+                    None,
+                ),
+                cpal::SampleFormat::U16 => device.build_input_stream(
+                    config,
+                    move |data: &[u16], _: &_| {
+                        push_samples(
+                            &target,
+                            data,
+                            |s| (f32::from(s) - 32768.0) / 32768.0,
+                            &level,
+                            &limit,
+                            chunk,
+                        )
+                    },
+                    on_error,
+                    None,
+                ),
+                _ => {
+                    return Err(SpeechError::NoMicrophone(
+                        "El micrófono usa un formato de audio que Nexium no admite.".into(),
+                    ))
+                }
             }
             .map_err(|_| no_microphone())?;
             stream.play().map_err(|_| no_microphone())?;
@@ -364,40 +492,68 @@ pub fn start_recording(on_level: LevelCallback, on_limit: LimitCallback) -> Resu
             }
         }
     });
-    let (buffer, sample_rate) = ready_rx.recv_timeout(Duration::from_secs(10)).map_err(|_| no_microphone())??;
-    Ok(Recording { stop: Some(stop_tx), thread: Some(thread), buffer, sample_rate })
+    let (buffer, sample_rate) = ready_rx
+        .recv_timeout(Duration::from_secs(10))
+        .map_err(|_| no_microphone())??;
+    Ok(Recording {
+        stop: Some(stop_tx),
+        thread: Some(thread),
+        buffer,
+        sample_rate,
+    })
 }
 
 /// Descarga verificada por hash: un archivo incompleto o alterado nunca queda como modelo válido.
-pub async fn download_model(model: &SpeechModel, directory: &Path, on_progress: impl Fn(u64, u64) + Send, base_url: Option<&str>) -> Result<(), String> {
+pub async fn download_model(
+    model: &SpeechModel,
+    directory: &Path,
+    on_progress: impl Fn(u64, u64) + Send,
+    base_url: Option<&str>,
+) -> Result<(), String> {
     const FAILED: &str = "No se pudo descargar el modelo de voz. Comprueba la conexión.";
-    tokio::fs::create_dir_all(directory).await.map_err(|_| "No se pudo crear la carpeta del modelo.".to_owned())?;
+    tokio::fs::create_dir_all(directory)
+        .await
+        .map_err(|_| "No se pudo crear la carpeta del modelo.".to_owned())?;
     let url = format!("{}/{}", base_url.unwrap_or(MODEL_BASE_URL), model.file);
     let response = reqwest::get(url).await.map_err(|_| FAILED.to_owned())?;
     if !response.status().is_success() {
         return Err(FAILED.into());
     }
-    let total = response.content_length().unwrap_or(u64::from(model.size_mb) * 1_048_576);
+    let total = response
+        .content_length()
+        .unwrap_or(u64::from(model.size_mb) * 1_048_576);
     let partial = directory.join(format!("{}.part", model.file));
-    let mut file = tokio::fs::File::create(&partial).await.map_err(|_| "No se pudo escribir el modelo.".to_owned())?;
+    let mut file = tokio::fs::File::create(&partial)
+        .await
+        .map_err(|_| "No se pudo escribir el modelo.".to_owned())?;
     let mut hasher = Sha256::new();
     let mut downloaded = 0u64;
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|_| FAILED.to_owned())?;
         hasher.update(&chunk);
-        file.write_all(&chunk).await.map_err(|_| "No se pudo escribir el modelo.".to_owned())?;
+        file.write_all(&chunk)
+            .await
+            .map_err(|_| "No se pudo escribir el modelo.".to_owned())?;
         downloaded += chunk.len() as u64;
         on_progress(downloaded, total);
     }
-    file.flush().await.map_err(|_| "No se pudo escribir el modelo.".to_owned())?;
+    file.flush()
+        .await
+        .map_err(|_| "No se pudo escribir el modelo.".to_owned())?;
     drop(file);
-    let digest: String = hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect();
+    let digest: String = hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
     if digest != model.sha256 {
         let _ = tokio::fs::remove_file(&partial).await;
         return Err("El modelo descargado no superó la verificación. Inténtalo de nuevo.".into());
     }
-    tokio::fs::rename(&partial, directory.join(model.file)).await.map_err(|_| "No se pudo guardar el modelo.".to_owned())
+    tokio::fs::rename(&partial, directory.join(model.file))
+        .await
+        .map_err(|_| "No se pudo guardar el modelo.".to_owned())
 }
 
 #[cfg(test)]
@@ -433,11 +589,27 @@ mod tests {
 
     #[test]
     fn a_full_buffer_stops_accepting_audio() {
-        let buffer = Mutex::new(CaptureBuffer { samples: vec![], pending_level: vec![], channels: 2, limit: 2, limit_reached: false });
+        let buffer = Mutex::new(CaptureBuffer {
+            samples: vec![],
+            pending_level: vec![],
+            channels: 2,
+            limit: 2,
+            limit_reached: false,
+        });
         let limit_hits = Arc::new(Mutex::new(0));
         let counter = limit_hits.clone();
-        let (level, limit): (LevelCallback, LimitCallback) = (Arc::new(|_| {}), Arc::new(move || *counter.lock().unwrap() += 1));
-        push_samples(&buffer, &[0.5f32, 0.5, 0.5, 0.5], |s| s, &level, &limit, 100);
+        let (level, limit): (LevelCallback, LimitCallback) = (
+            Arc::new(|_| {}),
+            Arc::new(move || *counter.lock().unwrap() += 1),
+        );
+        push_samples(
+            &buffer,
+            &[0.5f32, 0.5, 0.5, 0.5],
+            |s| s,
+            &level,
+            &limit,
+            100,
+        );
         push_samples(&buffer, &[0.5f32, 0.5], |s| s, &level, &limit, 100);
         assert_eq!(buffer.lock().unwrap().samples.len(), 2);
         assert_eq!(*limit_hits.lock().unwrap(), 1);
@@ -445,17 +617,31 @@ mod tests {
 
     #[tokio::test]
     async fn a_missing_model_is_reported() {
-        let error = WhisperSpeech::default().transcribe(vec![0.0; 10], PathBuf::from("no-existe.bin"), CancellationToken::new()).await.unwrap_err();
+        let error = WhisperSpeech::default()
+            .transcribe(
+                vec![0.0; 10],
+                PathBuf::from("no-existe.bin"),
+                CancellationToken::new(),
+            )
+            .await
+            .unwrap_err();
         assert_eq!(error, SpeechError::ModelMissing);
     }
 
     #[tokio::test]
     async fn a_corrupt_download_is_discarded() {
         let server = MockServer::start().await;
-        Mock::given(path("/ggml-base-q5_1.bin")).respond_with(ResponseTemplate::new(200).set_body_bytes(vec![1, 2, 3])).mount(&server).await;
+        Mock::given(path("/ggml-base-q5_1.bin"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![1, 2, 3]))
+            .mount(&server)
+            .await;
         let dir = tempfile::tempdir().unwrap();
         let model = find_model("base").unwrap();
-        assert!(download_model(model, dir.path(), |_, _| {}, Some(&server.uri())).await.is_err());
+        assert!(
+            download_model(model, dir.path(), |_, _| {}, Some(&server.uri()))
+                .await
+                .is_err()
+        );
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
     }
 
@@ -463,12 +649,26 @@ mod tests {
     async fn a_verified_download_is_kept() {
         let server = MockServer::start().await;
         let body = b"modelo".to_vec();
-        Mock::given(path("/m.bin")).respond_with(ResponseTemplate::new(200).set_body_bytes(body.clone())).mount(&server).await;
-        let digest: String = Sha256::digest(&body).iter().map(|byte| format!("{byte:02x}")).collect();
+        Mock::given(path("/m.bin"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(body.clone()))
+            .mount(&server)
+            .await;
+        let digest: String = Sha256::digest(&body)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
         let digest: &'static str = Box::leak(digest.into_boxed_str());
-        let model = SpeechModel { id: "x", display_name: "x", file: "m.bin", size_mb: 1, sha256: digest };
+        let model = SpeechModel {
+            id: "x",
+            display_name: "x",
+            file: "m.bin",
+            size_mb: 1,
+            sha256: digest,
+        };
         let dir = tempfile::tempdir().unwrap();
-        download_model(&model, dir.path(), |_, _| {}, Some(&server.uri())).await.unwrap();
+        download_model(&model, dir.path(), |_, _| {}, Some(&server.uri()))
+            .await
+            .unwrap();
         assert!(dir.path().join("m.bin").exists());
     }
 
@@ -499,7 +699,9 @@ mod tests {
     fn another_model_replaces_the_first_before_loading() {
         let cache = ModelCache::default();
         let now = Instant::now();
-        let first = cache.get_or_load(Path::new("small.bin"), now, || Ok::<_, ()>(1)).unwrap();
+        let first = cache
+            .get_or_load(Path::new("small.bin"), now, || Ok::<_, ()>(1))
+            .unwrap();
         let weak = Arc::downgrade(&first);
         drop(first);
         let second = cache
@@ -515,8 +717,18 @@ mod tests {
     fn a_failed_load_leaves_nothing_cached() {
         let cache = ModelCache::<i32>::default();
         let now = Instant::now();
-        assert_eq!(cache.get_or_load(Path::new("m.bin"), now, || Err("dañado")).unwrap_err(), "dañado");
-        assert_eq!(*cache.get_or_load(Path::new("m.bin"), now, || Ok::<_, &str>(1)).unwrap(), 1);
+        assert_eq!(
+            cache
+                .get_or_load(Path::new("m.bin"), now, || Err("dañado"))
+                .unwrap_err(),
+            "dañado"
+        );
+        assert_eq!(
+            *cache
+                .get_or_load(Path::new("m.bin"), now, || Ok::<_, &str>(1))
+                .unwrap(),
+            1
+        );
     }
 
     #[test]
@@ -537,7 +749,9 @@ mod tests {
     fn using_the_model_restarts_the_idle_period() {
         let cache = ModelCache::default();
         let (start, idle) = (Instant::now(), Duration::from_secs(600));
-        cache.get_or_load(Path::new("m.bin"), start, || Ok::<_, ()>(1)).unwrap();
+        cache
+            .get_or_load(Path::new("m.bin"), start, || Ok::<_, ()>(1))
+            .unwrap();
         cache.touch(start + Duration::from_secs(500));
         assert!(!cache.release_if_idle(start + idle, idle));
     }
@@ -546,7 +760,9 @@ mod tests {
     fn a_model_in_use_survives_its_release() {
         let cache = ModelCache::default();
         let (start, idle) = (Instant::now(), Duration::from_secs(1));
-        let in_use = cache.get_or_load(Path::new("m.bin"), start, || Ok::<_, ()>(9)).unwrap();
+        let in_use = cache
+            .get_or_load(Path::new("m.bin"), start, || Ok::<_, ()>(9))
+            .unwrap();
         assert!(cache.release_if_idle(start + idle, idle));
         assert_eq!(*in_use, 9);
     }

@@ -106,11 +106,26 @@ impl Default for OpenMeteo {
 
 impl OpenMeteo {
     pub fn with_urls(geocoding_url: &str, forecast_url: &str) -> Self {
-        Self { http: reqwest::Client::new(), geocoding_url: geocoding_url.to_owned(), forecast_url: forecast_url.to_owned() }
+        Self {
+            http: reqwest::Client::new(),
+            geocoding_url: geocoding_url.to_owned(),
+            forecast_url: forecast_url.to_owned(),
+        }
     }
 
-    async fn get<T: serde::de::DeserializeOwned>(&self, url: String, query: &[(&str, String)]) -> Result<T, WeatherError> {
-        let response = self.http.get(url).query(query).timeout(TIMEOUT).send().await.map_err(|_| WeatherError::Unreachable)?;
+    async fn get<T: serde::de::DeserializeOwned>(
+        &self,
+        url: String,
+        query: &[(&str, String)],
+    ) -> Result<T, WeatherError> {
+        let response = self
+            .http
+            .get(url)
+            .query(query)
+            .timeout(TIMEOUT)
+            .send()
+            .await
+            .map_err(|_| WeatherError::Unreachable)?;
         if !response.status().is_success() {
             return Err(WeatherError::Unreachable);
         }
@@ -120,9 +135,16 @@ impl OpenMeteo {
 
 fn day(daily: &Daily, index: usize) -> Result<DayForecast, WeatherError> {
     Ok(DayForecast {
-        condition: condition_name(*daily.weather_code.get(index).ok_or(WeatherError::Invalid)?).to_owned(),
-        min_c: *daily.temperature_2m_min.get(index).ok_or(WeatherError::Invalid)?,
-        max_c: *daily.temperature_2m_max.get(index).ok_or(WeatherError::Invalid)?,
+        condition: condition_name(*daily.weather_code.get(index).ok_or(WeatherError::Invalid)?)
+            .to_owned(),
+        min_c: *daily
+            .temperature_2m_min
+            .get(index)
+            .ok_or(WeatherError::Invalid)?,
+        max_c: *daily
+            .temperature_2m_max
+            .get(index)
+            .ok_or(WeatherError::Invalid)?,
     })
 }
 
@@ -130,9 +152,21 @@ fn day(daily: &Daily, index: usize) -> Result<DayForecast, WeatherError> {
 impl WeatherProvider for OpenMeteo {
     async fn report(&self, city: &str) -> Result<WeatherReport, WeatherError> {
         let places: GeocodingResponse = self
-            .get(format!("{}/search", self.geocoding_url), &[("name", city.to_owned()), ("count", "1".into()), ("language", "es".into()), ("format", "json".into())])
+            .get(
+                format!("{}/search", self.geocoding_url),
+                &[
+                    ("name", city.to_owned()),
+                    ("count", "1".into()),
+                    ("language", "es".into()),
+                    ("format", "json".into()),
+                ],
+            )
             .await?;
-        let place = places.results.into_iter().next().ok_or(WeatherError::CityNotFound)?;
+        let place = places
+            .results
+            .into_iter()
+            .next()
+            .ok_or(WeatherError::CityNotFound)?;
         let forecast: ForecastResponse = self
             .get(
                 format!("{}/forecast", self.forecast_url),
@@ -140,14 +174,21 @@ impl WeatherProvider for OpenMeteo {
                     ("latitude", place.latitude.to_string()),
                     ("longitude", place.longitude.to_string()),
                     ("current", "temperature_2m,weather_code".into()),
-                    ("daily", "weather_code,temperature_2m_max,temperature_2m_min".into()),
+                    (
+                        "daily",
+                        "weather_code,temperature_2m_max,temperature_2m_min".into(),
+                    ),
                     ("timezone", "auto".into()),
                     ("forecast_days", "2".into()),
                 ],
             )
             .await?;
         Ok(WeatherReport {
-            place: if place.country.is_empty() { place.name } else { format!("{}, {}", place.name, place.country) },
+            place: if place.country.is_empty() {
+                place.name
+            } else {
+                format!("{}, {}", place.name, place.country)
+            },
             temperature_c: forecast.current.temperature_2m,
             condition: condition_name(forecast.current.weather_code).to_owned(),
             today: day(&forecast.daily, 0)?,
@@ -205,19 +246,31 @@ mod tests {
     #[tokio::test]
     async fn an_unknown_city_is_reported() {
         let server = server_with_data().await;
-        assert_eq!(client(&server).report("Nolugar").await.unwrap_err(), WeatherError::CityNotFound);
+        assert_eq!(
+            client(&server).report("Nolugar").await.unwrap_err(),
+            WeatherError::CityNotFound
+        );
     }
 
     #[tokio::test]
     async fn no_connection_never_invents_data() {
         let client = OpenMeteo::with_urls("http://127.0.0.1:9", "http://127.0.0.1:9");
-        assert_eq!(client.report("Bogotá").await.unwrap_err(), WeatherError::Unreachable);
+        assert_eq!(
+            client.report("Bogotá").await.unwrap_err(),
+            WeatherError::Unreachable
+        );
     }
 
     #[tokio::test]
     async fn a_server_error_is_reported() {
         let server = MockServer::start().await;
-        Mock::given(path("/search")).respond_with(ResponseTemplate::new(500)).mount(&server).await;
-        assert_eq!(client(&server).report("Bogotá").await.unwrap_err(), WeatherError::Unreachable);
+        Mock::given(path("/search"))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&server)
+            .await;
+        assert_eq!(
+            client(&server).report("Bogotá").await.unwrap_err(),
+            WeatherError::Unreachable
+        );
     }
 }

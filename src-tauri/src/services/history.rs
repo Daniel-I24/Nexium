@@ -20,7 +20,13 @@ impl HistoryService {
     }
 
     /// Solo texto: las capturas, el audio y las claves no llegan a esta capa.
-    pub fn record(&self, request: &str, category: Category, status: InteractionStatus, response: &str) -> AppResult<(i64, String)> {
+    pub fn record(
+        &self,
+        request: &str,
+        category: Category,
+        status: InteractionStatus,
+        response: &str,
+    ) -> AppResult<(i64, String)> {
         let created_at = Local::now().to_rfc3339();
         let connection = self.db.lock()?;
         connection.execute(
@@ -28,7 +34,10 @@ impl HistoryService {
             params![request, created_at, category.as_str(), status.as_str(), response],
         )?;
         let id = connection.last_insert_rowid();
-        connection.execute("DELETE FROM history WHERE id <= ?1", params![id - MAX_ENTRIES])?;
+        connection.execute(
+            "DELETE FROM history WHERE id <= ?1",
+            params![id - MAX_ENTRIES],
+        )?;
         Ok((id, created_at))
     }
 
@@ -60,7 +69,9 @@ impl HistoryService {
     }
 
     pub fn delete(&self, id: i64) -> AppResult<()> {
-        self.db.lock()?.execute("DELETE FROM history WHERE id = ?1", params![id])?;
+        self.db
+            .lock()?
+            .execute("DELETE FROM history WHERE id = ?1", params![id])?;
         Ok(())
     }
 
@@ -81,8 +92,12 @@ mod tests {
     #[test]
     fn records_and_filters_by_status() {
         let history = service();
-        history.record("a", Category::Time, InteractionStatus::Completed, "ok").unwrap();
-        history.record("b", Category::Weather, InteractionStatus::Failed, "sin red").unwrap();
+        history
+            .record("a", Category::Time, InteractionStatus::Completed, "ok")
+            .unwrap();
+        history
+            .record("b", Category::Weather, InteractionStatus::Failed, "sin red")
+            .unwrap();
         assert_eq!(history.list(None).unwrap().len(), 2);
         let failed = history.list(Some(InteractionStatus::Failed)).unwrap();
         assert_eq!(failed.len(), 1);
@@ -92,16 +107,30 @@ mod tests {
     #[test]
     fn pending_entries_can_be_completed() {
         let history = service();
-        let (id, _) = history.record("a", Category::Reminders, InteractionStatus::Pending, "aclaración").unwrap();
+        let (id, _) = history
+            .record(
+                "a",
+                Category::Reminders,
+                InteractionStatus::Pending,
+                "aclaración",
+            )
+            .unwrap();
         history.complete(id, "guardado").unwrap();
-        assert_eq!(history.list(None).unwrap()[0].status, InteractionStatus::Completed);
+        assert_eq!(
+            history.list(None).unwrap()[0].status,
+            InteractionStatus::Completed
+        );
     }
 
     #[test]
     fn deletes_one_or_all() {
         let history = service();
-        let (id, _) = history.record("a", Category::Time, InteractionStatus::Completed, "ok").unwrap();
-        history.record("b", Category::Time, InteractionStatus::Completed, "ok").unwrap();
+        let (id, _) = history
+            .record("a", Category::Time, InteractionStatus::Completed, "ok")
+            .unwrap();
+        history
+            .record("b", Category::Time, InteractionStatus::Completed, "ok")
+            .unwrap();
         history.delete(id).unwrap();
         assert_eq!(history.list(None).unwrap().len(), 1);
         history.clear().unwrap();
@@ -112,7 +141,9 @@ mod tests {
     fn keeps_a_bounded_number_of_entries() {
         let history = service();
         for _ in 0..(MAX_ENTRIES + 5) {
-            history.record("a", Category::Time, InteractionStatus::Completed, "ok").unwrap();
+            history
+                .record("a", Category::Time, InteractionStatus::Completed, "ok")
+                .unwrap();
         }
         assert_eq!(history.list(None).unwrap().len(), MAX_ENTRIES as usize);
     }

@@ -41,7 +41,10 @@ pub trait AiProvider: Send + Sync {
     fn quota_message(&self) -> String;
     fn is_configured(&self) -> bool;
     async fn interpret(&self, request: InterpretRequest) -> Result<AiAnswer<Intent>, AiError>;
-    async fn analyze_image(&self, request: VisionRequest) -> Result<AiAnswer<ScreenAnalysis>, AiError>;
+    async fn analyze_image(
+        &self,
+        request: VisionRequest,
+    ) -> Result<AiAnswer<ScreenAnalysis>, AiError>;
 }
 
 /// Estado del servicio según su último uso real: consultarlo aparte gastaría cuota.
@@ -66,8 +69,12 @@ impl AiStatusTracker {
             Ok(_) => AiServiceStatus::Working,
             Err(AiError::RateLimited | AiError::DailyLimit) => AiServiceStatus::Limited,
             Err(AiError::QuotaExhausted) => AiServiceStatus::QuotaExhausted,
-            Err(AiError::RegionUnavailable | AiError::RegionUnknown) => AiServiceStatus::RegionUnavailable,
-            Err(AiError::Network | AiError::Timeout | AiError::Unavailable) => AiServiceStatus::Unreachable,
+            Err(AiError::RegionUnavailable | AiError::RegionUnknown) => {
+                AiServiceStatus::RegionUnavailable
+            }
+            Err(AiError::Network | AiError::Timeout | AiError::Unavailable) => {
+                AiServiceStatus::Unreachable
+            }
             // El resto no dice nada sobre el servicio: una cancelación o una solicitud rechazada, por ejemplo.
             Err(_) => return,
         };
@@ -80,7 +87,11 @@ impl AiStatusTracker {
         if !configured {
             return AiServiceStatus::NotConfigured;
         }
-        self.0.lock().ok().and_then(|current| *current).unwrap_or(AiServiceStatus::NotUsedYet)
+        self.0
+            .lock()
+            .ok()
+            .and_then(|current| *current)
+            .unwrap_or(AiServiceStatus::NotUsedYet)
     }
 }
 
@@ -99,9 +110,18 @@ mod tests {
         assert_eq!(after(Ok(())), AiServiceStatus::Working);
         assert_eq!(after(Err(AiError::RateLimited)), AiServiceStatus::Limited);
         assert_eq!(after(Err(AiError::DailyLimit)), AiServiceStatus::Limited);
-        assert_eq!(after(Err(AiError::QuotaExhausted)), AiServiceStatus::QuotaExhausted);
-        assert_eq!(after(Err(AiError::RegionUnavailable)), AiServiceStatus::RegionUnavailable);
-        assert_eq!(after(Err(AiError::RegionUnknown)), AiServiceStatus::RegionUnavailable);
+        assert_eq!(
+            after(Err(AiError::QuotaExhausted)),
+            AiServiceStatus::QuotaExhausted
+        );
+        assert_eq!(
+            after(Err(AiError::RegionUnavailable)),
+            AiServiceStatus::RegionUnavailable
+        );
+        assert_eq!(
+            after(Err(AiError::RegionUnknown)),
+            AiServiceStatus::RegionUnavailable
+        );
         assert_eq!(after(Err(AiError::Network)), AiServiceStatus::Unreachable);
         assert_eq!(after(Err(AiError::Cancelled)), AiServiceStatus::NotUsedYet);
     }

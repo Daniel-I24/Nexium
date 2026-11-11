@@ -22,9 +22,16 @@ impl UsageService {
         let totals = self
             .db
             .lock()?
-            .query_row("SELECT requests, tokens FROM ai_usage WHERE day = ?1", params![Self::today()], |row| {
-                Ok((row.get::<_, u32>(0)?, u64::try_from(row.get::<_, i64>(1)?).unwrap_or(0)))
-            })
+            .query_row(
+                "SELECT requests, tokens FROM ai_usage WHERE day = ?1",
+                params![Self::today()],
+                |row| {
+                    Ok((
+                        row.get::<_, u32>(0)?,
+                        u64::try_from(row.get::<_, i64>(1)?).unwrap_or(0),
+                    ))
+                },
+            )
             .optional()?;
         Ok(totals.unwrap_or((0, 0)))
     }
