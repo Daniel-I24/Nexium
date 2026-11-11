@@ -9,7 +9,6 @@ pub mod services;
 
 use std::{sync::Arc, sync::Mutex, time::Duration};
 
-use async_trait::async_trait;
 use chrono::Utc;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -26,9 +25,9 @@ use crate::{
     },
     database::Database,
     models::Reading,
+    platform::WindowAwareCapture,
     providers::{
         ai::{server::NexiumServer, AiProvider, AiStatusTracker},
-        capture::{capture_behind, CaptureError, ConcealableWindow, NativeScreenCapture, ScreenCaptureProvider},
         files::{AuthorizedFolder, LocalFileSearch},
         notification::{NotificationProvider, TauriNotifications},
         speech::{SpeechProvider, WhisperSpeech},
@@ -45,39 +44,6 @@ use crate::{
 
 const REMINDER_CHECK_INTERVAL: Duration = Duration::from_secs(20);
 const SPEECH_IDLE_CHECK_INTERVAL: Duration = Duration::from_secs(30);
-
-/// Oculta Nexium durante la captura para que el análisis trate de lo que hay detrás.
-struct WindowAwareCapture<R: Runtime> {
-    app: AppHandle<R>,
-    inner: NativeScreenCapture,
-}
-
-struct MainWindow<R: Runtime>(tauri::WebviewWindow<R>);
-
-impl<R: Runtime> ConcealableWindow for MainWindow<R> {
-    fn hide(&self) -> bool {
-        self.0.hide().is_ok()
-    }
-
-    fn is_visible(&self) -> Option<bool> {
-        self.0.is_visible().ok()
-    }
-
-    fn show(&self) {
-        let _ = self.0.show();
-        let _ = self.0.set_focus();
-    }
-}
-
-#[async_trait]
-impl<R: Runtime> ScreenCaptureProvider for WindowAwareCapture<R> {
-    async fn capture_once(&self) -> Result<Vec<u8>, CaptureError> {
-        match self.app.get_webview_window("main") {
-            Some(window) => capture_behind(&MainWindow(window), self.inner.capture_once()).await,
-            None => self.inner.capture_once().await,
-        }
-    }
-}
 
 fn known_folders<R: Runtime>(app: &AppHandle<R>) -> Vec<AuthorizedFolder> {
     let paths = app.path();
@@ -126,7 +92,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
     let assistant = Arc::new(Assistant {
         ai: ai.clone(),
         ai_status: AiStatusTracker::default(),
-        capture: Arc::new(WindowAwareCapture { app: app.clone(), inner: NativeScreenCapture }),
+        capture: Arc::new(WindowAwareCapture::new(app.clone())),
         handlers,
         settings: settings.clone(),
         history: history.clone(),

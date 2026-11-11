@@ -6,6 +6,7 @@ mod linux;
 mod macos;
 #[cfg(target_os = "windows")]
 mod windows;
+mod window_capture;
 
 #[cfg(target_os = "linux")]
 pub use linux::wifi_status;
@@ -13,3 +14,5 @@ pub use linux::wifi_status;
 pub use macos::wifi_status;
 #[cfg(target_os = "windows")]
 pub use windows::wifi_status;
+
+pub use window_capture::WindowAwareCapture;
