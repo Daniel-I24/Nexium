@@ -21,16 +21,43 @@ const MAX_STEPS: usize = 3;
 static BLOCK_MARK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*(?:#{1,6}\s+|>\s*|[-*+•]\s+|\d{1,2}[.)]\s+)").unwrap());
 /// Enlaces: se conserva el texto y se descarta la dirección.
 static LINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap());
+/// Negrita: dos asteriscos a cada lado.
+static BOLD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\*\*([^*]+)\*\*").unwrap());
+/// Cursiva: un asterisco pegado a cada extremo de una palabra. "*.log" o "2 * 3" no lo son.
+static ITALIC: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(^|[^\w*])\*([^*\s](?:[^*]*[^*\s])?)\*([^\w*]|$)").unwrap());
 
-/// La interfaz muestra texto plano: cualquier Markdown que devuelva el modelo se quita antes.
-/// Los guiones bajos sueltos se conservan, porque aparecen en nombres de archivo.
+/// Quita las marcas de énfasis y enlaces de un fragmento que no es código.
+fn without_emphasis(segment: &str) -> String {
+    let segment = LINK.replace_all(segment, "${1}");
+    let mut segment = BOLD.replace_all(&segment, "${1}").into_owned();
+    // Dos cursivas seguidas comparten el separador: cada pasada resuelve una.
+    for _ in 0..3 {
+        let next = ITALIC.replace_all(&segment, "${1}${2}${3}").into_owned();
+        if next == segment {
+            break;
+        }
+        segment = next;
+    }
+    segment.replace("**", "")
+}
+
+/// La interfaz muestra texto plano: se quitan las marcas de Markdown, nunca el contenido.
+/// Lo que va entre comillas invertidas (rutas, comandos, nombres de archivo) se conserva tal cual,
+/// y los guiones bajos nunca se tocan, porque aparecen en nombres de archivo.
 pub fn plain_text(text: &str) -> String {
     let lines: Vec<String> = text
         .lines()
         .map(|line| {
             let line = BLOCK_MARK.replace(line, "");
-            let line = LINK.replace_all(&line, "$1");
-            line.replace("**", "").replace("__", "").replace(['*', '`'], "")
+            let mut parts: Vec<String> = line.split('`').map(str::to_owned).collect();
+            // Una comilla invertida sin cerrar no abre código: se une al texto anterior.
+            if parts.len() % 2 == 0 {
+                let unclosed = parts.pop().unwrap_or_default();
+                if let Some(previous) = parts.last_mut() {
+                    previous.push_str(&unclosed);
+                }
+            }
+            parts.iter().enumerate().map(|(index, part)| if index % 2 == 1 { part.clone() } else { without_emphasis(part) }).collect::<String>()
         })
         .filter(|line| !line.trim().is_empty())
         .collect();
@@ -202,13 +229,23 @@ mod tests {
     #[test]
     fn markdown_never_reaches_the_interface() {
         let cases = [
-            ("**Error de ruta**", "Error de ruta"),
-            ("### ¿Qué significa?", "¿Qué significa?"),
-            ("1. Abre `services.msc`", "Abre services.msc"),
-            ("- Reinicia el *servicio*", "Reinicia el servicio"),
-            ("> cita\n\n__aviso__", "cita aviso"),
-            ("Mira [la ayuda](https://ejemplo.test)", "Mira la ayuda"),
+            ("**Error 0x80070002**: falta `configuracion.ini`", "Error 0x80070002: falta configuracion.ini"),
+            ("Código de error: 0x80070002", "Código de error: 0x80070002"),
+            (r"Abre `C:\Program Files\Inventario\configuracion.ini`", r"Abre C:\Program Files\Inventario\configuracion.ini"),
+            ("Busca `*.log` en `__pycache__`", "Busca *.log en __pycache__"),
+            ("El archivo __init__.py no existe", "El archivo __init__.py no existe"),
             ("El archivo mi_informe_final.docx", "El archivo mi_informe_final.docx"),
+            ("Borra los archivos *.tmp y *.log", "Borra los archivos *.tmp y *.log"),
+            ("Calcula 2 * 3 * 4", "Calcula 2 * 3 * 4"),
+            ("*Nota:* reinicia el *servicio*", "Nota: reinicia el servicio"),
+            ("### ¿Qué significa?", "¿Qué significa?"),
+            ("1. Ejecuta `sfc /scannow` como administrador", "Ejecuta sfc /scannow como administrador"),
+            ("- Reinstala el programa", "Reinstala el programa"),
+            ("Mira [la ayuda](https://ejemplo.test)", "Mira la ayuda"),
+            (r"Ruta `C:\Users\[nombre]\(copia)`", r"Ruta C:\Users\[nombre]\(copia)"),
+            ("**Error sin cerrar", "Error sin cerrar"),
+            ("Comilla `sin cerrar", "Comilla sin cerrar"),
+            ("> cita\n\n**aviso**", "cita aviso"),
             ("Texto   con\nsaltos", "Texto con saltos"),
         ];
         for (input, expected) in cases {
