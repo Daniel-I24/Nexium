@@ -70,8 +70,17 @@ describe("fuentes incluidas en la aplicación", () => {
   });
 
   it("la hoja de estilos importa las fuentes locales", () => {
-    const css = readFileSync("src/styles/theme.css", "utf8");
-    expect(css).toContain("@fontsource-variable/instrument-sans");
-    expect(css).toContain("@fontsource/ibm-plex-mono");
+    expect(readFileSync("src/styles/theme.css", "utf8")).toContain('@import "./fonts.css"');
+    const fonts = readFileSync("src/styles/fonts.css", "utf8");
+    expect(fonts).toContain("@fontsource-variable/instrument-sans/files/");
+    expect(fonts).toContain("@fontsource/ibm-plex-mono/files/");
+  });
+
+  it("solo declara fuentes WOFF2, sin copias WOFF duplicadas", () => {
+    const fonts = readFileSync("src/styles/fonts.css", "utf8");
+    const sources = fonts.match(/url\("[^"]+"\)/g) ?? [];
+    expect(sources.length).toBeGreaterThan(0);
+    expect(sources.every((source) => source.endsWith('.woff2")'))).toBe(true);
+    expect(fonts).not.toMatch(/format\(['"]woff['"]\)/);
   });
 });
