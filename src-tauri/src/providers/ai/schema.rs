@@ -53,7 +53,7 @@ pub fn plain_text(text: &str) -> String {
             let line = BLOCK_MARK.replace(line, "");
             let mut parts: Vec<String> = line.split('`').map(str::to_owned).collect();
             // Una comilla invertida sin cerrar no abre código: se une al texto anterior.
-            if parts.len() % 2 == 0 {
+            if parts.len().is_multiple_of(2) {
                 let unclosed = parts.pop().unwrap_or_default();
                 if let Some(previous) = parts.last_mut() {
                     previous.push_str(&unclosed);

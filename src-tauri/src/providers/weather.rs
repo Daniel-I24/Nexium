@@ -91,7 +91,7 @@ pub fn condition_name(code: u32) -> &'static str {
         51 | 53 | 55 | 56 | 57 => "llovizna",
         61 | 63 | 65 | 66 | 67 => "lluvia",
         71 | 73 | 75 | 77 => "nieve",
-        80 | 81 | 82 => "chubascos",
+        80..=82 => "chubascos",
         85 | 86 => "chubascos de nieve",
         95 | 96 | 99 => "tormenta",
         _ => "condición desconocida",
