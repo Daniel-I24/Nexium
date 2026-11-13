@@ -1,6 +1,7 @@
 //! Voz local: micrófono con cpal y transcripción con Whisper. El audio nunca sale del equipo ni se guarda.
 
 use std::{
+    ffi::c_void,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -212,6 +213,15 @@ pub fn audio_context(samples: usize) -> i32 {
         .clamp(256, 1500)
 }
 
+/// Whisper la consulta durante la transcripción. `user_data` apunta al indicador de cancelación.
+///
+/// # Safety
+/// `user_data` debe apuntar a un `AtomicBool` vivo mientras dure la transcripción.
+unsafe extern "C" fn abort_requested(user_data: *mut c_void) -> bool {
+    // SAFETY: `run_whisper` pasa un puntero a un `AtomicBool` que sobrevive a `state.full`.
+    unsafe { (*user_data.cast::<AtomicBool>()).load(Ordering::Relaxed) }
+}
+
 fn run_whisper(
     samples: &[f32],
     context: &WhisperContext,
@@ -231,8 +241,13 @@ fn run_whisper(
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
     params.set_print_special(false);
-    let flag = cancelled.clone();
-    params.set_abort_callback_safe(move || flag.load(Ordering::Relaxed));
+    // No se usa `set_abort_callback_safe`: en whisper-rs 0.16 lee el cierre con un tipo equivocado
+    // y Whisper casi siempre recibe "abortar", así que ninguna transcripción terminaba.
+    // SAFETY: `cancelled` vive en esta función hasta después de `state.full`, que es quien usa el puntero.
+    unsafe {
+        params.set_abort_callback(Some(abort_requested));
+        params.set_abort_callback_user_data(Arc::as_ptr(&cancelled).cast_mut().cast());
+    }
     let outcome = state.full(params, samples);
     if cancelled.load(Ordering::Relaxed) {
         return Err(SpeechError::Cancelled);
@@ -560,6 +575,32 @@ pub async fn download_model(
 mod tests {
     use super::*;
     use wiremock::{matchers::path, Mock, MockServer, ResponseTemplate};
+
+    #[test]
+    fn the_abort_callback_reads_the_cancellation_flag() {
+        let flag = AtomicBool::new(false);
+        let pointer = std::ptr::from_ref(&flag).cast_mut().cast();
+        // SAFETY: `flag` vive durante toda la prueba.
+        assert!(!unsafe { abort_requested(pointer) });
+        flag.store(true, Ordering::Relaxed);
+        assert!(unsafe { abort_requested(pointer) });
+    }
+
+    /// Necesita el modelo real: `NEXIUM_WHISPER_MODEL=<ruta de ggml-*.bin> cargo test -- --ignored`.
+    #[tokio::test]
+    #[ignore = "necesita un modelo de Whisper descargado"]
+    async fn silence_is_transcribed_and_not_reported_as_a_failure() {
+        let model =
+            PathBuf::from(std::env::var("NEXIUM_WHISPER_MODEL").expect("NEXIUM_WHISPER_MODEL"));
+        let speech = WhisperSpeech::default();
+        let silence = vec![0.0; SAMPLE_RATE as usize * 4];
+        assert_eq!(
+            speech
+                .transcribe(silence, model, CancellationToken::new())
+                .await,
+            Ok(String::new())
+        );
+    }
 
     #[test]
     fn resampling_keeps_duration() {
