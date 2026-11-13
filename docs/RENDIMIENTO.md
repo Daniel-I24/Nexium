@@ -30,6 +30,24 @@ Commit `6748435`.
 
 **Memoria con Whisper cargado: no medida en la app.** El modelo no está descargado en este equipo y cargarlo requiere hablar al micrófono, que forma parte de las pruebas manuales. La referencia disponible es la del banco de pruebas de voz (`docs/PRUEBA_VOZ.md`): 332 MB de pico con `small`, fuera de la app.
 
+## Después de la Fase B: 13 de noviembre de 2026
+
+Commit `b320f79`. Misma máquina y mismo método, conectada a la corriente. Cuatro series de 5 arranques cada una.
+
+| Medida | Línea base (una serie) | Después (cuatro series) | Conclusión |
+|---|---|---|---|
+| Instalador NSIS | 3,48 MiB | 3,40 MiB | Mejora: sin las fuentes `.woff` |
+| Instalador MSI | 4,67 MiB | 4,60 MiB | Mejora: sin las fuentes `.woff` |
+| Frontend (`dist/`) | 537 KB | 450 KB | Mejora: sin las fuentes `.woff` |
+| Arranque en frío (primera ejecución de cada serie) | 3,98 s | 1,01 a 3,17 s | No concluyente: depende de la caché de Windows |
+| Arranque en caliente | 527 a 573 ms | 585 a 768 ms | No concluyente: la línea base es una sola serie |
+| Memoria privada en reposo | 178 MB | 179 a 182 MB | Sin cambio apreciable |
+| CPU en reposo | 0,44 % de un núcleo | 0,44 a 0,68 % de un núcleo | Sin cambio apreciable: misma variación que entre series |
+
+- La Fase B no buscaba cambiar el arranque, la memoria ni la CPU: sus cambios fueron de estructura, de validación y de tamaño. Solo el tamaño mejoró de forma medible.
+- El arranque en caliente parece unos 60 ms más lento, pero la línea base se tomó con una sola serie, otro día y sin repetir. Para afirmarlo habría que volver a compilar `6748435` y medir las dos versiones seguidas.
+- En una serie, el conjunto de trabajo bajó a 93 MB: Windows recortó la memoria de la ventana en reposo. La memoria privada no cambió.
+
 ## Comprobaciones del ejecutable de distribución
 
 Búsqueda de texto en `nexium.exe`:
