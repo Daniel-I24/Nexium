@@ -98,6 +98,8 @@ describe("operaciones", () => {
     expect(sent.model).toBe("gemini-3.6-flash");
     expect(sent.response_format).toMatchObject({ mime_type: "application/json", schema: { required: ["summary", "cause", "steps"] } });
     expect(sent.system_instruction).toContain("sin formato Markdown");
+    expect(sent.system_instruction).toContain("Describe únicamente lo que se ve en la imagen");
+    expect(sent.system_instruction).toContain("no añadas recomendaciones");
     expect(sent.input).toEqual([
       { type: "text", text: 'Dime "qué" es \\ esto' },
       { type: "image", data: JPEG, mime_type: "image/jpeg" },
@@ -366,11 +368,47 @@ describe("errores de Google", () => {
     expect(text).not.toContain("detalle interno");
   });
 
-  it("un corte también se reintenta con una captura, y el cuerpo sigue completo", async () => {
+  it("en el análisis, un 503 pasa al modelo de respaldo con la imagen completa", async () => {
+    const log = vi.spyOn(console, "log");
     const spy = geminiReplies(failure(503, "service_unavailable"), success("ok"));
-    expect((await handleRequest(capture(), testEnv())).status).toBe(200);
-    const body = (spy.mock.calls[1] as [string, RequestInit])[1].body as Blob;
-    expect(JSON.parse(await body.text()).input[1].data).toBe(JPEG);
+    const response = await handleRequest(capture(), testEnv());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ output: "ok", tokens: 42 });
+    const sent = await Promise.all(spy.mock.calls.map(([, init]) => ((init as RequestInit).body as Blob).text().then((text) => JSON.parse(text))));
+    expect(sent.map((body) => body.model)).toEqual(["gemini-3.6-flash", "gemini-3.5-flash-lite"]);
+    expect(sent[1].input[1].data).toBe(JPEG);
+    expect(JSON.parse(log.mock.calls.flat().join(" "))).toMatchObject({ operation: "analyze", code: "ok", model: "gemini-3.5-flash-lite" });
+  });
+
+  it("en el análisis, si el respaldo también da 503, no hay un tercer intento", async () => {
+    const log = vi.spyOn(console, "log");
+    const spy = geminiReplies(failure(503, "service_unavailable"), failure(503, "service_unavailable"), success("ok"));
+    const response = await handleRequest(capture(), testEnv());
+    expect(response.status).toBe(503);
+    expect(await errorOf(response)).toBe("unavailable");
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(log.mock.calls.flat().join(" "))).toMatchObject({ upstream: { status: 503, model: "gemini-3.5-flash-lite" } });
+  });
+
+  it("en el análisis, otros fallos no se repiten con el mismo modelo", async () => {
+    for (const reply of [failure(500, "internal"), failure(429, "rate_limit_exceeded")]) {
+      const spy = geminiReplies(reply, success("ok"));
+      expect((await handleRequest(capture(), testEnv())).status).not.toBe(200);
+      expect(spy).toHaveBeenCalledTimes(1);
+      spy.mockRestore();
+    }
+    const spy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new DOMException("agotado", "TimeoutError"));
+    expect(await errorOf(await handleRequest(capture(), testEnv()))).toBe("timeout");
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("al interpretar, el éxito registra el modelo y un corte se reintenta con el mismo", async () => {
+    const log = vi.spyOn(console, "log");
+    const spy = geminiReplies(failure(503, "service_unavailable"), success());
+    expect((await handleRequest(interpret(), testEnv())).status).toBe(200);
+    const models = await Promise.all(spy.mock.calls.map(([, init]) => JSON.parse((init as RequestInit).body as string).model));
+    expect(models).toEqual(["gemini-3.5-flash-lite", "gemini-3.5-flash-lite"]);
+    expect(JSON.parse(log.mock.calls.flat().join(" "))).toMatchObject({ code: "ok", model: "gemini-3.5-flash-lite" });
   });
 
   it("un corte se reintenta una sola vez", async () => {
@@ -412,7 +450,7 @@ describe("errores de Google", () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
       throw new DOMException("agotado", "TimeoutError");
     });
-    await expect(callGemini({ body: "{}", timeoutMs: 100, totalTimeoutMs: 3500 }, "clave-de-prueba")).rejects.toMatchObject({ code: "timeout" });
+    await expect(callGemini({ model: "m", body: () => "{}", timeoutMs: 100, totalTimeoutMs: 3500 }, "clave-de-prueba")).rejects.toMatchObject({ code: "timeout" });
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
@@ -423,7 +461,7 @@ describe("errores de Google", () => {
       if (signals.length === 1) throw new DOMException("agotado", "TimeoutError");
       return success()();
     });
-    await callGemini({ body: "{}", timeoutMs: 60_000, totalTimeoutMs: 10_000 }, "clave-de-prueba");
+    await callGemini({ model: "m", body: () => "{}", timeoutMs: 60_000, totalTimeoutMs: 10_000 }, "clave-de-prueba");
     expect(signals).toHaveLength(2);
   });
 

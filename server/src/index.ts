@@ -21,8 +21,8 @@ async function run(operation: Operation, request: Request, env: Env): Promise<Mo
 }
 
 /** Solo métricas: nunca el texto, la imagen, la dirección IP ni el identificador de instalación. */
-function logMetric(operation: Operation | "unknown", code: string, status: number, startedAt: number, tokens: number, upstream?: unknown): void {
-  console.log(JSON.stringify({ operation, code, status, durationMs: Date.now() - startedAt, tokens, upstream }));
+function logMetric(operation: Operation | "unknown", code: string, status: number, startedAt: number, tokens: number, extra: { model?: string; upstream?: unknown } = {}): void {
+  console.log(JSON.stringify({ operation, code, status, durationMs: Date.now() - startedAt, tokens, ...extra }));
 }
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
@@ -31,13 +31,13 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   try {
     if (!operation) throw new ApiError("not_found");
     if (request.method !== "POST") throw new ApiError("method_not_allowed");
-    const answer = await run(operation, request, env);
-    logMetric(operation, "ok", 200, startedAt, answer.tokens);
-    return Response.json(answer);
+    const { output, tokens, model } = await run(operation, request, env);
+    logMetric(operation, "ok", 200, startedAt, tokens, { model });
+    return Response.json({ output, tokens });
   } catch (error) {
     const known = error instanceof ApiError ? error : new ApiError("unavailable");
     const upstream = error instanceof ApiError && "upstream" in error ? error.upstream : undefined;
-    logMetric(operation ?? "unknown", error instanceof ApiError ? known.code : "internal", errorStatus(known.code), startedAt, 0, upstream);
+    logMetric(operation ?? "unknown", error instanceof ApiError ? known.code : "internal", errorStatus(known.code), startedAt, 0, { upstream });
     return errorResponse(known);
   }
 }

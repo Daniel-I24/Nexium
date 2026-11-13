@@ -9,13 +9,19 @@ const MIN_RETRY_MS = 3000;
 export interface ModelAnswer {
   output: string;
   tokens: number;
+  /** Modelo que respondió. Solo se registra: la aplicación no lo recibe. */
+  model: string;
 }
 
 export interface Upstream {
-  body: string | Blob;
+  model: string;
+  /** Solo en el análisis: se usa si Google devuelve 503 con el modelo principal, en lugar de repetir con el mismo. */
+  fallbackModel?: string;
+  /** El cuerpo depende del modelo, que va dentro. */
+  body: (model: string) => string | Blob;
   /** Espera máxima de cada intento. */
   timeoutMs: number;
-  /** Espera máxima sumando el reintento: la aplicación sigue mostrando que procesa. */
+  /** Espera máxima sumando el segundo intento: la aplicación sigue mostrando que procesa. */
   totalTimeoutMs: number;
 }
 
@@ -36,35 +42,40 @@ interface InteractionResponse {
 export function interpretRequest({ text, now }: InterpretInput): Upstream {
   const { model, timeoutMs, totalTimeoutMs, maxOutputTokens, thinkingLevel, systemInstruction, responseSchema } = contract.interpret;
   return {
+    model,
     timeoutMs,
     totalTimeoutMs,
-    body: JSON.stringify({
-      model,
-      store: false,
-      system_instruction: systemInstruction.replace("{now}", now),
-      input: text,
-      generation_config: { max_output_tokens: maxOutputTokens, thinking_level: thinkingLevel },
-      response_format: { type: "text", mime_type: "application/json", schema: responseSchema },
-    }),
+    body: (chosen) =>
+      JSON.stringify({
+        model: chosen,
+        store: false,
+        system_instruction: systemInstruction.replace("{now}", now),
+        input: text,
+        generation_config: { max_output_tokens: maxOutputTokens, thinking_level: thinkingLevel },
+        response_format: { type: "text", mime_type: "application/json", schema: responseSchema },
+      }),
   };
 }
 
 export function analyzeRequest({ question, image }: AnalyzeInput): Upstream {
-  const { model, timeoutMs, totalTimeoutMs, maxOutputTokens, systemInstruction, responseSchema } = contract.analyze;
+  const { model, fallbackModel, timeoutMs, totalTimeoutMs, maxOutputTokens, systemInstruction, responseSchema } = contract.analyze;
   // La imagen se empalma como bytes. La marca es aleatoria para que la pregunta no pueda coincidir con ella.
   const marker = crypto.randomUUID();
-  const [before, after] = JSON.stringify({
-    model,
-    store: false,
-    system_instruction: systemInstruction,
-    input: [
-      { type: "text", text: question },
-      { type: "image", data: marker, mime_type: "image/jpeg" },
-    ],
-    generation_config: { max_output_tokens: maxOutputTokens },
-    response_format: { type: "text", mime_type: "application/json", schema: responseSchema },
-  }).split(marker) as [string, string];
-  return { timeoutMs, totalTimeoutMs, body: new Blob([before, image, after]) };
+  const body = (chosen: string) => {
+    const [before, after] = JSON.stringify({
+      model: chosen,
+      store: false,
+      system_instruction: systemInstruction,
+      input: [
+        { type: "text", text: question },
+        { type: "image", data: marker, mime_type: "image/jpeg" },
+      ],
+      generation_config: { max_output_tokens: maxOutputTokens },
+      response_format: { type: "text", mime_type: "application/json", schema: responseSchema },
+    }).split(marker) as [string, string];
+    return new Blob([before, image, after]);
+  };
+  return { model, fallbackModel, timeoutMs, totalTimeoutMs, body };
 }
 
 interface GoogleError {
@@ -75,6 +86,7 @@ interface GoogleError {
 export interface UpstreamFailure {
   status: number;
   code: string | undefined;
+  model: string;
 }
 
 function identifier(value: unknown): string | undefined {
@@ -89,13 +101,13 @@ function errorCode(status: number, envelope: GoogleError | undefined): ErrorCode
   return daily ? "service_quota" : "rate_limited";
 }
 
-async function send(upstream: Upstream, key: string, timeoutMs: number): Promise<ModelAnswer> {
+async function send(upstream: Upstream, model: string, key: string, timeoutMs: number): Promise<ModelAnswer> {
   let response: Response;
   try {
     response = await fetch(`${contract.baseUrl}/interactions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key, "Api-Revision": contract.apiRevision },
-      body: upstream.body,
+      body: upstream.body(model),
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
@@ -103,9 +115,9 @@ async function send(upstream: Upstream, key: string, timeoutMs: number): Promise
   }
   if (!response.ok) {
     const envelope = await response.json<GoogleError>().catch(() => undefined);
-    const upstream: UpstreamFailure = { status: response.status, code: identifier(envelope?.error?.status) ?? identifier(envelope?.error?.code) };
+    const failure: UpstreamFailure = { status: response.status, code: identifier(envelope?.error?.status) ?? identifier(envelope?.error?.code), model };
     const error = response.status >= 500 ? transient("unavailable") : new ApiError(errorCode(response.status, envelope));
-    throw Object.assign(error, { upstream });
+    throw Object.assign(error, { upstream: failure });
   }
   const answer = await response.json<InteractionResponse>().catch(() => {
     throw new ApiError("unavailable");
@@ -117,18 +129,31 @@ async function send(upstream: Upstream, key: string, timeoutMs: number): Promise
     .map((part) => part.text ?? "")
     .join("");
   if (!output.trim()) throw new ApiError("no_output");
-  return { output, tokens: answer.usage?.total_tokens ?? 0 };
+  return { output, tokens: answer.usage?.total_tokens ?? 0, model };
 }
 
-/** Un único reintento, solo ante un fallo pasajero y dentro del tiempo total: un 429 nunca se repite. */
+function isGoogle503(error: unknown): boolean {
+  return error instanceof ApiError && "upstream" in error && (error.upstream as UpstreamFailure).status === 503;
+}
+
+/**
+ * Como mucho un segundo intento, dentro del tiempo total. Un 429 o un 4xx nunca se repiten.
+ * Con modelo de respaldo, solo un 503 de Google lleva al segundo intento, y siempre con el otro modelo.
+ * Sin él, un fallo pasajero se reintenta una vez con el mismo modelo.
+ */
 export async function callGemini(upstream: Upstream, key: string): Promise<ModelAnswer> {
   const deadline = Date.now() + upstream.totalTimeoutMs;
   try {
-    return await send(upstream, key, upstream.timeoutMs);
+    return await send(upstream, upstream.model, key, upstream.timeoutMs);
   } catch (error) {
     const remaining = deadline - Date.now() - RETRY_DELAY_MS;
-    if (!isTransient(error) || remaining < MIN_RETRY_MS) throw error;
+    if (remaining < MIN_RETRY_MS) throw error;
+    if (upstream.fallbackModel) {
+      if (!isGoogle503(error)) throw error;
+      return send(upstream, upstream.fallbackModel, key, Math.min(upstream.timeoutMs, remaining));
+    }
+    if (!isTransient(error)) throw error;
     await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-    return send(upstream, key, Math.min(upstream.timeoutMs, remaining));
+    return send(upstream, upstream.model, key, Math.min(upstream.timeoutMs, remaining));
   }
 }

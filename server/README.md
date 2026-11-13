@@ -37,7 +37,12 @@ El país sale de `request.cf.country`, que rellena Cloudflare y el cliente no pu
 | `unavailable` | 503 | Google o el contador no están disponibles |
 | `timeout` | 504 | Google tardó demasiado |
 
-Los detalles de Google nunca llegan al cliente. Un 429 o un 4xx no se reintentan. Un fallo pasajero (error 5xx de Google, tiempo agotado o red caída) se reintenta una sola vez, dentro de un tiempo total fijo: 22 s para interpretar (10 s por intento) y 85 s para analizar (40 s por intento). Mientras tanto la aplicación sigue mostrando que procesa.
+Los detalles de Google nunca llegan al cliente. Un 429 o un 4xx no se reintentan. Hay como mucho un segundo intento, dentro de un tiempo total fijo, y mientras tanto la aplicación sigue mostrando que procesa:
+
+- **Interpretar:** un fallo pasajero (error 5xx de Google, tiempo agotado o red caída) se repite una vez con el mismo modelo. 22 s en total, 10 s por intento.
+- **Analizar:** solo un 503 de Google lleva al segundo intento, y siempre con el modelo de respaldo (`fallbackModel` en `src/ai-contract.json`). Nunca se repite con el mismo modelo. 85 s en total, 40 s por intento.
+
+El registro de cada solicitud indica qué modelo respondió o, si falló, el estado, el código y el modelo del último error de Google.
 
 ## Límites de uso
 
