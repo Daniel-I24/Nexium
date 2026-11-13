@@ -353,9 +353,15 @@ pub struct Recording {
     thread: Option<JoinHandle<()>>,
     buffer: Arc<Mutex<CaptureBuffer>>,
     sample_rate: u32,
+    device: String,
 }
 
 impl Recording {
+    /// Nombre del dispositivo que se está grabando, para explicar un fallo.
+    pub fn device(&self) -> &str {
+        &self.device
+    }
+
     pub fn finish(mut self) -> Vec<f32> {
         self.close();
         let samples = self
@@ -380,6 +386,38 @@ impl Drop for Recording {
     fn drop(&mut self) {
         self.close();
     }
+}
+
+/// Si la entrada predeterminada no es un micrófono (por ejemplo, "Stereo Mix", que graba lo que suena en el
+/// equipo), se usa el primer micrófono disponible. Si no hay ninguno reconocible, se respeta la predeterminada.
+pub fn pick_input<D>(
+    default: Option<D>,
+    inputs: impl IntoIterator<Item = D>,
+    is_microphone: impl Fn(&D) -> bool,
+) -> Option<D> {
+    if default.as_ref().is_some_and(&is_microphone) {
+        return default;
+    }
+    inputs
+        .into_iter()
+        .find(|device| is_microphone(device))
+        .or(default)
+}
+
+fn is_microphone(device: &cpal::Device) -> bool {
+    device.description().is_ok_and(|description| {
+        matches!(
+            description.device_type(),
+            cpal::DeviceType::Microphone | cpal::DeviceType::Headset | cpal::DeviceType::Handset
+        )
+    })
+}
+
+fn device_name(device: &cpal::Device) -> String {
+    device.description().map_or_else(
+        |_| "micrófono".to_owned(),
+        |description| description.name().to_owned(),
+    )
 }
 
 type LevelCallback = Arc<dyn Fn(f32) + Send + Sync>;
@@ -426,12 +464,17 @@ pub fn start_recording(
 ) -> Result<Recording, SpeechError> {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let (ready_tx, ready_rx) =
-        mpsc::channel::<Result<(Arc<Mutex<CaptureBuffer>>, u32), SpeechError>>();
+        mpsc::channel::<Result<(Arc<Mutex<CaptureBuffer>>, u32, String), SpeechError>>();
     let thread = std::thread::spawn(move || {
         let opened = (|| {
-            let device = cpal::default_host()
-                .default_input_device()
+            let host = cpal::default_host();
+            let inputs = host
+                .input_devices()
+                .map(Iterator::collect::<Vec<_>>)
+                .unwrap_or_default();
+            let device = pick_input(host.default_input_device(), inputs, is_microphone)
                 .ok_or_else(no_microphone)?;
+            let name = device_name(&device);
             let supported = device.default_input_config().map_err(|_| no_microphone())?;
             let format = supported.sample_format();
             let config: cpal::StreamConfig = supported.into();
@@ -494,11 +537,11 @@ pub fn start_recording(
             }
             .map_err(|_| no_microphone())?;
             stream.play().map_err(|_| no_microphone())?;
-            Ok((stream, buffer, rate))
+            Ok((stream, buffer, rate, name))
         })();
         match opened {
-            Ok((stream, buffer, rate)) => {
-                let _ = ready_tx.send(Ok((buffer, rate)));
+            Ok((stream, buffer, rate, name)) => {
+                let _ = ready_tx.send(Ok((buffer, rate, name)));
                 let _ = stop_rx.recv();
                 drop(stream);
             }
@@ -507,7 +550,7 @@ pub fn start_recording(
             }
         }
     });
-    let (buffer, sample_rate) = ready_rx
+    let (buffer, sample_rate, device) = ready_rx
         .recv_timeout(Duration::from_secs(10))
         .map_err(|_| no_microphone())??;
     Ok(Recording {
@@ -515,6 +558,7 @@ pub fn start_recording(
         thread: Some(thread),
         buffer,
         sample_rate,
+        device,
     })
 }
 
@@ -599,6 +643,29 @@ mod tests {
                 .transcribe(silence, model, CancellationToken::new())
                 .await,
             Ok(String::new())
+        );
+    }
+
+    #[test]
+    fn a_microphone_is_preferred_over_a_default_that_is_not_one() {
+        let is_mic = |device: &&str| device.starts_with("Micrófono");
+        let inputs = ["Stereo Mix", "Micrófono integrado", "Micrófono USB"];
+        assert_eq!(
+            pick_input(Some("Stereo Mix"), inputs, is_mic),
+            Some("Micrófono integrado")
+        );
+        assert_eq!(
+            pick_input(Some("Micrófono USB"), inputs, is_mic),
+            Some("Micrófono USB")
+        );
+        assert_eq!(
+            pick_input(Some("Stereo Mix"), ["Stereo Mix"], is_mic),
+            Some("Stereo Mix")
+        );
+        assert_eq!(pick_input(None, ["Línea"], is_mic), None);
+        assert_eq!(
+            pick_input(None, ["Línea", "Micrófono USB"], is_mic),
+            Some("Micrófono USB")
         );
     }
 

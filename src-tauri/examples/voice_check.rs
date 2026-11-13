@@ -85,6 +85,7 @@ async fn main() {
     println!("\nGrabando {seconds} s: habla ahora.");
     let recording = speech::start_recording(Arc::new(|_| {}), Arc::new(|| {}))
         .unwrap_or_else(|error| panic!("{error}"));
+    println!("Grabando de: {}", recording.device());
     std::thread::sleep(Duration::from_secs(seconds));
     let samples = recording.finish();
     let peak = samples
