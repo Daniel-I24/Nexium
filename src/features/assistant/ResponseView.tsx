@@ -179,6 +179,12 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
   }
 }
 
+/** Todas las líneas de origen terminan igual, con un punto, aunque el texto venga de sitios distintos. */
+export function originSentence(label: string) {
+  const trimmed = label.trim();
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
 export function ResponseView({ response, actions }: { response: AssistantResponse; actions: ResponseActions }) {
   const time = new Date(response.createdAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
   return (
@@ -188,7 +194,7 @@ export function ResponseView({ response, actions }: { response: AssistantRespons
         <span className="font-mono text-sm text-muted">{time}</span>
       </div>
       <Body body={response.body} actions={actions} />
-      {response.body.kind !== "error" && <p className="m-0 text-sm text-muted">Origen: {response.originLabel}</p>}
+      {response.body.kind !== "error" && <p className="m-0 text-sm text-muted">Origen: {originSentence(response.originLabel)}</p>}
     </article>
   );
 }

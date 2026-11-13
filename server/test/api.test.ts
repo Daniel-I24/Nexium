@@ -100,6 +100,7 @@ describe("operaciones", () => {
     expect(sent.system_instruction).toContain("sin formato Markdown");
     expect(sent.system_instruction).toContain("Describe únicamente lo que se ve en la imagen");
     expect(sent.system_instruction).toContain("no añadas recomendaciones");
+    expect(sent.system_instruction).toContain("de tú");
     expect(sent.input).toEqual([
       { type: "text", text: 'Dime "qué" es \\ esto' },
       { type: "image", data: JPEG, mime_type: "image/jpeg" },

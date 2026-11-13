@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AssistantResponse, ResponseBody } from "@/types/api";
 
-import { ResponseView } from "./ResponseView";
+import { originSentence, ResponseView } from "./ResponseView";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -20,6 +20,15 @@ const response = (body: ResponseBody): AssistantResponse => ({
 
 const actions = { onSaveReminder: vi.fn(), onAuthorizeFolders: vi.fn() };
 
+describe("origen", () => {
+  it("todas las líneas de origen terminan con un punto, sin duplicarlo", () => {
+    expect(originSentence("reglas locales, sin IA")).toBe("reglas locales, sin IA.");
+    expect(originSentence("Open-Meteo; solicitud interpretada con IA (Google Gemini)")).toBe("Open-Meteo; solicitud interpretada con IA (Google Gemini).");
+    expect(originSentence("una captura analizada con IA (Google Gemini). Nexium ya descartó la imagen")).toBe("una captura analizada con IA (Google Gemini). Nexium ya descartó la imagen.");
+    expect(originSentence("ya termina.")).toBe("ya termina.");
+  });
+});
+
 describe("errores", () => {
   it("no muestran un origen sin datos: el mensaje ya explica la causa", () => {
     render(<ResponseView response={{ ...response({ kind: "error", code: "unavailable", message: "El servidor de IA no responde en este momento.", hint: "Vuelve a intentarlo." }), originLabel: "sin datos" }} actions={actions} />);
@@ -29,7 +38,7 @@ describe("errores", () => {
 
   it("una respuesta correcta sí muestra su origen", () => {
     render(<ResponseView response={response({ kind: "text", text: "Hola" })} actions={actions} />);
-    expect(screen.getByText(/Origen: una captura analizada/)).toBeInTheDocument();
+    expect(screen.getByText("Origen: una captura analizada con IA (Google Gemini). Nexium ya descartó la imagen.")).toBeInTheDocument();
   });
 });
 
