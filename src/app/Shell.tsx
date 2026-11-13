@@ -16,7 +16,8 @@ export function Shell({ screen, sensing, onSelect, bar, children }: ShellProps) 
     <div className="flex h-dvh flex-col bg-base text-ink wide:flex-row">
       <Rail active={screen} sensing={sensing} onSelect={onSelect} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-panel">
-        <main className="min-h-0 flex-1 overflow-y-auto px-6 py-8 wide:px-12">
+        {/* Contenedor común de todas las pantallas: centrado, con el mismo ancho máximo y el mismo margen. */}
+        <main className="scrollbar-stable min-h-0 flex-1 overflow-y-auto px-6 py-8 wide:px-12">
           <div className="mx-auto w-full max-w-content">{children}</div>
         </main>
         {bar}

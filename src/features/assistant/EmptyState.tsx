@@ -2,7 +2,7 @@ const examples = ["¿Cuánta memoria RAM estoy utilizando?", "¿Cómo está el c
 
 export function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   return (
-    <div className="flex max-w-reading flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <h1 className="m-0 text-xl font-medium leading-tight">¿Qué necesitas saber de tu equipo?</h1>
       <p className="m-0 text-muted">Pulsa Hablar o escribe tu solicitud. También puedes empezar por uno de estos ejemplos:</p>
       <ul className="m-0 flex list-none flex-col border-b border-hairline p-0">

@@ -48,7 +48,7 @@ export function HistoryScreen() {
   const act = (action: Promise<void>) => action.then(load).catch((reason: unknown) => setError(errorMessage(reason)));
 
   return (
-    <div className="flex max-w-reading flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <h1 className="m-0 text-xl font-medium leading-tight">Historial</h1>
       <p className="m-0 text-sm text-muted">Se guarda en este equipo. No incluye claves, audio ni capturas. Una respuesta sobre tu pantalla sí puede describir lo que se veía en ella.</p>
       <div role="group" aria-label="Filtrar por estado" className="flex flex-wrap items-center gap-2">

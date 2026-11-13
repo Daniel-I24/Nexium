@@ -100,7 +100,7 @@ export function SettingsScreen() {
   };
 
   return (
-    <div className="flex max-w-reading flex-col gap-8 pb-8">
+    <div className="flex flex-col gap-8 pb-8">
       <h1 className="m-0 text-xl font-medium leading-tight">Ajustes</h1>
       {message && <p role="status" className={`m-0 ${message.error ? "text-error" : "text-ok"}`}>{message.text}</p>}
 

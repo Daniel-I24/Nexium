@@ -85,6 +85,11 @@
   }
 }
 
+/* Reserva siempre el hueco de la barra de desplazamiento: si no, el contenido centrado se mueve al aparecer. */
+@utility scrollbar-stable {
+  scrollbar-gutter: stable;
+}
+
 @layer base {
   html {
     font-family: var(--font-sans);

@@ -87,7 +87,7 @@ export function RemindersScreen() {
   }, [load]);
 
   return (
-    <div className="flex max-w-reading flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <h1 className="m-0 text-xl font-medium leading-tight">Recordatorios</h1>
       <p className="m-0 text-sm text-muted">
         Los avisos solo se emiten mientras Nexium está abierto o en la bandeja del sistema. Si lo cierras con Salir, verás los vencidos al volver a abrirlo.
