@@ -30,6 +30,8 @@ pub struct SpeechModel {
     pub display_name: &'static str,
     pub file: &'static str,
     pub size_mb: u32,
+    /// Tamaño exacto del archivo: se comprueba antes de usarlo, además del hash al descargarlo.
+    pub size_bytes: u64,
     pub sha256: &'static str,
 }
 
@@ -39,6 +41,7 @@ pub const CATALOG: &[SpeechModel] = &[
         display_name: "Preciso (recomendado)",
         file: "ggml-small-q5_1.bin",
         size_mb: 190,
+        size_bytes: 190_085_487,
         sha256: "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
     },
     SpeechModel {
@@ -46,9 +49,27 @@ pub const CATALOG: &[SpeechModel] = &[
         display_name: "Rápido, para equipos modestos",
         file: "ggml-base-q5_1.bin",
         size_mb: 60,
+        size_bytes: 59_707_625,
         sha256: "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
     },
 ];
+
+/// En qué estado está un modelo en disco.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelState {
+    Missing,
+    /// Hay un archivo con su nombre pero no tiene el tamaño esperado: quedó a medias o se alteró.
+    Damaged,
+    Ready,
+}
+
+pub fn model_state(model: &SpeechModel, directory: &Path) -> ModelState {
+    match std::fs::metadata(directory.join(model.file)) {
+        Ok(metadata) if metadata.len() == model.size_bytes => ModelState::Ready,
+        Ok(_) => ModelState::Damaged,
+        Err(_) => ModelState::Missing,
+    }
+}
 
 pub fn find_model(id: &str) -> Option<&'static SpeechModel> {
     CATALOG.iter().find(|model| model.id == id)
@@ -86,10 +107,21 @@ pub fn statuses(directory: &Path, active: &str) -> Vec<SpeechModelStatus> {
         .collect()
 }
 
+/// Cada causa de fallo de la voz, con su mensaje en español.
 #[derive(Debug, PartialEq)]
 pub enum SpeechError {
     ModelMissing,
+    ModelDownloading,
+    ModelDamaged,
+    /// El archivo es correcto pero Whisper no pudo cargarlo: casi siempre por falta de memoria.
+    ModelUnloadable,
     NoMicrophone(String),
+    /// La grabación no tiene ninguna muestra.
+    NoAudio,
+    /// Se grabó, pero sin sonido: micrófono silenciado o dispositivo equivocado.
+    Silent {
+        device: String,
+    },
     Failed(String),
     Cancelled,
 }
@@ -97,13 +129,35 @@ pub enum SpeechError {
 impl std::fmt::Display for SpeechError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ModelMissing => {
-                f.write_str("Falta el modelo de voz. Descárgalo en Ajustes, sección Voz.")
-            }
+            Self::ModelMissing => f.write_str("Falta el modelo de voz. Descárgalo en Ajustes, sección Voz. Mientras tanto puedes escribir tu solicitud."),
+            Self::ModelDownloading => f.write_str("El modelo de voz aún se está descargando. Espera a que termine en Ajustes, sección Voz. Mientras tanto puedes escribir tu solicitud."),
+            Self::ModelDamaged => f.write_str("El modelo de voz está incompleto o dañado. Vuelve a descargarlo en Ajustes, sección Voz."),
+            Self::ModelUnloadable => f.write_str("No se pudo cargar el modelo de voz. Suele deberse a falta de memoria: cierra otras aplicaciones y vuelve a intentarlo."),
+            Self::NoAudio => f.write_str("La grabación quedó vacía. Pulsa Hablar, di tu solicitud y después pulsa Terminar."),
+            Self::Silent { device } => write!(f, "El micrófono \u{201c}{device}\u{201d} no captó ningún sonido. Comprueba que no esté silenciado y que sea el que usas."),
             Self::NoMicrophone(reason) | Self::Failed(reason) => f.write_str(reason),
             Self::Cancelled => f.write_str("Operación cancelada."),
         }
     }
+}
+
+/// Por debajo de este pico (unos -60 dBFS) la grabación es silencio: ni siquiera hay ruido de fondo.
+const SILENCE_PEAK: f32 = 0.001;
+
+/// Distingue una grabación vacía o muda antes de gastar tiempo en transcribirla.
+pub fn check_audible(samples: &[f32], device: &str) -> Result<(), SpeechError> {
+    if samples.is_empty() {
+        return Err(SpeechError::NoAudio);
+    }
+    let peak = samples
+        .iter()
+        .fold(0.0f32, |peak, sample| peak.max(sample.abs()));
+    if peak < SILENCE_PEAK {
+        return Err(SpeechError::Silent {
+            device: device.to_owned(),
+        });
+    }
+    Ok(())
 }
 
 #[async_trait]
@@ -198,11 +252,8 @@ fn load_whisper(model_path: &Path) -> Result<WhisperContext, SpeechError> {
     let path = model_path
         .to_str()
         .ok_or_else(|| SpeechError::Failed("La ruta del modelo no es válida.".into()))?;
-    WhisperContext::new_with_params(path, WhisperContextParameters::default()).map_err(|_| {
-        SpeechError::Failed(
-            "No se pudo cargar el modelo de voz. Vuelve a descargarlo en Ajustes.".into(),
-        )
-    })
+    WhisperContext::new_with_params(path, WhisperContextParameters::default())
+        .map_err(|_| SpeechError::ModelUnloadable)
 }
 
 /// Whisper procesa 30 s aunque el audio dure menos. Ajustarlo a la duración real reduce la espera de 6,5 a 1,5 s
@@ -252,7 +303,12 @@ fn run_whisper(
     if cancelled.load(Ordering::Relaxed) {
         return Err(SpeechError::Cancelled);
     }
-    outcome.map_err(|_| SpeechError::Failed("No se pudo transcribir el audio.".into()))?;
+    outcome.map_err(|error| match error {
+        whisper_rs::WhisperError::NoSamples => SpeechError::NoAudio,
+        other => SpeechError::Failed(format!(
+            "Whisper no pudo transcribir el audio ({other:?}). Vuelve a intentarlo."
+        )),
+    })?;
     Ok(state
         .as_iter()
         .map(|segment| segment.to_string())
@@ -647,6 +703,70 @@ mod tests {
     }
 
     #[test]
+    fn each_recording_problem_has_its_own_message() {
+        assert_eq!(check_audible(&[], "Micrófono"), Err(SpeechError::NoAudio));
+        assert_eq!(
+            check_audible(&[0.0; 16_000], "Stereo Mix"),
+            Err(SpeechError::Silent {
+                device: "Stereo Mix".into()
+            })
+        );
+        assert_eq!(
+            check_audible(&[0.0005, -0.0009], "Micrófono"),
+            Err(SpeechError::Silent {
+                device: "Micrófono".into()
+            })
+        );
+        assert_eq!(check_audible(&[0.0, 0.02, -0.01], "Micrófono"), Ok(()));
+        let messages = [
+            SpeechError::ModelMissing,
+            SpeechError::ModelDownloading,
+            SpeechError::ModelDamaged,
+            SpeechError::ModelUnloadable,
+            SpeechError::NoAudio,
+            SpeechError::Silent {
+                device: "Stereo Mix".into(),
+            },
+        ]
+        .map(|error| error.to_string());
+        let unique: std::collections::HashSet<_> = messages.iter().collect();
+        assert_eq!(unique.len(), messages.len());
+        assert!(messages[1].contains("se está descargando"));
+        assert!(messages[2].contains("incompleto o dañado"));
+        assert!(messages[3].contains("memoria"));
+        assert!(messages[5].contains("Stereo Mix") && messages[5].contains("silenciado"));
+        assert!(messages
+            .iter()
+            .all(|message| message != "No se pudo transcribir el audio."));
+    }
+
+    #[test]
+    fn the_model_is_ready_only_with_its_exact_size() {
+        let directory = tempfile::tempdir().unwrap();
+        let model = SpeechModel {
+            id: "prueba",
+            display_name: "Prueba",
+            file: "modelo.bin",
+            size_mb: 1,
+            size_bytes: 4,
+            sha256: "",
+        };
+        assert_eq!(model_state(&model, directory.path()), ModelState::Missing);
+        std::fs::write(directory.path().join("modelo.bin.part"), b"12").unwrap();
+        assert_eq!(model_state(&model, directory.path()), ModelState::Missing);
+        std::fs::write(directory.path().join("modelo.bin"), b"123").unwrap();
+        assert_eq!(model_state(&model, directory.path()), ModelState::Damaged);
+        std::fs::write(directory.path().join("modelo.bin"), b"1234").unwrap();
+        assert_eq!(model_state(&model, directory.path()), ModelState::Ready);
+    }
+
+    #[test]
+    fn the_catalog_sizes_match_the_published_files() {
+        assert_eq!(find_model("small").unwrap().size_bytes, 190_085_487);
+        assert_eq!(find_model("base").unwrap().size_bytes, 59_707_625);
+    }
+
+    #[test]
     fn a_microphone_is_preferred_over_a_default_that_is_not_one() {
         let is_mic = |device: &&str| device.starts_with("Micrófono");
         let inputs = ["Stereo Mix", "Micrófono integrado", "Micrófono USB"];
@@ -771,6 +891,7 @@ mod tests {
             display_name: "x",
             file: "m.bin",
             size_mb: 1,
+            size_bytes: body.len() as u64,
             sha256: digest,
         };
         let dir = tempfile::tempdir().unwrap();

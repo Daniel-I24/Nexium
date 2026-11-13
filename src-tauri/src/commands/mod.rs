@@ -43,6 +43,26 @@ pub struct AppState {
     pub models_dir: PathBuf,
     pub cancel: Mutex<CancellationToken>,
     pub recording: Mutex<Option<Recording>>,
+    /// Modelo que se está descargando: hasta que termine y se verifique, no se puede usar.
+    pub downloading: Mutex<Option<String>>,
+}
+
+impl AppState {
+    /// Un modelo solo se usa si está completo, verificado y no se está descargando.
+    fn ready_model(&self, model: &speech::SpeechModel) -> Result<(), speech::SpeechError> {
+        if self
+            .downloading
+            .lock()
+            .is_ok_and(|current| current.as_deref() == Some(model.id))
+        {
+            return Err(speech::SpeechError::ModelDownloading);
+        }
+        match speech::model_state(model, &self.models_dir) {
+            speech::ModelState::Ready => Ok(()),
+            speech::ModelState::Damaged => Err(speech::SpeechError::ModelDamaged),
+            speech::ModelState::Missing => Err(speech::SpeechError::ModelMissing),
+        }
+    }
 }
 
 impl AppState {
@@ -135,9 +155,9 @@ pub fn voice_start<R: Runtime>(app: AppHandle<R>, state: State<'_, AppState>) ->
     let settings = state.settings.get()?;
     let model = speech::find_model(&settings.speech_model)
         .ok_or_else(|| AppError::Validation("Ese modelo de voz no existe.".into()))?;
-    if !state.models_dir.join(model.file).exists() {
-        return Err(AppError::Operation(format!("Falta el modelo de voz ({} MB). Descárgalo en Ajustes, sección Voz. Mientras tanto puedes escribir tu solicitud.", model.size_mb)));
-    }
+    state
+        .ready_model(model)
+        .map_err(|error| AppError::Operation(error.to_string()))?;
     let (level_app, limit_app) = (app.clone(), app.clone());
     let recording = speech::start_recording(
         Arc::new(move |level| {
@@ -186,12 +206,16 @@ pub async fn voice_stop<R: Runtime>(
     };
     let stage = stage_sink(&app);
     stage(Stage::Transcribing);
+    let device = recording.device().to_owned();
     let samples = tokio::task::spawn_blocking(move || recording.finish())
         .await
         .map_err(|_| AppError::Operation("La grabación se interrumpió.".into()))?;
     let settings = state.settings.get()?;
     let model = speech::find_model(&settings.speech_model)
         .ok_or_else(|| AppError::Validation("Ese modelo de voz no existe.".into()))?;
+    speech::check_audible(&samples, &device)
+        .and_then(|()| state.ready_model(model))
+        .map_err(|error| AppError::Operation(error.to_string()))?;
     let cancel = state.fresh_cancel();
     let text = state
         .speech
@@ -253,9 +277,21 @@ pub async fn speech_model_download<R: Runtime>(
 ) -> AppResult<()> {
     let model = speech::find_model(&model_id)
         .ok_or_else(|| AppError::Validation("Ese modelo de voz no existe.".into()))?;
+    {
+        let mut downloading = state
+            .downloading
+            .lock()
+            .map_err(|_| AppError::Operation("No se pudo iniciar la descarga.".into()))?;
+        if downloading.is_some() {
+            return Err(AppError::Operation(
+                "Ya hay una descarga de modelo en curso.".into(),
+            ));
+        }
+        *downloading = Some(model.id.to_owned());
+    }
     let emitter = app.clone();
     let id = model.id.to_owned();
-    speech::download_model(
+    let result = speech::download_model(
         model,
         &state.models_dir,
         move |downloaded, total| {
@@ -271,7 +307,11 @@ pub async fn speech_model_download<R: Runtime>(
         None,
     )
     .await
-    .map_err(AppError::Operation)
+    .map_err(AppError::Operation);
+    if let Ok(mut downloading) = state.downloading.lock() {
+        *downloading = None;
+    }
+    result
 }
 
 #[tauri::command]

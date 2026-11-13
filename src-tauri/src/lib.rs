@@ -131,6 +131,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
         models_dir: data_dir.join("models"),
         cancel: Mutex::new(CancellationToken::new()),
         recording: Mutex::new(None),
+        downloading: Mutex::new(None),
     })
 }
 
