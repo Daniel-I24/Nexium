@@ -2,7 +2,7 @@
 
 Última actualización: 13 de noviembre de 2026.
 
-**Etapa actual:** plan de cierre para la presentación. **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas**; sigue la Fase C (pruebas). Faltan las comprobaciones manuales del propietario: micrófono, bandeja, notificaciones y repetir la captura real con el modelo de respaldo.
+**Etapa actual:** plan de cierre para la presentación. **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas**; sigue la Fase C (pruebas). Faltan las comprobaciones manuales del propietario: micrófono, bandeja y notificaciones.
 
 ## Fase B: rendimiento y calidad del código
 
@@ -21,9 +21,11 @@ Mediciones en `docs/RENDIMIENTO.md`. Solo mejoró de forma medible el tamaño: e
 - El análisis de pantalla devuelve resumen, causa y hasta tres pasos en JSON, validado por la app. Todo texto de la IA pasa por una limpieza de Markdown que conserva el contenido entre comillas invertidas (18 casos con pruebas).
 - Errores con su causa (sin conexión, servidor que no responde, tiempo agotado, cuota, región), sin "Origen: sin datos", y aviso de captura en una frase con "Más información".
 
-**Incidencia abierta: `gemini-3.6-flash` responde 503 a todas las capturas desde el 11 de noviembre.** Cuatro de cuatro intentos, con y sin esquema JSON; antes había respondido 17 de 17. El texto, con `gemini-3.5-flash-lite`, sigue funcionando. Con la misma imagen, `gemini-3.5-flash-lite` respondió el análisis en 2,6 s con un JSON válido. Desde `55ebe42`, el Worker usa `gemini-3.5-flash-lite` como respaldo cuando Google devuelve 503, sin repetir con el mismo modelo, y registra qué modelo respondió. Falta verlo en la app real. La causa del 503 no se ha determinado.
+**Incidencia cerrada con un respaldo: `gemini-3.6-flash` responde 503 a todas las capturas desde el 11 de noviembre.** Cuatro de cuatro intentos, con y sin esquema JSON; antes había respondido 17 de 17. El texto, con `gemini-3.5-flash-lite`, sigue funcionando. Con la misma imagen, `gemini-3.5-flash-lite` respondió el análisis en 2,6 s con un JSON válido. Desde `55ebe42`, el Worker usa `gemini-3.5-flash-lite` como respaldo cuando Google devuelve 503, sin repetir con el mismo modelo, y registra qué modelo respondió. **Comprobado en la app de distribución el 13 de noviembre a las 13:46:** el propietario capturó la imagen de prueba maximizada y Nexium mostró el resumen, la causa con el código `0x80070002` y un paso, "Compruebe que el archivo exista en la carpeta del programa", sin pasos inventados ni texto perdido. Respondió `gemini-3.5-flash-lite` en 2,5 s, tras el 503 de `gemini-3.6-flash`: un análisis del cupo de Nexium y dos peticiones a Google. La causa del 503 sigue sin conocerse; si `gemini-3.6-flash` vuelve a responder, el Worker lo usará sin cambios.
 
-**Cuota de análisis gastada en pruebas:** 11 de noviembre, 2; 13 de noviembre, 3.
+**A vigilar:** esa petición usó 15 ms de CPU del Worker, y la del 13 de noviembre a las 09:17, 11 ms. El plan gratuito indica 10 ms; Cloudflare no cortó ninguna. Las mediciones del 9 de noviembre daban de 3 a 8 ms.
+
+**Cuota de análisis gastada en pruebas:** 11 de noviembre, 2; 13 de noviembre, 4.
 
 ## Fase A: IA integrada mediante el servidor de Nexium
 
@@ -42,7 +44,7 @@ Quien usa Nexium ya no configura ninguna clave. La aplicación habla con un Work
 | Recorrer todo el alfabeto base64 de 512 KB | 0 a 1 ms con el Worker caliente, unos 3 ms en frío. Medido con solicitudes rechazadas, sin gastar cuota |
 | Solicitudes no válidas (cabecera PNG, tipo PNG) | 400, sin llamar a Google |
 | App real: búsqueda, aclaración "5/6", chiste, hora, clima, Ajustes | Correctos. Ajustes indica "Funcionando" |
-| App real: análisis de pantalla | Funciona de extremo a extremo en 14 s, pero **la captura no mostró la imagen de prueba**: capturó la ventana de la conversación de desarrollo, que llegó a Google. Hay que repetirla con la pantalla preparada. Repetida el 11 y el 13 de noviembre: falló por el 503 de Google (ver Fase B) |
+| App real: análisis de pantalla | Funciona de extremo a extremo en 14 s, pero **la captura no mostró la imagen de prueba**: capturó la ventana de la conversación de desarrollo, que llegó a Google. Hay que repetirla con la pantalla preparada. Repetida el 11 y el 13 de noviembre: falló por el 503 de Google. Correcta el 13 de noviembre a las 13:46 con el modelo de respaldo (ver Fase B) |
 
 **Decisiones del propietario aplicadas:**
 
@@ -118,7 +120,6 @@ Las pruebas con datos de ejemplo no detectaron estos defectos; sí la ventana re
 ## Sin probar
 
 - Micrófono, bandeja y notificaciones. El almacén de claves ya no existe: la clave está en el servidor.
-- Captura de pantalla real con una pantalla preparada, sin datos personales.
 - Búsqueda de archivos en carpetas reales.
 - Carga y liberación del modelo de voz en la app real.
 - El instalador: todo lo anterior es con `tauri dev`.
