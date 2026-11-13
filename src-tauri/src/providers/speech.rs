@@ -29,7 +29,6 @@ pub struct SpeechModel {
     pub id: &'static str,
     pub display_name: &'static str,
     pub file: &'static str,
-    pub size_mb: u32,
     /// Tamaño exacto del archivo: se comprueba antes de usarlo, además del hash al descargarlo.
     pub size_bytes: u64,
     pub sha256: &'static str,
@@ -40,7 +39,6 @@ pub const CATALOG: &[SpeechModel] = &[
         id: "small",
         display_name: "Preciso (recomendado)",
         file: "ggml-small-q5_1.bin",
-        size_mb: 190,
         size_bytes: 190_085_487,
         sha256: "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
     },
@@ -48,7 +46,6 @@ pub const CATALOG: &[SpeechModel] = &[
         id: "base",
         display_name: "Rápido, para equipos modestos",
         file: "ggml-base-q5_1.bin",
-        size_mb: 60,
         size_bytes: 59_707_625,
         sha256: "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
     },
@@ -71,6 +68,12 @@ pub fn model_state(model: &SpeechModel, directory: &Path) -> ModelState {
     }
 }
 
+/// Megabytes como los muestra Windows (1 MB = 1 048 576 bytes). La etiqueta y el contador de descarga usan
+/// siempre esta función, para que nunca muestren cifras distintas del mismo archivo.
+pub fn megabytes(bytes: u64) -> u64 {
+    (bytes + 524_288) / 1_048_576
+}
+
 pub fn find_model(id: &str) -> Option<&'static SpeechModel> {
     CATALOG.iter().find(|model| model.id == id)
 }
@@ -84,9 +87,12 @@ pub fn catalog_ids() -> Vec<&'static str> {
 pub struct SpeechModelStatus {
     pub id: String,
     pub display_name: String,
-    pub size_mb: u32,
+    pub size_mb: u64,
     pub path: String,
+    /// Completo y con su tamaño exacto: se puede usar.
     pub downloaded: bool,
+    /// Hay un archivo con su nombre, pero no tiene el tamaño esperado.
+    pub damaged: bool,
     pub is_active: bool,
 }
 
@@ -95,11 +101,13 @@ pub fn statuses(directory: &Path, active: &str) -> Vec<SpeechModelStatus> {
         .iter()
         .map(|model| {
             let path = directory.join(model.file);
+            let state = model_state(model, directory);
             SpeechModelStatus {
                 id: model.id.into(),
                 display_name: model.display_name.into(),
-                size_mb: model.size_mb,
-                downloaded: path.exists(),
+                size_mb: megabytes(model.size_bytes),
+                downloaded: state == ModelState::Ready,
+                damaged: state == ModelState::Damaged,
                 path: path.to_string_lossy().into_owned(),
                 is_active: model.id == active,
             }
@@ -713,9 +721,7 @@ pub async fn download_model(
     if !response.status().is_success() {
         return Err(FAILED.into());
     }
-    let total = response
-        .content_length()
-        .unwrap_or(u64::from(model.size_mb) * 1_048_576);
+    let total = response.content_length().unwrap_or(model.size_bytes);
     let partial = directory.join(format!("{}.part", model.file));
     let mut file = tokio::fs::File::create(&partial)
         .await
@@ -826,7 +832,6 @@ mod tests {
             id: "prueba",
             display_name: "Prueba",
             file: "modelo.bin",
-            size_mb: 1,
             size_bytes: 4,
             sha256: "",
         };
@@ -843,6 +848,34 @@ mod tests {
     fn the_catalog_sizes_match_the_published_files() {
         assert_eq!(find_model("small").unwrap().size_bytes, 190_085_487);
         assert_eq!(find_model("base").unwrap().size_bytes, 59_707_625);
+    }
+
+    #[test]
+    fn the_label_and_the_download_counter_show_the_same_size() {
+        assert_eq!(megabytes(190_085_487), 181);
+        assert_eq!(megabytes(59_707_625), 57);
+        let directory = tempfile::tempdir().unwrap();
+        let listed = statuses(directory.path(), "small");
+        assert_eq!(
+            listed.iter().map(|model| model.size_mb).collect::<Vec<_>>(),
+            [181, 57]
+        );
+    }
+
+    #[test]
+    fn only_a_complete_model_counts_as_downloaded() {
+        let directory = tempfile::tempdir().unwrap();
+        let small = find_model("small").unwrap();
+        std::fs::write(
+            directory.path().join(format!("{}.part", small.file)),
+            b"a medias",
+        )
+        .unwrap();
+        let listed = statuses(directory.path(), "small");
+        assert!(!listed[0].downloaded && !listed[0].damaged);
+        std::fs::write(directory.path().join(small.file), b"truncado").unwrap();
+        let listed = statuses(directory.path(), "small");
+        assert!(!listed[0].downloaded && listed[0].damaged);
     }
 
     #[test]
@@ -1014,7 +1047,6 @@ mod tests {
             id: "x",
             display_name: "x",
             file: "m.bin",
-            size_mb: 1,
             size_bytes: body.len() as u64,
             sha256: digest,
         };

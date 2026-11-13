@@ -136,9 +136,11 @@ export function SettingsScreen() {
                   {model.displayName} <span className="font-mono text-sm text-muted">{model.sizeMb} MB</span>
                 </span>
               </label>
-              {!model.downloaded && (
+              {model.downloaded ? (
+                <span className="font-mono text-sm text-ok">Disponible</span>
+              ) : (
                 <Button disabled={download !== null} onClick={() => void startDownload(model.id)}>
-                  {download?.modelId === model.id ? `${download.downloadedMb} de ${download.totalMb} MB` : "Descargar"}
+                  {download?.modelId === model.id ? `${download.downloadedMb} de ${download.totalMb} MB` : model.damaged ? "Volver a descargar" : "Descargar"}
                 </Button>
               )}
             </li>

@@ -30,6 +30,25 @@ function view(overrides: Partial<SettingsView> = {}, microphone: string | null =
 
 beforeEach(() => invoke.mockReset());
 
+describe("Ajustes: modelos de voz", () => {
+  const model = (overrides: object) => ({ id: "small", displayName: "Preciso (recomendado)", sizeMb: 181, path: "", downloaded: false, damaged: false, isActive: true, ...overrides });
+
+  it("muestra el tamaño real y marca el modelo descargado como disponible", async () => {
+    invoke.mockResolvedValue(view({ speechModels: [model({ downloaded: true })] }));
+    render(<SettingsScreen />);
+    expect(await screen.findByText("181 MB")).toBeInTheDocument();
+    expect(screen.getByText("Disponible")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Descargar" })).not.toBeInTheDocument();
+  });
+
+  it("ofrece volver a descargar un modelo dañado y no deja elegirlo", async () => {
+    invoke.mockResolvedValue(view({ speechModels: [model({ damaged: true })] }));
+    render(<SettingsScreen />);
+    expect(await screen.findByRole("button", { name: "Volver a descargar" })).toBeInTheDocument();
+    expect(screen.getByRole("radio")).toBeDisabled();
+  });
+});
+
 describe("Ajustes: micrófono", () => {
   it("dice qué micrófono usará Nexium y marca los dispositivos que no lo son", async () => {
     invoke.mockResolvedValue(view());

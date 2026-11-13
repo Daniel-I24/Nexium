@@ -110,6 +110,7 @@ export interface SpeechModelStatus {
   sizeMb: number;
   path: string;
   downloaded: boolean;
+  damaged: boolean;
   isActive: boolean;
 }
 

@@ -301,7 +301,7 @@ pub async fn speech_model_download<R: Runtime>(
                 DownloadPayload {
                     model_id: id.clone(),
                     downloaded_mb: downloaded / 1_048_576,
-                    total_mb: total / 1_048_576,
+                    total_mb: speech::megabytes(total),
                 },
             );
         },
