@@ -8,5 +8,9 @@ export default defineConfig({
       miniflare: { bindings: { GEMINI_API_KEY: "clave-de-prueba" } },
     }),
   ],
-  test: { include: ["test/**/*.test.ts"] },
+  test: {
+    include: ["test/**/*.test.ts"],
+    // El motor de Workers solo admite la cobertura de istanbul.
+    coverage: { provider: "istanbul", include: ["src/**/*.ts"], reporter: ["text-summary", "json-summary"], reportsDirectory: "coverage" },
+  },
 });
