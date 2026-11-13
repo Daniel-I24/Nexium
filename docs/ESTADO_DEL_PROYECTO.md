@@ -1,8 +1,29 @@
 # Nexium: estado del proyecto
 
-Última actualización: 10 de noviembre de 2026.
+Última actualización: 13 de noviembre de 2026.
 
-**Etapa actual:** plan de cierre para la presentación. **Fase A (IA integrada mediante servidor) cerrada**; sigue la Fase B (rendimiento y calidad del código). Faltan las comprobaciones manuales del propietario: micrófono, bandeja, notificaciones y una captura real con la pantalla preparada.
+**Etapa actual:** plan de cierre para la presentación. **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas**; sigue la Fase C (pruebas). Faltan las comprobaciones manuales del propietario: micrófono, bandeja, notificaciones y repetir la captura real con el modelo de respaldo.
+
+## Fase B: rendimiento y calidad del código
+
+Mediciones en `docs/RENDIMIENTO.md`. Solo mejoró de forma medible el tamaño: el frontend pasó de 537 KB a 450 KB, y los instaladores de 3,48 a 3,40 MiB (NSIS) y de 4,67 a 4,60 MiB (MSI), al quitar las fuentes `.woff` duplicadas. El arranque, la memoria y la CPU en reposo no cambiaron de forma concluyente.
+
+**Cambios, sin cambiar el comportamiento salvo donde se indica:**
+
+- Controladores: cada uno devuelve `Option<Outcome>`; desaparecen los cuatro `unreachable!`.
+- El adaptador que oculta la ventana para capturar sale de `lib.rs` a `platform/window_capture.rs`.
+- Formato por defecto de `rustfmt` en un commit solo de formato, y Clippy sin avisos con `-D warnings`. La CI comprueba ambos en los tres sistemas, con límites de tiempo por job.
+- `cargo audit` y `npm audit`: 0 vulnerabilidades en la app y el Worker. Avisos y la vulnerabilidad moderada de desarrollo, en `docs/RENDIMIENTO.md`.
+
+**Correcciones de comportamiento pedidas durante la fase:**
+
+- La captura espera a que Windows confirme que Nexium está oculto y vuelve a mostrarlo siempre. Probado con una ventana simulada; en la app real aún no se ha visto una captura correcta desde este cambio.
+- El análisis de pantalla devuelve resumen, causa y hasta tres pasos en JSON, validado por la app. Todo texto de la IA pasa por una limpieza de Markdown que conserva el contenido entre comillas invertidas (18 casos con pruebas).
+- Errores con su causa (sin conexión, servidor que no responde, tiempo agotado, cuota, región), sin "Origen: sin datos", y aviso de captura en una frase con "Más información".
+
+**Incidencia abierta: `gemini-3.6-flash` responde 503 a todas las capturas desde el 11 de noviembre.** Cuatro de cuatro intentos, con y sin esquema JSON; antes había respondido 17 de 17. El texto, con `gemini-3.5-flash-lite`, sigue funcionando. Con la misma imagen, `gemini-3.5-flash-lite` respondió el análisis en 2,6 s con un JSON válido. Desde `55ebe42`, el Worker usa `gemini-3.5-flash-lite` como respaldo cuando Google devuelve 503, sin repetir con el mismo modelo, y registra qué modelo respondió. Falta verlo en la app real. La causa del 503 no se ha determinado.
+
+**Cuota de análisis gastada en pruebas:** 11 de noviembre, 2; 13 de noviembre, 3.
 
 ## Fase A: IA integrada mediante el servidor de Nexium
 
@@ -21,7 +42,7 @@ Quien usa Nexium ya no configura ninguna clave. La aplicación habla con un Work
 | Recorrer todo el alfabeto base64 de 512 KB | 0 a 1 ms con el Worker caliente, unos 3 ms en frío. Medido con solicitudes rechazadas, sin gastar cuota |
 | Solicitudes no válidas (cabecera PNG, tipo PNG) | 400, sin llamar a Google |
 | App real: búsqueda, aclaración "5/6", chiste, hora, clima, Ajustes | Correctos. Ajustes indica "Funcionando" |
-| App real: análisis de pantalla | Funciona de extremo a extremo en 14 s, pero **la captura no mostró la imagen de prueba**: capturó la ventana de la conversación de desarrollo, que llegó a Google. Hay que repetirla con la pantalla preparada |
+| App real: análisis de pantalla | Funciona de extremo a extremo en 14 s, pero **la captura no mostró la imagen de prueba**: capturó la ventana de la conversación de desarrollo, que llegó a Google. Hay que repetirla con la pantalla preparada. Repetida el 11 y el 13 de noviembre: falló por el 503 de Google (ver Fase B) |
 
 **Decisiones del propietario aplicadas:**
 
