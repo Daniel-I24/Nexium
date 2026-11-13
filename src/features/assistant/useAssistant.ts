@@ -6,8 +6,27 @@ import type { AssistantResponse, ReminderOption, SuggestedRequest } from "@/type
 
 const LEVEL_HISTORY = 72;
 const CAPTURE_REQUEST = "Analiza lo que aparece en mi pantalla";
+const VOICE_REQUEST = "Solicitud por voz";
 const TAPE_LENGTH = 5;
 const notRetryable = new Set(["quotaExhausted", "notConfigured", "regionUnavailable", "regionUnknown"]);
+
+/** Identificadores negativos: un intento fallido en la interfaz nunca coincide con uno del historial. */
+let nextLocalId = -1;
+
+/** Lo que se intentó y por qué falló, para que no desaparezca de la conversación. */
+function failedAttempt(request: string, error: unknown): AssistantResponse {
+  const message = errorMessage(error);
+  return {
+    id: nextLocalId--,
+    request,
+    createdAt: new Date().toISOString(),
+    category: "general",
+    status: "failed",
+    originLabel: "",
+    summary: message,
+    body: { kind: "error", code: "failed", message, hint: null },
+  };
+}
 
 /** Respuesta actual y cinta cambian juntas: separadas, un actualizador tendría que modificar la otra. */
 interface Session {
@@ -48,15 +67,20 @@ export function useAssistant() {
     } else if (body.kind === "captureRequest") {
       void requestCaptureRef.current(body.question);
     } else if (body.kind === "error") {
-      setBar({ kind: "error", message: body.message, retryable: !notRetryable.has(body.code) });
+      setBar({ kind: "error", message: null, retryable: !notRetryable.has(body.code) });
     } else {
       setBar({ kind: "idle" });
     }
   }, []);
 
-  const fail = useCallback((error: unknown) => {
-    setBar({ kind: "error", message: errorMessage(error), retryable: true });
-  }, []);
+  /** Sin solicitud, el error solo cabe en la barra. Con ella, queda en la conversación junto a lo que se intentó. */
+  const fail = useCallback(
+    (error: unknown, request?: string) => {
+      if (request) present(failedAttempt(request, error));
+      else setBar({ kind: "error", message: errorMessage(error), retryable: true });
+    },
+    [present],
+  );
 
   const submit = useCallback(
     async (text: string) => {
@@ -64,7 +88,7 @@ export function useAssistant() {
       try {
         present(await api.submitRequest(text));
       } catch (error) {
-        fail(error);
+        fail(error, text);
       }
     },
     [fail, present],
@@ -76,7 +100,7 @@ export function useAssistant() {
     try {
       await api.startVoice();
     } catch (error) {
-      fail(error);
+      fail(error, VOICE_REQUEST);
     }
   }, [fail]);
 
@@ -86,7 +110,7 @@ export function useAssistant() {
       if (response) present(response);
       else setBar({ kind: "idle" });
     } catch (error) {
-      fail(error);
+      fail(error, VOICE_REQUEST);
     }
   }, [fail, present]);
 
@@ -124,7 +148,7 @@ export function useAssistant() {
     try {
       present(await api.analyzeScreen(captureQuestion.current));
     } catch (error) {
-      fail(error);
+      fail(error, captureQuestion.current);
     }
   }, [fail, present]);
 

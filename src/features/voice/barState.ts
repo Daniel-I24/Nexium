@@ -7,7 +7,8 @@ export type BarState =
   | { kind: "responding" }
   | { kind: "captureConsent"; provider: string; notice: string }
   | { kind: "clarify"; question: string; reminderOptions: ReminderOption[]; suggestions: SuggestedRequest[] }
-  | { kind: "error"; message: string; retryable: boolean };
+  /** `message` es null cuando el error ya se ve en la conversación: la barra no lo repite. */
+  | { kind: "error"; message: string | null; retryable: boolean };
 
 const stepLabels: Partial<Record<Stage, string>> = {
   transcribing: "Transcribiendo tu voz en este equipo",

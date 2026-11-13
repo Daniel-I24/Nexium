@@ -47,14 +47,14 @@ describe("useAssistant", () => {
     invoke.mockResolvedValueOnce(reply({ kind: "error", code: "quotaExhausted", message: "Cuota", hint: null }, "failed"));
     const { result } = renderHook(() => useAssistant());
     await act(() => result.current.submit("hola"));
-    expect(result.current.bar).toEqual({ kind: "error", message: "Cuota", retryable: false });
+    expect(result.current.bar).toEqual({ kind: "error", message: null, retryable: false });
   });
 
   it("una región sin servicio no es reintentable", async () => {
     invoke.mockResolvedValueOnce(reply({ kind: "error", code: "regionUnavailable", message: "Región", hint: null }, "failed"));
     const { result } = renderHook(() => useAssistant());
     await act(() => result.current.submit("hola"));
-    expect(result.current.bar).toEqual({ kind: "error", message: "Región", retryable: false });
+    expect(result.current.bar).toEqual({ kind: "error", message: null, retryable: false });
   });
 
   it("una solicitud de pantalla pide permiso y no captura sola", async () => {
@@ -88,10 +88,39 @@ describe("useAssistant", () => {
     expect(result.current.tape.map((entry) => entry.id)).toEqual([1]);
   });
 
-  it("un fallo del micrófono se muestra como error", async () => {
+  it("un fallo del micrófono queda en la conversación, sin repetirse en la barra", async () => {
     invoke.mockRejectedValueOnce("Falta el modelo de voz.");
     const { result } = renderHook(() => useAssistant());
     await act(() => result.current.speak());
-    expect(result.current.bar).toEqual({ kind: "error", message: "Falta el modelo de voz.", retryable: true });
+    expect(result.current.current).toMatchObject({ request: "Solicitud por voz", status: "failed", body: { kind: "error", message: "Falta el modelo de voz." } });
+    expect(result.current.bar).toEqual({ kind: "error", message: null, retryable: true });
+  });
+
+  it("un fallo al transcribir conserva la respuesta anterior en la cinta", async () => {
+    invoke.mockResolvedValueOnce(reply({ kind: "text", text: "hola" }));
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("hola"));
+    invoke.mockResolvedValueOnce(undefined).mockRejectedValueOnce("El micrófono no captó ningún sonido.");
+    await act(() => result.current.speak());
+    await act(() => result.current.stopListening());
+    expect(result.current.current).toMatchObject({ request: "Solicitud por voz", body: { message: "El micrófono no captó ningún sonido." } });
+    expect(result.current.tape.map((entry) => entry.id)).toEqual([1]);
+  });
+
+  it("un fallo de una solicitud escrita conserva el texto que se intentó", async () => {
+    invoke.mockRejectedValueOnce("Sin conexión.");
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("¿Qué tiempo hace?"));
+    expect(result.current.current).toMatchObject({ request: "¿Qué tiempo hace?", body: { kind: "error", message: "Sin conexión." } });
+  });
+
+  it("dos fallos seguidos tienen identificadores distintos y negativos", async () => {
+    invoke.mockRejectedValueOnce("a").mockRejectedValueOnce("b");
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("uno"));
+    await act(() => result.current.submit("dos"));
+    const ids = [result.current.tape[0]?.id, result.current.current?.id];
+    expect(new Set(ids).size).toBe(2);
+    expect(ids.every((id) => id !== undefined && id < 0)).toBe(true);
   });
 });

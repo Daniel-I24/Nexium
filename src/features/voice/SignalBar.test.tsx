@@ -93,11 +93,20 @@ describe("SignalBar", () => {
     expect(handlers.onChooseReminderOption).toHaveBeenCalledWith(option);
   });
 
-  it("un error explica la causa y permite reintentar", async () => {
+  it("un error que no está en la conversación se explica en la barra, sin la etiqueta Error", async () => {
     const handlers = setup({ kind: "error", message: "No puedo usar el micrófono.", retryable: true });
-    expect(status()).toHaveTextContent("Error");
+    expect(status()).toHaveTextContent("No puedo usar el micrófono.");
+    expect(screen.queryByText("Error")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(handlers.onRetry).toHaveBeenCalled();
+  });
+
+  it("un error que ya está en la conversación no se repite en la barra", () => {
+    setup({ kind: "error", message: null, retryable: true });
+    expect(status()).toHaveClass("sr-only");
+    expect(status()).toHaveTextContent("El motivo aparece en la conversación");
+    expect(screen.queryByText("Error")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cerrar" })).toBeInTheDocument();
   });
 
   it("la cuota agotada no ofrece reintentar", () => {

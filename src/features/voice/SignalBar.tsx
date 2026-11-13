@@ -41,6 +41,31 @@ function Frame({ tone, status, statusClass, children }: { tone: Tone; status: st
   );
 }
 
+/** Un error se lee una sola vez: si ya está en la conversación, la barra solo ofrece qué hacer. */
+function ErrorBar({ message, retryable, onRetry, onClose }: { message: string | null; retryable: boolean; onRetry: () => void; onClose: () => void }) {
+  return (
+    <section aria-label="Barra de señal" className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t-2 border-error bg-base px-4 py-3">
+      {retryable && (
+        <Button variant="primary" className={voiceKey} onClick={onRetry}>
+          Reintentar
+        </Button>
+      )}
+      {message ? (
+        <p role="status" aria-live="polite" className="m-0 min-w-48 flex-1 text-error">
+          {message}
+        </p>
+      ) : (
+        <span role="status" aria-live="polite" className="sr-only">
+          No se pudo completar la solicitud. El motivo aparece en la conversación.
+        </span>
+      )}
+      <Button className={message ? undefined : "ml-auto"} onClick={onClose}>
+        Cerrar
+      </Button>
+    </section>
+  );
+}
+
 const voiceKey = "h-16 w-34 shrink-0";
 
 /** Una frase basta para decidir. El aviso completo de privacidad queda a un clic. */
@@ -158,16 +183,6 @@ export function SignalBar(props: SignalBarProps) {
         </Frame>
       );
     case "error":
-      return (
-        <Frame tone="error" status="Error" statusClass="text-error">
-          {state.retryable && (
-            <Button variant="primary" className={voiceKey} onClick={props.onRetry}>
-              Reintentar
-            </Button>
-          )}
-          <p className="m-0 min-w-48 flex-1 text-error">{state.message}</p>
-          <Button onClick={onCancel}>Cerrar</Button>
-        </Frame>
-      );
+      return <ErrorBar message={state.message} retryable={state.retryable} onRetry={props.onRetry} onClose={onCancel} />;
   }
 }
