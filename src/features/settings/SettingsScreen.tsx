@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/Button";
 import { api, errorMessage, events } from "@/services/api";
-import type { AiServiceStatus, DownloadProgress, Settings, SettingsView } from "@/types/api";
+import type { AiServiceStatus, DownloadProgress, InputDevice, Settings, SettingsView } from "@/types/api";
 
 const statusLabels: Record<AiServiceStatus, string> = {
   notConfigured: "No incluido en esta versión",
@@ -33,6 +33,24 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 const inputStyle = "h-11 rounded-sm border border-line bg-panel px-3 text-md text-ink";
+
+function deviceLabel(device: InputDevice) {
+  const notes = [device.isDefault && "predeterminado de Windows", !device.isMicrophone && "no parece un micrófono"].filter(Boolean);
+  return notes.length > 0 ? `${device.name} (${notes.join(", ")})` : device.name;
+}
+
+/** Qué micrófono usará Nexium, y si el elegido no está conectado. */
+function MicrophoneNote({ chosen, active }: { chosen: string | null; active: string | null }) {
+  if (!active) return <p className="m-0 text-sm text-error">No se encontró ningún micrófono. Conecta uno y vuelve a abrir Ajustes.</p>;
+  if (chosen && chosen !== active) {
+    return (
+      <p className="m-0 text-sm text-error">
+        El micrófono elegido, {chosen}, no está conectado. Nexium usará {active}.
+      </p>
+    );
+  }
+  return <p className="m-0 text-sm text-muted">Nexium usará: {active}.</p>;
+}
 
 export function SettingsScreen() {
   const [view, setView] = useState<SettingsView | null>(null);
@@ -126,6 +144,17 @@ export function SettingsScreen() {
             </li>
           ))}
         </ul>
+        <Field label="Micrófono">
+          <select value={draft.microphone ?? ""} onChange={(event) => update("microphone", event.target.value || null)} className={inputStyle}>
+            <option value="">Automático: el primer micrófono disponible</option>
+            {view.microphones.map((device) => (
+              <option key={device.name} value={device.name}>
+                {deviceLabel(device)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <MicrophoneNote chosen={view.settings.microphone} active={view.activeMicrophone} />
         <Field label="Liberar el modelo tras estos minutos sin uso">
           <input type="number" min={1} max={240} value={draft.speechIdleMinutes} onChange={(event) => update("speechIdleMinutes", Number(event.target.value))} className={`font-mono ${inputStyle}`} />
         </Field>

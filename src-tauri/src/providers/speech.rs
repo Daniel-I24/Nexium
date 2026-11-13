@@ -478,6 +478,72 @@ pub fn pick_input<D>(
         .or(default)
 }
 
+/// El micrófono elegido en Ajustes, si sigue conectado; si no, la elección automática.
+pub fn choose_input<D>(
+    preferred: Option<&str>,
+    default: Option<D>,
+    inputs: Vec<D>,
+    name_of: impl Fn(&D) -> String,
+    is_microphone: impl Fn(&D) -> bool,
+) -> Option<D> {
+    if let Some(wanted) = preferred {
+        if let Some(index) = inputs.iter().position(|device| name_of(device) == wanted) {
+            return inputs.into_iter().nth(index);
+        }
+    }
+    pick_input(default, inputs, is_microphone)
+}
+
+/// Un dispositivo de entrada tal como se muestra en Ajustes.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct InputDevice {
+    pub name: String,
+    pub is_microphone: bool,
+    pub is_default: bool,
+}
+
+pub fn input_devices() -> Vec<InputDevice> {
+    let host = cpal::default_host();
+    let default = host
+        .default_input_device()
+        .map(|device| device_name(&device));
+    host.input_devices()
+        .map(|devices| {
+            devices
+                .map(|device| {
+                    let name = device_name(&device);
+                    InputDevice {
+                        is_microphone: is_microphone(&device),
+                        is_default: default.as_deref() == Some(name.as_str()),
+                        name,
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn resolve_input(preferred: Option<&str>) -> Option<cpal::Device> {
+    let host = cpal::default_host();
+    let inputs = host
+        .input_devices()
+        .map(Iterator::collect::<Vec<_>>)
+        .unwrap_or_default();
+    choose_input(
+        preferred,
+        host.default_input_device(),
+        inputs,
+        device_name,
+        is_microphone,
+    )
+}
+
+/// Nombre del dispositivo que se usaría ahora mismo con la preferencia indicada.
+pub fn active_input(preferred: Option<&str>) -> Option<String> {
+    resolve_input(preferred).map(|device| device_name(&device))
+}
+
 fn is_microphone(device: &cpal::Device) -> bool {
     device.description().is_ok_and(|description| {
         matches!(
@@ -533,6 +599,7 @@ fn push_samples<T: Copy>(
 
 /// Abre el micrófono en un hilo propio: el flujo de cpal no se puede mover entre hilos en todos los sistemas.
 pub fn start_recording(
+    preferred: Option<String>,
     on_level: LevelCallback,
     on_limit: LimitCallback,
 ) -> Result<Recording, SpeechError> {
@@ -541,13 +608,7 @@ pub fn start_recording(
         mpsc::channel::<Result<(Arc<Mutex<CaptureBuffer>>, u32, String), SpeechError>>();
     let thread = std::thread::spawn(move || {
         let opened = (|| {
-            let host = cpal::default_host();
-            let inputs = host
-                .input_devices()
-                .map(Iterator::collect::<Vec<_>>)
-                .unwrap_or_default();
-            let device = pick_input(host.default_input_device(), inputs, is_microphone)
-                .ok_or_else(no_microphone)?;
+            let device = resolve_input(preferred.as_deref()).ok_or_else(no_microphone)?;
             let name = device_name(&device);
             let supported = device.default_input_config().map_err(|_| no_microphone())?;
             let format = supported.sample_format();
@@ -782,6 +843,51 @@ mod tests {
     fn the_catalog_sizes_match_the_published_files() {
         assert_eq!(find_model("small").unwrap().size_bytes, 190_085_487);
         assert_eq!(find_model("base").unwrap().size_bytes, 59_707_625);
+    }
+
+    #[test]
+    fn the_chosen_microphone_wins_while_it_is_connected() {
+        let is_mic = |device: &&str| device.starts_with("Micrófono");
+        let name = |device: &&str| (*device).to_owned();
+        let inputs = vec![
+            "Stereo Mix",
+            "Micrófono integrado",
+            "Micrófono de la cámara",
+        ];
+        assert_eq!(
+            choose_input(
+                Some("Micrófono de la cámara"),
+                Some("Stereo Mix"),
+                inputs.clone(),
+                name,
+                is_mic
+            ),
+            Some("Micrófono de la cámara")
+        );
+        assert_eq!(
+            choose_input(
+                Some("Stereo Mix"),
+                Some("Stereo Mix"),
+                inputs.clone(),
+                name,
+                is_mic
+            ),
+            Some("Stereo Mix")
+        );
+        assert_eq!(
+            choose_input(
+                Some("Auriculares desconectados"),
+                Some("Stereo Mix"),
+                inputs.clone(),
+                name,
+                is_mic
+            ),
+            Some("Micrófono integrado")
+        );
+        assert_eq!(
+            choose_input(None, Some("Stereo Mix"), inputs, name, is_mic),
+            Some("Micrófono integrado")
+        );
     }
 
     #[test]

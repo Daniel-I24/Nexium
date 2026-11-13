@@ -120,6 +120,13 @@ export interface Settings {
   weatherCity: string;
   authorizedFolders: string[];
   foldersConfirmed: boolean;
+  microphone: string | null;
+}
+
+export interface InputDevice {
+  name: string;
+  isMicrophone: boolean;
+  isDefault: boolean;
 }
 
 export interface SettingsView {
@@ -130,6 +137,8 @@ export interface SettingsView {
   tokensToday: number;
   knownFolders: string[];
   speechModels: SpeechModelStatus[];
+  microphones: InputDevice[];
+  activeMicrophone: string | null;
 }
 
 export interface DownloadProgress {

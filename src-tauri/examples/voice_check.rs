@@ -60,6 +60,7 @@ async fn main() {
         }
     }
 
+    println!("Nexium usaría: {:?}", speech::active_input(None));
     let arguments: Vec<String> = std::env::args().collect();
     // Audio sintético, sin micrófono: silencio de 4 s o ninguna muestra.
     if let Some(kind @ ("silencio" | "vacio")) = arguments.get(1).map(String::as_str) {
@@ -83,7 +84,7 @@ async fn main() {
         .and_then(|value| value.parse().ok())
         .unwrap_or(4);
     println!("\nGrabando {seconds} s: habla ahora.");
-    let recording = speech::start_recording(Arc::new(|_| {}), Arc::new(|| {}))
+    let recording = speech::start_recording(None, Arc::new(|_| {}), Arc::new(|| {}))
         .unwrap_or_else(|error| panic!("{error}"));
     println!("Grabando de: {}", recording.device());
     std::thread::sleep(Duration::from_secs(seconds));

@@ -160,6 +160,7 @@ pub fn voice_start<R: Runtime>(app: AppHandle<R>, state: State<'_, AppState>) ->
         .map_err(|error| AppError::Operation(error.to_string()))?;
     let (level_app, limit_app) = (app.clone(), app.clone());
     let recording = speech::start_recording(
+        settings.microphone.clone(),
         Arc::new(move |level| {
             let _ = level_app.emit("voice://level", level);
         }),
@@ -411,6 +412,9 @@ pub struct SettingsView {
     tokens_today: u64,
     known_folders: Vec<String>,
     speech_models: Vec<SpeechModelStatus>,
+    microphones: Vec<speech::InputDevice>,
+    /// El dispositivo que Nexium usará al pulsar Hablar con los ajustes guardados.
+    active_microphone: Option<String>,
 }
 
 fn settings_view(state: &AppState) -> AppResult<SettingsView> {
@@ -418,6 +422,8 @@ fn settings_view(state: &AppState) -> AppResult<SettingsView> {
     let (ai_requests_today, tokens_today) = state.usage.today_totals()?;
     Ok(SettingsView {
         speech_models: speech::statuses(&state.models_dir, &settings.speech_model),
+        microphones: speech::input_devices(),
+        active_microphone: speech::active_input(settings.microphone.as_deref()),
         settings,
         provider: ProviderInfo {
             display_name: state.ai.display_name().into(),

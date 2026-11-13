@@ -21,6 +21,8 @@ pub struct Settings {
     pub weather_city: String,
     pub authorized_folders: Vec<String>,
     pub folders_confirmed: bool,
+    /// Nombre del micrófono elegido. `None` es automático: el primer micrófono real.
+    pub microphone: Option<String>,
 }
 
 impl Default for Settings {
@@ -32,6 +34,7 @@ impl Default for Settings {
             weather_city: String::new(),
             authorized_folders: Vec::new(),
             folders_confirmed: false,
+            microphone: None,
         }
     }
 }
@@ -53,6 +56,15 @@ impl Settings {
         if !(1..=240).contains(&self.speech_idle_minutes) {
             return Err(AppError::Validation(
                 "El tiempo para liberar el modelo de voz debe estar entre 1 y 240 minutos.".into(),
+            ));
+        }
+        if self
+            .microphone
+            .as_ref()
+            .is_some_and(|name| name.trim().is_empty() || name.chars().count() > 200)
+        {
+            return Err(AppError::Validation(
+                "El nombre del micrófono no es válido.".into(),
             ));
         }
         if self.weather_city.chars().count() > 100 {
