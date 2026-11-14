@@ -5,9 +5,13 @@ use crate::{
     database::Database,
     error::{AppError, AppResult},
     models::{Category, HistoryEntry, InteractionStatus},
+    providers::ai::schema::plain_text,
 };
 
 const MAX_ENTRIES: i64 = 500;
+/// Un fallo que la interfaz registra tiene el mismo límite que una solicitud y su causa, uno algo mayor.
+pub const MAX_FAILURE_REQUEST: usize = 500;
+pub const MAX_FAILURE_CAUSE: usize = 600;
 
 #[derive(Clone)]
 pub struct HistoryService {
@@ -62,10 +66,31 @@ impl HistoryService {
                 created_at: row.get(2)?,
                 category: Category::parse(&row.get::<_, String>(3)?),
                 status: InteractionStatus::parse(&row.get::<_, String>(4)?),
-                response: row.get(5)?,
+                // Las entradas de versiones anteriores pueden traer Markdown de la IA: se limpia al mostrarlas,
+                // sin tocar la base de datos.
+                response: plain_text(&row.get::<_, String>(5)?),
             })
         })?;
         rows.collect::<Result<_, _>>().map_err(AppError::from)
+    }
+
+    /// Un fallo que solo vio la interfaz (micrófono, transcripción, conexión con el backend) también queda registrado.
+    pub fn record_failure(&self, request: &str, cause: &str) -> AppResult<(i64, String)> {
+        let request = request.trim();
+        let cause = cause.trim();
+        if request.is_empty() || cause.is_empty() {
+            return Err(AppError::Validation(
+                "Falta la solicitud o la causa del fallo.".into(),
+            ));
+        }
+        if request.chars().count() > MAX_FAILURE_REQUEST
+            || cause.chars().count() > MAX_FAILURE_CAUSE
+        {
+            return Err(AppError::Validation(
+                "El fallo es demasiado largo para el historial.".into(),
+            ));
+        }
+        self.record(request, Category::General, InteractionStatus::Failed, cause)
     }
 
     pub fn delete(&self, id: i64) -> AppResult<()> {
@@ -135,6 +160,49 @@ mod tests {
         assert_eq!(history.list(None).unwrap().len(), 1);
         history.clear().unwrap();
         assert!(history.list(None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn old_entries_are_shown_without_markdown_and_the_database_keeps_them() {
+        let history = service();
+        let stored = "**Error 0x80070002**: falta `configuracion.ini`
+
+- Reinstala el programa";
+        history
+            .record(
+                "pantalla",
+                Category::Screen,
+                InteractionStatus::Completed,
+                stored,
+            )
+            .unwrap();
+        assert_eq!(
+            history.list(None).unwrap()[0].response,
+            "Error 0x80070002: falta configuracion.ini Reinstala el programa"
+        );
+        let raw: String = history
+            .db
+            .lock()
+            .unwrap()
+            .query_row("SELECT response FROM history", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(raw, stored);
+    }
+
+    #[test]
+    fn failures_seen_only_by_the_interface_are_recorded_as_failed() {
+        let history = service();
+        history
+            .record_failure("Solicitud por voz", "El micrófono no captó ningún sonido.")
+            .unwrap();
+        let entry = &history.list(Some(InteractionStatus::Failed)).unwrap()[0];
+        assert_eq!(entry.request, "Solicitud por voz");
+        assert_eq!(entry.response, "El micrófono no captó ningún sonido.");
+        assert!(history.record_failure(" ", "causa").is_err());
+        assert!(history.record_failure("a", "").is_err());
+        assert!(history
+            .record_failure(&"a".repeat(MAX_FAILURE_REQUEST + 1), "causa")
+            .is_err());
     }
 
     #[test]
