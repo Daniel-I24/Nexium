@@ -229,6 +229,7 @@ pub fn run() {
             // Sin bandeja disponible, cerrar la ventana cierra la aplicación.
             let has_tray = build_tray(&handle).is_ok();
             if let Some(window) = app.get_webview_window("main") {
+                platform::window_size::fit_to_screen(&window);
                 let hidden = window.clone();
                 let settings = app.state::<AppState>().settings.clone();
                 let notices = TauriNotifications::new(handle.clone());
