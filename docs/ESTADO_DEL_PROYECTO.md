@@ -2,7 +2,54 @@
 
 Última actualización: 13 de noviembre de 2026.
 
-**Etapa actual:** plan de cierre para la presentación. **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas**; sigue la Fase C (pruebas). Faltan las comprobaciones manuales del propietario: micrófono, bandeja y notificaciones.
+**Etapa actual:** plan de cierre para la presentación. **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas, y revisión final de interfaz y funcionamiento hecha el 13 de noviembre** (abajo). No queda nada pendiente de código para una fase posterior. Falta la prueba manual final del propietario con la app instalada: `docs/PLAN_PRUEBAS_MANUALES.md`.
+
+## Revisión final de interfaz y funcionamiento (13 de noviembre de 2026)
+
+Detalle del diseño en `docs/DISENO_VISUAL.md` (secciones 3 a 7).
+
+**Distribución y pantallas.** Composición fluida en `rem`, con contenedores de ancho máximo, rejilla para el área de lectura (mínimo 10 rem) y la barra de señal (máximo media ventana, con desplazamiento interno). Guardar ajustes va en un pie fijo siempre visible, con su resultado al lado. Fecha y hora en dos campos. Ventana mínima de 640 × 400 (antes 720 × 520, que no cabía en 1280 × 720 al 150 %), y tamaño inicial ajustado al área de trabajo si 1100 × 720 no cabe.
+
+**Movimiento.** Duraciones y curvas como tokens de Tailwind; solo opacidad y transformaciones. Animados con propósito: cambio de pantalla, respuestas, avisos, estados de la barra (la señal amarilla se enciende por opacidad) y diálogos. Se eliminan las transiciones de color de botones y navegación. Con Reducir movimiento no se mueve nada.
+
+**Iconos, tipografía y accesibilidad.** Un único componente de iconos (Lucide, dos tamaños, grosor fijo), interlineado por tamaño y título fluido. Cada estado (Completada, Fallida, Pendiente, Vencido, Cancelada, Existe) lleva icono y palabra. El foco se dibuja siempre con tinta y pasa al control principal al cambiar el estado de la barra. Botones Eliminar con nombre propio para lectores de pantalla.
+
+**Funcionamiento.**
+
+- Historial: el Markdown de las entradas antiguas se limpia al leerlas, sin tocar la base de datos.
+- Confirmación accesible antes de Borrar todo (Historial) y Eliminar (Recordatorios), que nombra lo que se borra. Borrar todo con un filtro activo borraba también lo que no se veía sin avisar: ahora lo dice.
+- Los fallos que se muestran en la conversación (micrófono, transcripción, conexión con el backend) quedan en el historial como Fallida, con su causa.
+- Historial ya no dice "No incluye claves": Nexium no guarda ninguna desde la Fase A.
+- Concordancia: "1 solicitud", "1 token", "1 recordatorio" y "1 coincidencia", con una función común en Rust y en la interfaz. No se encontraron más casos.
+- Bandeja: la primera vez que la ventana se oculta al cerrarla, una notificación explica que Nexium sigue activo y cómo salir del todo. No se repite.
+- Recordatorios: estado vacío con un ejemplo que se puede pulsar; Vencido con icono, palabra y línea lateral.
+- `whisper-rs` documentado en `docs/ANALISIS_TECNICO.md`: por qué `=0.16.0`, el arreglo aislado y cuándo revisarlo.
+
+**Otros fallos encontrados en la revisión y corregidos:**
+
+- Al cambiar de pantalla se conservaba el desplazamiento de la anterior.
+- Historial y Recordatorios decían "No hay registros" o nada mientras cargaban; Ajustes decía "Cargando ajustes" sin indicar actividad.
+- "Ajustes guardados." aparecía arriba, fuera de la vista tras desplazarse hasta Guardar.
+- El foco de un botón primario (contorno del color del texto) casi no se veía en el tema claro.
+- El foco se perdía al cambiar el estado de la barra, por ejemplo tras enviar una solicitud con Intro.
+- Los ejemplos del Asistente se aclaraban al pasar el ratón, perdiendo contraste; ahora se subrayan.
+- Una solicitud por voz sin transcribir se llamaba "Sin solicitud" en la conversación y "(sin voz)" en el historial.
+- El símbolo de Nexium se anunciaba a los lectores de pantalla junto a su nombre.
+- El trazo del micrófono cambiaba de alto en cada lectura (recálculo de diseño); ahora se escala.
+- Palabras y rutas largas en historial, recordatorios, cinta y archivos podían salirse de su caja.
+
+**Pruebas automáticas, todas en verde en este Windows el 13 de noviembre:**
+
+| Conjunto | Resultado |
+|---|---|
+| `cargo test` (biblioteca, contrato, configuración de ventana) | 151 + 7 + 1 correctas, 1 ignorada (necesita el modelo de voz) |
+| `cargo clippy --all-targets -- -D warnings` y `cargo fmt --check` | Sin avisos |
+| `npm test` (interfaz, con contraste WCAG de los dos temas) | 86 correctas |
+| `npm run test:layout` (diseño en Edge) | 120 correctas: 20 vistas × 6 tamaños de ventana × 3 tamaños de texto, en 6 proyectos de escala y tema |
+| `npm run lint`, `tsc --noEmit` | Sin errores |
+| Worker: `npm test` y `npm run typecheck` | 109 correctas |
+
+**Depende de la prueba manual:** la notificación de un recordatorio y el aviso de la bandeja en la app instalada, el micrófono elegido en Ajustes, el redimensionado de la ventana nativa con la escala real del sistema, las animaciones con y sin Reducir movimiento en WebView2, y todo en macOS y Linux (las pruebas de diseño usan Chromium, no WebKit).
 
 ## Fase B: rendimiento y calidad del código
 
@@ -77,9 +124,9 @@ Código escrito, con pruebas automáticas, en este orden de módulos: interfaz, 
 
 **Automático, en este Windows:**
 
-- `cargo test --lib`: 107 pruebas correctas.
+- `cargo test --lib`: 107 pruebas correctas en aquella fecha; 151 tras la revisión final (ver arriba).
 - `cargo test --test contract`: 7 pruebas correctas en su última ejecución, anterior a `3a19589`. Los JSON de Rust coinciden con los que usa la interfaz.
-- `npm test`: 27 pruebas correctas.
+- `npm test`: 27 pruebas correctas en aquella fecha; 86 tras la revisión final.
 - `npm run lint` y `tsc --noEmit`: sin errores.
 
 Estas pruebas usan servidores simulados para Gemini y Open-Meteo. Las pruebas con los servicios reales están más abajo.
@@ -102,7 +149,7 @@ Estas pruebas usan servidores simulados para Gemini y Open-Meteo. Las pruebas co
 | "Cuéntame un chiste" | Explica lo que Nexium sabe hacer, sin ejecutar nada |
 | Aviso de captura | Nombra a Google Gemini y no captura nada sin pulsar Capturar. No se pulsó |
 | Recordatorios, Historial y Ajustes | Abren con datos reales |
-| Tamaños y temas | 720×520, 1100×720 y 1920×1080 sin desbordes. Tema oscuro real del sistema y tema claro por emulación de la vista. El cambio real de tema del sistema no se probó |
+| Tamaños y temas | 720×520, 1100×720 y 1920×1080 sin desbordes (sustituido por las pruebas de diseño automáticas del 13 de noviembre). Tema oscuro real del sistema y tema claro por emulación de la vista. El cambio real de tema del sistema no se probó |
 | Ancho máximo en pantallas grandes | Correcto |
 | Fecha "Recuérdame pagar el 5/6 a las 10:00" | Pregunta "¿Te refieres al 5 de junio o al 6 de mayo?" con las dos opciones, sin IA |
 | Coma de la lectura | El arreglo anterior no bastaba, porque se leía "7 , 9". Corregido en `0d9f7d1` |

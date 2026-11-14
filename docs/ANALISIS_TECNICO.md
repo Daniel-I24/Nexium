@@ -57,8 +57,23 @@ HistoryService → SQLite
 | `xcap` | 0.9 | |
 | `ashpd` | 0.14 | Solo Linux, portal de captura en Wayland |
 | `cpal` | 0.18 | |
-| `whisper-rs` | 0.16 | |
+| `whisper-rs` | `=0.16.0` | Fijada con `=`: ver "Por qué whisper-rs está fijado en 0.16.0" |
 | `reqwest` | 0.13 | |
+
+### Por qué whisper-rs está fijado en 0.16.0
+
+**El fallo.** En `whisper-rs` 0.16.0, `FullParams::set_abort_callback_safe` guarda el cierre como `Box<Box<dyn FnMut() -> bool>>`, pero el trampolín que llama Whisper lo lee como `*mut F`, el tipo concreto del cierre. Whisper recibe así un valor arbitrario, casi siempre "abortar", y ninguna transcripción termina: devuelve los errores -6 o -8. Se manifestó en la app como "la transcripción se aborta sola" y se corrigió en `2f50195`.
+
+**El arreglo aislado.** No se usa `set_abort_callback_safe`. La función `watch_cancellation` de `src-tauri/src/providers/speech.rs` registra un callback propio de bajo nivel (`set_abort_callback` y `set_abort_callback_user_data`) que lee un `AtomicBool` de cancelación. Es el único código `unsafe` de la voz, está documentado con sus condiciones de seguridad y lo cubren dos pruebas: `the_abort_callback_reads_the_cancellation_flag` y, con un modelo real (`--ignored`), `silence_is_transcribed_and_not_reported_as_a_failure`. Se aisló en `681d870`.
+
+**Por qué `=0.16.0`.** Es la última versión publicada, y la rama principal del proyecto tenía el mismo código el 13 de noviembre de 2026. Con `"0.16"`, `cargo update` podría traer una 0.16.x que cambie la firma o la semántica de esos parámetros sin que nadie revise el arreglo. La versión exacta obliga a que cualquier actualización sea deliberada.
+
+**Cuándo revisarlo.**
+
+- Cuando se publique una versión nueva de `whisper-rs` (0.16.1, 0.17 o posterior): leer su registro de cambios y el código de `set_abort_callback_safe`.
+- Si el trampolín ya convierte el puntero al mismo tipo con el que se guardó, sustituir `watch_cancellation` por `set_abort_callback_safe`, quitar el `unsafe` y ejecutar las dos pruebas anteriores, también la `--ignored` con un modelo descargado.
+- Si el fallo sigue, actualizar solo si la versión nueva aporta algo necesario, mantener el arreglo y comprobar con las mismas pruebas que la cancelación y la transcripción completa funcionan.
+- En cualquier caso, revisar al menos una vez por trimestre, en la auditoría de dependencias (`cargo audit`), si hay una versión nueva.
 
 ## 3. Justificación de cada tecnología
 

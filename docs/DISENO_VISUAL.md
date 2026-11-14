@@ -1,6 +1,6 @@
 # Nexium: diseño visual
 
-**Estado:** dirección aprobada por el propietario el 5 de noviembre de 2026, con los ajustes ya incorporados en este documento.
+**Estado:** dirección aprobada por el propietario el 5 de noviembre de 2026, con los ajustes ya incorporados en este documento. Revisado el 13 de noviembre de 2026: distribución fluida, movimiento, iconos, tipografía y accesibilidad (secciones 3 a 6).
 
 **Vista previa:** [lienzo con la pantalla principal, los estados y el sistema visual](https://claude.ai/artifact/FUcCdeDGmBACfRBA61EpC1). El enlace es privado. Todos los datos que aparecen son de ejemplo y no llegarán a la aplicación. La maqueta carga las fuentes desde Google Fonts porque el lienzo no admite otra vía; la aplicación no lo hace (sección 3).
 
@@ -59,7 +59,7 @@ El punto de partida es el neutro: gris aluminio con un matiz verde muy leve, que
 | `line` (controles, mínimo 3:1) | 3,22 y 3,67 | 3,92 y 3,44 |
 | `on-signal` sobre `signal` | 12,15 | 12,15 |
 
-Todo el texto supera 4,5:1. `hairline` no cumple 3:1 y por eso solo separa filas: nunca es el único límite de un control.
+Todo el texto supera 4,5:1. `tests/contrast.test.ts` lee los colores de `src/styles/theme.css` y comprueba en los dos temas el texto (4,5:1 sobre `base` y `panel`), los botones con fondo de color, y los bordes de control y el foco (3:1). `hairline` no cumple 3:1 y por eso solo separa filas: nunca es el único límite de un control.
 
 **Reglas que se derivan de la medición:**
 
@@ -76,14 +76,16 @@ Las dos familias tienen licencia OFL y **viajan dentro de la aplicación** (`@fo
 
 | Papel | Familia | Tamaño | Peso |
 |---|---|---|---|
-| Lectura | Plex Mono | 88 px, baja hasta 48 px según el ancho | 400 |
-| Respuesta destacada | Instrument Sans | 32 px | 500 |
-| Solicitud y párrafo de respuesta | Instrument Sans | 18 px | 400–500 |
-| Interfaz | Instrument Sans | 15 px | 400–600 |
-| Notas, origen y cinta | Instrument Sans | 13 px | 400 |
-| Datos en línea | Plex Mono | 12–15 px | 400–500 |
+| Papel | Token | Tamaño con el texto al 100 % | Interlineado | Peso |
+|---|---|---|---|---|
+| Lectura | `text-reading` | 88 px, baja hasta 48 px según el ancho | 1 | 400 |
+| Título de pantalla | `text-xl` | 32 px, baja hasta 26 px en la ventana mínima | 1,15 | 500 |
+| Solicitud, párrafo de respuesta, título de sección | `text-lg` | 18 px | 1,4 | 400–600 |
+| Interfaz | `text-md` | 15 px | 1,5 | 400–600 |
+| Notas, origen, cinta y estados | `text-sm` | 13 px | 1,45 | 400–500 |
+| Datos en línea y rutas | `text-xs` a `text-md`, Plex Mono | 12–15 px | 1,45–1,5 | 400–500 |
 
-Las cifras usan coma decimal (`es`), y los tamaños se definen en `rem` para respetar el escalado del sistema.
+Cada token de tamaño lleva su interlineado (`--text-*--line-height`): más abierto en el texto pequeño y más cerrado en los títulos, así que los componentes no fijan `leading-*`. Hay tres niveles de jerarquía visibles en cualquier ventana: título de pantalla, título de sección o solicitud, y texto. Las cifras usan coma decimal (`es`), y los tamaños se definen en `rem` para respetar el tamaño de texto del sistema.
 
 ## 4. Espacio, forma y movimiento
 
@@ -91,8 +93,31 @@ Las cifras usan coma decimal (`es`), y los tamaños se definen en `rem` para res
 - **Radio:** 2 px como máximo.
 - **Sombras:** ninguna. La jerarquía se construye con tono y líneas de 1 px. La única excepción son los menús flotantes, si llegan a hacer falta.
 - **Controles:** mínimo de 44 px de alto. Foco visible con contorno de 2 px y separación de 2 px.
-- **Movimiento:** solo para comunicar un cambio de estado, entre 120 y 200 ms. Con `prefers-reduced-motion` se elimina.
 - **Trazo de voz:** responde al nivel real del micrófono. Nunca es una animación decorativa.
+
+### Movimiento
+
+Cada animación tiene una finalidad: indicar un cambio de estado, orientar (dónde apareció algo nuevo) o confirmar una acción. **Solo se animan `opacity` y `transform`**, que el navegador compone sin recalcular el diseño, así que es fluido también en equipos modestos. No hay rebotes, resortes ni efectos decorativos. `scripts/check-tailwind.mjs` rechaza `transition-colors`, `transition-all`, duraciones numéricas y curvas fuera de los tokens.
+
+| Token | Valor | Uso |
+|---|---|---|
+| `duration-fast` | 120 ms | Cambios en el mismo sitio: estado de la barra, señal amarilla |
+| `duration-base` | 160 ms | Contenido nuevo: respuestas, avisos, diálogos |
+| `duration-slow` | 200 ms | Cambio de pantalla |
+| `ease-instrument` | `cubic-bezier(0.2, 0, 0, 1)` | Cambios en el sitio y progreso |
+| `ease-enter` | `cubic-bezier(0, 0, 0, 1)` | Entradas: llegan rápido y se asientan |
+
+| Animación | Dónde | Qué hace | Para qué |
+|---|---|---|---|
+| `animate-section` | Cambio de pantalla | Aparece y sube 4 px en 200 ms | Orienta: cambió toda el área |
+| `animate-enter` | Respuesta nueva, aviso, estado vacío | Aparece y sube 4 px en 160 ms | Señala dónde está lo nuevo |
+| `animate-fade` | Contenido de cada estado de la barra, fondo del diálogo | Fundido de 120 ms | Indica el cambio de estado sin moverse |
+| Capa `signal` | Barra al escuchar o pedir permiso de captura | La capa amarilla se enciende y apaga por opacidad | Un cambio de privacidad que no debe pasar inadvertido |
+| `animate-dialog` | Diálogo de confirmación | Aparece desde el 98 % en 160 ms | Centra la atención en la decisión |
+| `animate-sweep` | Procesando | Progreso indeterminado continuo | Confirma que Nexium sigue trabajando |
+| Trazo de voz | Escuchando | Cada barra se escala en vertical (`scaleY`) | Muestra el nivel real del micrófono |
+
+**Reducir movimiento.** Con `prefers-reduced-motion: reduce` (en Windows, Accesibilidad > Efectos visuales > Efectos de animación desactivado) se eliminan todas las animaciones y transiciones. Los estados cambian igual, pero de golpe; el progreso de Procesando queda quieto y el texto del estado indica lo que pasa. El trazo de voz sigue reflejando el nivel, porque es información, no adorno.
 
 ## 5. Componentes
 
@@ -144,7 +169,34 @@ Hay siete estados. Todos se definen en ambos temas y se escriben siempre con pal
 
 Todo el texto supera 4,5:1 y los límites de control superan 3:1 en ambos temas. La única excepción medida es `signal` sobre `base` claro, resuelta con el borde obligatorio.
 
-**Iconos:** `lucide-react`, trazo 1,75 y dos tamaños (16 y 20 px), solo donde ayuden a reconocer un control. Los elementos de navegación usan texto.
+**Iconos:** un único conjunto, Lucide (de trazo), a través de `src/components/Icon.tsx`, que es el único archivo que importa `lucide-react` (lo comprueba `check-tailwind.mjs`). Grosor 1,75 con `absoluteStrokeWidth`, igual en los dos tamaños: `sm` (16 px) junto a texto de interfaz y estados, y `md` (20 px) en los botones principales. Los tamaños van en `rem` (`size-4`, `size-5`) y crecen con el texto. Un icono acompaña siempre a una palabra y se oculta a los lectores de pantalla; solo lleva nombre propio cuando es lo único que transmite algo (el fallo en la cinta). Los elementos de navegación usan texto.
+
+| Icono | Nombre | Uso |
+|---|---|---|
+| Micrófono | `mic` | Hablar |
+| Escáner | `screen` | Analizar pantalla |
+| Círculo con marca | `completed` | Completada, Existe, Disponible, Guardado, avisos correctos |
+| Círculo con aspa | `failed` | Fallida, Ya no existe, errores |
+| Reloj | `pending` | Pendiente |
+| Círculo con exclamación | `overdue` | Vencido |
+| Círculo tachado | `cancelled` | Cancelada |
+| Campana | `reminder` | Estado vacío de Recordatorios |
+
+**Estados con icono, palabra y color.** Ningún estado se distingue solo por el color (`StatusLabel`):
+
+| Estado | Icono | Color | Además |
+|---|---|---|---|
+| Completada | `completed` | `ok` | |
+| Fallida | `failed` | `error` | En la cinta, el icono se lee como "Fallida" |
+| Pendiente | `pending` | `query` | |
+| Vencido | `overdue` | `error` | Línea lateral `error` de 2 px en la fila |
+| Cancelada | `cancelled` | `muted` | |
+
+**Diálogo de confirmación** (`ConfirmDialog`). Antes de Borrar todo en Historial y de Eliminar un recordatorio. Usa el `<dialog>` modal del sistema: el resto de la ventana queda inerte, Escape cancela, el foco empieza en Cancelar para que Intro no borre por accidente y vuelve al botón que lo abrió. El título pregunta y la descripción nombra lo que se borra (el recordatorio con su fecha, o cuántas entradas; con un filtro activo, avisa de que se borra también lo que no se ve) y dice que no se puede deshacer. Fondo `panel`, borde `line`, fondo de ventana atenuado y botón destructivo en `error`.
+
+**Avisos** (`Notice`). Resultado de una acción o fallo de una pantalla: icono, texto y color, `role="status"` o `role="alert"`, y entrada con `animate-enter`.
+
+**Foco.** Contorno de 2 px con separación de 2 px, siempre con `ink` (no con el color del texto, que en un botón primario apenas se vería) y con `on-signal` sobre la barra amarilla. Cuando cambia el estado de la barra y el foco estaba en ella, pasa al control principal del estado nuevo (Terminar, Cancelar, Capturar, la primera opción, Reintentar o el campo de texto), en lugar de perderse.
 
 ## 6. Pantallas
 
@@ -155,17 +207,33 @@ Cada pantalla tiene una finalidad:
 | **Asistente** | Pedir algo y leer la respuesta. Es la pantalla principal |
 | **Recordatorios** | Ver, editar y eliminar recordatorios pendientes |
 | **Historial** | Consultar, filtrar y eliminar interacciones |
-| **Ajustes** | Clave y modelos de IA, carpetas autorizadas, modelo de voz, ciudad del clima |
+| **Ajustes** | Estado y límite de la IA, carpetas autorizadas, modelo de voz y micrófono, ciudad del clima. Guardar va en un pie fijo, siempre visible, con su resultado al lado |
 
 **Atribución.** Toda respuesta de clima muestra "Datos meteorológicos de Open-Meteo (CC BY 4.0)" con enlace a su sitio, y Ajustes incluye la misma atribución.
 
 La pantalla vacía de Asistente muestra tres ejemplos de solicitudes reales que se pueden pulsar. Es la vía de descubrimiento de funciones y sustituye a una cuadrícula de módulos.
 
-**Adaptación al tamaño:** ventana inicial de 1100 × 720 y mínima de 720 × 520.
+**Estados vacíos y de carga.** Cada lista dice que está cargando mientras llega, y nunca "vacío" antes de tiempo. Recordatorios sin elementos explica cómo crear uno y ofrece un ejemplo que se puede pulsar; Historial vacío lo dice según el filtro.
 
-- Por debajo de 900 px, la navegación lateral pasa a ser una franja superior.
-- La lectura reduce su tamaño hasta 48 px.
-- Las filas y la barra de señal se reordenan sin desplazamiento horizontal.
+### Adaptación a cualquier pantalla
+
+Nexium no se diseña para las medidas de un equipo concreto. La interfaz se adapta a tres cosas a la vez: el tamaño de la ventana, la escala de pantalla del sistema y el tamaño de texto que elija la persona.
+
+- **Unidades relativas.** Tamaños de letra, espaciado, anchos máximos y puntos de corte en `rem`. Con el texto del sistema al 200 %, el punto de corte `wide` (56,25 rem) pasa de 900 a 1800 px: la composición estrecha se mantiene hasta que de verdad cabe la ancha.
+- **Composición.** Navegación arriba (estrecha) o a la izquierda (ancha); a la derecha, una rejilla con el área de lectura (mínimo 10 rem, desplazamiento propio) y la barra de señal (como mucho media ventana, con desplazamiento interno). Si ni así cabe todo, se desplaza la ventana entera: ningún control queda cortado ni fuera de alcance.
+- **Contenedores.** Contenido centrado con ancho máximo (`max-w-content`, 60 rem) y texto a `max-w-reading` (40 rem). Filas con `flex-wrap` y `gap`, y elementos con `min-w-0` y una base flexible (`basis-48`, `basis-60`) en lugar de anchos fijos. Rutas y palabras largas se parten.
+- **Fecha y hora** en dos campos: un solo campo de fecha y hora no cabe en una ventana estrecha con el texto ampliado.
+- **Desplazamiento.** Cada pantalla empieza arriba al cambiar de sección, y el área principal reserva espacio (`scroll-pb-32`) para que un campo nunca quede bajo el pie fijo de Ajustes al llegar a él con el teclado.
+
+**Tamaño de la ventana.** Preferido de 1100 × 720 y mínimo de **640 × 400**, en píxeles lógicos (`tauri.conf.json`). El mínimo debe caber en el área de trabajo de las pantallas pequeñas habituales: 1280 × 720 al 150 % deja 853 × 432 lógicos con la barra de tareas, y 1366 × 768 al 125 %, 1093 × 576. Por debajo de 640 de ancho, la barra de señal tendría que apilar cada control en su propia fila; por debajo de 400 de alto, el área de lectura quedaría por debajo de 10 rem. Al abrirse, si el tamaño preferido no cabe, la ventana ocupa el 90 % del área de trabajo sin bajar del mínimo (`src-tauri/src/platform/window_size.rs`).
+
+**Pruebas de diseño** (`npm run test:layout`, `tests/layout`). Playwright monta la app completa con un backend simulado y datos que fuerzan el diseño (nombres, rutas y textos largos). Recorre 20 vistas (las cuatro pantallas, los diálogos, Editar y los siete estados de la barra) en:
+
+- 6 tamaños de ventana: mínima (640 × 400), 800 × 600, inicial (1100 × 720), 1366 × 768 y maximizada en 1080p y 1440p;
+- 3 tamaños de texto del sistema: 100, 150 y 200 %, cambiando la letra predeterminada del navegador, como hace el sistema;
+- 6 proyectos: escalas de pantalla de 100, 125, 150, 175 y 200 %, y los dos temas.
+
+Fallan si hay desplazamiento horizontal, un control que no queda entero en la ventana tras desplazarse hasta él, uno cortado por un contenedor o tapado por otro elemento, o un texto que se sale de su caja. En Windows usan Edge, el mismo motor que WebView2; en Linux, Chromium. Con `NEXIUM_SHOTS=1` guardan una captura de cada combinación en `test-results/capturas`. Lo que no cubren (WebKit en macOS y Linux, la escala real del sistema con la ventana nativa) queda para la prueba manual.
 
 ## 7. Reglas de Tailwind CSS
 
@@ -177,7 +245,7 @@ Se usa Tailwind CSS 4 con configuración en CSS, sin `tailwind.config.js`.
 4. **Radio y sombra restringidos:** el tema anula los valores por defecto para que `rounded-xl` y `shadow-lg` no estén disponibles.
 5. **`@apply` casi nunca:** la reutilización se hace con componentes de React.
 6. **Variantes por propiedades:** los componentes exponen `variant`, y un mapa tipado asocia cada variante con sus clases.
-7. **Comprobación automática:** `scripts/check-tailwind.mjs` (parte de `npm run lint`) falla si aparecen colores de la paleta por defecto, valores arbitrarios, radios o sombras no permitidos, degradados o la variante `dark:`. Es la vía alternativa prevista: el script es más simple y no depende de la compatibilidad de un plugin.
+7. **Comprobación automática:** `scripts/check-tailwind.mjs` (parte de `npm run lint`) falla si aparecen colores de la paleta por defecto, valores arbitrarios, radios o sombras no permitidos, degradados, la variante `dark:`, transiciones de algo que no sea opacidad o transformación, duraciones o curvas fuera de los tokens, o iconos importados fuera de `Icon.tsx`. Lo que no se puede expresar con utilidades del tema (la rejilla de la columna, el alto máximo de la barra, el foco sobre la señal) se define como `@utility` en `theme.css`. Es la vía alternativa prevista: el script es más simple y no depende de la compatibilidad de un plugin.
 
 ## 8. Coherencia
 

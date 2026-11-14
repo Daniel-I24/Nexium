@@ -25,7 +25,106 @@ Instalador: descárgalo de la última ejecución de [CI](https://github.com/Dani
 | 15 | Cerrar la ventana con el recordatorio pendiente | La app sigue en la bandeja y el aviso llega |
 | 16 | Salir desde la bandeja y volver a abrir tras la hora | El recordatorio sigue guardado y aparece como vencido |
 | 17 | Analizar pantalla con una ventana sin datos personales | Aviso nombrando a Google Gemini antes de capturar; responde sobre esa ventana |
-| 18 | Revisar el Historial | Aparecen las solicitudes, y se pueden filtrar y eliminar |
+| 18 | Revisar el Historial | Aparecen las solicitudes con su estado escrito y con icono, y se pueden filtrar y eliminar |
+
+## Prueba manual final (Windows, app instalada)
+
+Instala con el `.exe` de `src-tauri\target\release\bundle\nsis` generado por `compilar-distribucion.cmd`. Anota para cada caso **Correcto**, **Falla** (con lo que viste) o **No probado**, y el equipo: resolución, escala de pantalla y tamaño de texto de Windows.
+
+**Equipo:** resolución ____ · escala ____ % · tamaño de texto ____ % · tema ____
+
+### F1. Análisis de pantalla con `captura-prueba.jpg`
+
+1. Abre `C:\Nexium\bench-audio\captura-prueba.jpg` maximizada en el visor de fotos, sin otras ventanas delante.
+2. En Nexium, pulsa Analizar pantalla. Antes de capturar, comprueba el aviso: una frase que nombra a Google Gemini, y "Más información" con el aviso completo. Pulsa Capturar.
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Nexium se oculta durante la captura y vuelve a mostrarse | Sí, sin quedarse oculto | |
+| Formato | Un resumen en negrita, "Causa probable" y "Qué hacer" con pasos numerados. Sin asteriscos, almohadillas ni viñetas de Markdown | |
+| Contenido | Habla de lo que muestra la imagen (el error y su código), sin pasos inventados | |
+| Trato | De tú ("Comprueba…", "Abre…"), nunca de usted | |
+| Origen | "Origen: una captura analizada con IA (Google Gemini). Nexium ya descartó la imagen." | |
+| Historial | La solicitud aparece como Completada, con icono | |
+
+### F2. Notificación de un recordatorio
+
+1. Escribe "Recuérdame probar Nexium hoy a las HH:MM", con una hora dos minutos más tarde, y guárdalo.
+2. Espera con Nexium abierto (o en la bandeja).
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Notificación | Llega a la hora, con el título "Recordatorio de Nexium" y el texto del recordatorio | |
+| Nombre de la app | La notificación la firma **Nexium**, no PowerShell ni otra app | |
+| Recordatorios | El recordatorio pasa a Vencido: icono, palabra en rojo y línea lateral | |
+
+### F3. Aviso de la bandeja la primera vez
+
+Con una instalación nueva (o tras borrar `%APPDATA%\io.github.daniel-i24.nexium`):
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Cerrar la ventana con la X por primera vez | La ventana se oculta y llega la notificación "Nexium sigue activo", que explica que sigue en la bandeja y que se sale con clic derecho en su icono > Salir | |
+| Abrir desde la bandeja y cerrar otra vez | Se oculta sin ningún aviso | |
+| Cerrar Nexium y volver a abrirlo; cerrar la ventana | Sin aviso: no se repite tras reiniciar | |
+| Clic derecho en el icono > Salir | Nexium se cierra del todo (no queda en el Administrador de tareas) | |
+
+### F4. Redimensionado en todas las pantallas
+
+En Asistente (con una respuesta y con la conversación vacía), Recordatorios, Historial y Ajustes:
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Al abrir | Si 1100 × 720 no cabe, la ventana se abre más pequeña y centrada | |
+| Ventana mínima (arrastra un borde hasta que no encoja más) | Nada cortado ni superpuesto. Sin barra de desplazamiento horizontal. Hablar, el campo de texto y Analizar pantalla a la vista | |
+| Tamaño mediano y maximizada | El contenido se centra con un ancho máximo; la barra de señal ocupa todo el ancho | |
+| Ajustes, en cada tamaño | "Guardar ajustes" siempre visible abajo, y "Ajustes guardados." al lado al pulsarlo | |
+| Escala de pantalla 150 % y 200 % (Configuración > Pantalla) | Igual que al 100 %, con el texto más grande | |
+| Tamaño de texto 150 % (Accesibilidad > Tamaño del texto) | Si la app lo sigue, nada se corta; con la ventana mínima puede desplazarse la ventana entera | |
+| Tema claro y oscuro del sistema | La app cambia de tema; el texto se lee bien en los dos | |
+
+### F5. Voz con el micrófono elegido en Ajustes
+
+1. En Ajustes > Voz, elige el micrófono que vas a usar y pulsa Guardar ajustes.
+2. Comprueba que "Nexium usará: …" nombra ese micrófono.
+3. Pulsa Hablar, di "¿Qué hora es?" y pulsa Terminar.
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Escuchando | La barra se vuelve amarilla con un fundido; el trazo se mueve con tu voz | |
+| Resultado | La frase se transcribe y responde la hora | |
+| Cancelar mientras escuchas | La barra vuelve a En espera y no se transcribe nada | |
+| Micrófono desconectado | Ajustes avisa de que el elegido no está conectado y cuál usará | |
+| Un fallo de voz | Aparece en la conversación y en Historial como Fallida, con la causa | |
+
+### F6. Confirmaciones de borrado
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Historial > Borrar todo | Diálogo "¿Borrar todo el historial?" que dice cuántas entradas se borrarán y que no se puede deshacer | |
+| Con el filtro Fallidas activo > Borrar todo | Avisa de que también se borra lo que no muestra el filtro | |
+| Teclado en el diálogo | El foco empieza en Cancelar; Tab recorre solo los botones del diálogo; Escape lo cierra sin borrar; al cerrar, el foco vuelve a Borrar todo | |
+| Recordatorios > Eliminar | Diálogo que nombra el recordatorio y su fecha; Cancelar no borra, Eliminar sí | |
+
+### F7. Animaciones con y sin Reducir movimiento
+
+Primero con los efectos de animación de Windows activados (Accesibilidad > Efectos visuales > Efectos de animación):
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Cambiar de pantalla | El contenido aparece con un fundido breve y sube un poco | |
+| Respuesta nueva | Aparece con el mismo movimiento breve | |
+| Barra: Hablar, Terminar, Procesando, error | Cada cambio de estado se funde; la señal amarilla se enciende y se apaga con un fundido; en Procesando, una línea se desliza | |
+| Diálogo de confirmación | Aparece con un fundido y una leve escala; el fondo se oscurece | |
+| Ningún movimiento estorba | Nada rebota ni retrasa el uso | |
+
+Después, desactiva Efectos de animación y reinicia Nexium:
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Lo mismo que arriba | Todo cambia de golpe, sin fundidos ni desplazamientos; los estados se siguen viendo y leyendo igual | |
+| Procesando | La línea queda quieta; el texto indica el paso | |
+| Escuchando | El trazo del micrófono sigue mostrando el nivel | |
 
 ## Solo en Windows
 
