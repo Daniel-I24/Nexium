@@ -7,13 +7,19 @@ import { RemindersScreen } from "@/features/reminders/RemindersScreen";
 import { SettingsScreen } from "@/features/settings/SettingsScreen";
 import { isSensing } from "@/features/voice/barState";
 import { SignalBar } from "@/features/voice/SignalBar";
+import { withViewTransition } from "@/utils/motion";
 
 import type { Screen } from "./Rail";
 import { Shell } from "./Shell";
 
 export function App() {
-  const [screen, setScreen] = useState<Screen>("assistant");
+  const [screen, setScreenNow] = useState<Screen>("assistant");
   const assistant = useAssistant();
+
+  /** El cambio de sección se anima: la anterior sale mientras entra la nueva. */
+  const setScreen = (next: Screen) => {
+    if (next !== screen) withViewTransition(() => setScreenNow(next));
+  };
 
   const goToAssistant = (action: () => void) => {
     setScreen("assistant");

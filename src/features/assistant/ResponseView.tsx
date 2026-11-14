@@ -238,7 +238,7 @@ export function originSentence(label: string) {
 export function ResponseView({ response, actions }: { response: AssistantResponse; actions: ResponseActions }) {
   const time = new Date(response.createdAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
   return (
-    <article className="flex animate-enter flex-col gap-6">
+    <article className="flex animate-response flex-col gap-6">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
         <h1 className="m-0 min-w-0 break-words text-lg font-medium">{response.request}</h1>
         <span className="font-mono text-sm text-muted">{time}</span>

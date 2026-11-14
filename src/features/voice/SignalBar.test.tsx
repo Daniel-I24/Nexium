@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { barStateFromStage, isSensing, type BarState } from "./barState";
+import { TRACE_BARS } from "./LevelTrace";
 import { SignalBar } from "./SignalBar";
 
 function setup(state: BarState) {
@@ -173,10 +174,15 @@ describe("SignalBar: foco y movimiento", () => {
     expect(layer()).toHaveClass("transition-opacity");
   });
 
-  it("el trazo del micrófono se mueve con una transformación, no cambiando el alto", () => {
-    const { container } = render(<SignalBar state={{ kind: "listening" }} levels={[0.5]} {...handlers} />);
-    const bar = container.querySelector("[aria-label='Nivel del micrófono'] span") as HTMLElement;
-    expect(bar.style.transform).toBe("scaleY(0.5)");
-    expect(bar.style.height).toBe("");
+  it("el trazo del micrófono se mueve con una transformación interpolada, no cambiando el alto", () => {
+    const { container } = render(<SignalBar state={{ kind: "listening" }} levels={[0.25]} {...handlers} />);
+    const bars = [...container.querySelectorAll<HTMLElement>("[aria-label='Nivel del micrófono'] span:not([aria-hidden])")];
+    expect(bars).toHaveLength(TRACE_BARS);
+    const newest = bars.at(-1) as HTMLElement;
+    expect(newest.style.transform).toBe("scaleY(0.5)");
+    expect(newest.style.height).toBe("");
+    expect(newest).toHaveClass("transition-transform", "duration-fast");
+    // Sin lectura todavía, la barra es una línea, no desaparece.
+    expect((bars[0] as HTMLElement).style.transform).toBe("scaleY(0.04)");
   });
 });

@@ -1,7 +1,10 @@
 import { Icon } from "@/components/Icon";
 import type { AssistantResponse } from "@/types/api";
 
-/** Respuestas anteriores comprimidas en una línea: hora, solicitud y resultado. Un fallo lleva icono y su nombre para lectores de pantalla. */
+/**
+ * Respuestas anteriores comprimidas en una línea: hora, solicitud y resultado. Un fallo lleva icono y su nombre
+ * para lectores de pantalla. Cada línea nueva llega desde abajo, desde donde estaba la respuesta que resume.
+ */
 export function Tape({ entries }: { entries: AssistantResponse[] }) {
   if (entries.length === 0) return null;
   return (
@@ -9,7 +12,7 @@ export function Tape({ entries }: { entries: AssistantResponse[] }) {
       {entries.map((entry) => {
         const failed = entry.status === "failed";
         return (
-          <li key={entry.id} className="flex flex-wrap gap-x-6 gap-y-1 border-b border-hairline py-2 text-sm text-muted">
+          <li key={entry.id} className="flex animate-to-tape flex-wrap gap-x-6 gap-y-1 border-b border-hairline py-2 text-sm text-muted">
             <span className="w-12 shrink-0 font-mono">
               {new Date(entry.createdAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
             </span>

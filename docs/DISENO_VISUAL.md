@@ -97,39 +97,46 @@ Cada token de tamaño lleva su interlineado (`--text-*--line-height`): más abie
 
 ### Movimiento
 
-Cada animación tiene una finalidad: indicar un cambio de estado, orientar (dónde apareció algo nuevo) o confirmar una acción. **Solo se animan `opacity` y `transform`**, que el navegador compone sin recalcular el diseño, así que es fluido también en equipos modestos. No hay rebotes, resortes ni efectos decorativos. `scripts/check-tailwind.mjs` rechaza `transition-colors`, `transition-all`, duraciones numéricas y curvas fuera de los tokens.
+Cada animación explica un cambio: qué llega, qué se va, adónde mirar o que una acción terminó. **Solo se animan `opacity` y `transform`**, que el navegador compone sin recalcular el diseño, así que es fluido también en equipos modestos. Todas duran **entre 150 y 300 ms**, sin rebotes ni efectos decorativos. Lo que entra decelera (llega rápido y se asienta); lo que sale acelera y se va antes de que llegue lo nuevo.
+
+**Con Tailwind CSS.** Los tokens están en el `@theme` de `src/styles/theme.css` y se usan como utilidades: `duration-*`, `ease-*` y `animate-*` (`transition-opacity duration-base ease-instrument`, `animate-enter`). Solo es CSS propio lo que Tailwind no puede expresar: los pseudoelementos de View Transitions del cambio de sección. `scripts/check-tailwind.mjs` rechaza `transition-colors`, `transition-all`, duraciones numéricas y curvas o animaciones fuera de los tokens, y `tests/motion.test.ts` comprueba en la hoja real que cada duración está entre 150 y 300 ms, que los fotogramas clave solo tocan opacidad y transformaciones y que ninguna curva rebota.
 
 | Token | Valor | Uso |
 |---|---|---|
-| `duration-fast` | 120 ms | Cambios en el mismo sitio: estado de la barra, señal amarilla |
-| `duration-base` | 160 ms | Contenido nuevo: respuestas, avisos, diálogos |
-| `duration-slow` | 200 ms | Cambio de pantalla |
-| `ease-instrument` | `cubic-bezier(0.2, 0, 0, 1)` | Cambios en el sitio y progreso |
+| `duration-fast` | 150 ms | Lo que sale y los cambios en el sitio: estado de la barra, capa amarilla, trazo de voz |
+| `duration-base` | 200 ms | Lo que entra: avisos, elementos de lista, líneas de la cinta |
+| `duration-slow` | 250 ms | Lo que cambia toda una zona: sección, respuesta, diálogo |
+| `ease-instrument` | `cubic-bezier(0.2, 0, 0, 1)` | Cambios en el sitio |
 | `ease-enter` | `cubic-bezier(0, 0, 0, 1)` | Entradas: llegan rápido y se asientan |
+| `ease-exit` | `cubic-bezier(0.3, 0, 1, 1)` | Salidas: arrancan despacio y se van |
 
-| Animación | Dónde | Qué hace | Para qué |
+| Transición | Utilidad | Qué hace | Para qué |
 |---|---|---|---|
-| `animate-section` | Cambio de pantalla | Aparece y sube 4 px en 200 ms | Orienta: cambió toda el área |
-| `animate-enter` | Respuesta nueva, aviso, estado vacío | Aparece y sube 4 px en 160 ms | Señala dónde está lo nuevo |
-| `animate-fade` | Contenido de cada estado de la barra, fondo del diálogo | Fundido de 120 ms | Indica el cambio de estado sin moverse |
-| Capa `signal` | Barra al escuchar o pedir permiso de captura | La capa amarilla se enciende y apaga por opacidad | Un cambio de privacidad que no debe pasar inadvertido |
-| `animate-dialog` | Diálogo de confirmación | Aparece desde el 98 % en 160 ms | Centra la atención en la decisión |
-| `animate-sweep` | Procesando | Progreso indeterminado continuo | Confirma que Nexium sigue trabajando |
-| Trazo de voz | Escuchando | Cada barra se escala en vertical (`scaleY`) | Muestra el nivel real del micrófono |
+| Cambio de sección | View Transitions (`view-section`) | La sección anterior se apaga en 150 ms subiendo 4 px; la nueva entra 50 ms después en 250 ms, subiendo 8 px. Navegación y barra no se mueven | Orienta sin dejar la zona en blanco: las dos vistas se cruzan sobre el mismo fondo |
+| Respuesta nueva | `animate-response` | Aparece y sube 8 px en 250 ms, 60 ms después de la cinta | Señala dónde está lo nuevo |
+| Respuesta a la cinta | `animate-to-tape` | La línea de la cinta llega desde 16 px más abajo, donde estaba la respuesta, en 200 ms | Explica que la respuesta anterior no desapareció: se resumió |
+| Estados de la barra | `animate-bar` y capa `signal` con `transition-opacity` | El contenido aparece y sube 4 px en 150 ms; la capa amarilla se enciende o apaga en 200 ms | Un cambio de estado o de privacidad que no debe pasar inadvertido |
+| Diálogos | `animate-dialog`, `animate-backdrop` y sus salidas | El fondo se oscurece mientras el panel entra desde el 96 % y 8 px más abajo (250 ms); al cerrarse, los dos salen en 150 ms antes de que el foco vuelva | Centra la atención en la decisión y confirma que se cerró |
+| Avisos y guardado | `animate-enter` | El aviso aparece y sube 8 px en 200 ms; cada guardado lo vuelve a mostrar | Confirma la acción donde se hizo |
+| Listas | `animate-enter` y `animate-leave` | Los elementos entran escalonados (30 ms entre uno y otro, solo los seis primeros); al eliminar, el elemento se desvanece y se aparta 8 px en 150 ms antes de quitarse | Muestra qué llegó y qué se fue |
+| Carga | `animate-sweep` (`Loading`, `ProgressLine`) | Línea de progreso indeterminada junto al texto de lo que se carga o procesa | Confirma que Nexium sigue trabajando |
+| Voz | `LevelTrace` | 48 barras simétricas sobre una línea central; cada lectura del micrófono (cada 50 ms) cambia `scaleY`, que se interpola en 150 ms. Las barras más antiguas se apagan hacia la izquierda | Muestra el nivel real de la voz de forma fluida, como un instrumento de medida |
 
-**Reducir movimiento.** Con `prefers-reduced-motion: reduce` (en Windows, Accesibilidad > Efectos visuales > Efectos de animación desactivado) se eliminan todas las animaciones y transiciones. Los estados cambian igual, pero de golpe; el progreso de Procesando queda quieto y el texto del estado indica lo que pasa. El trazo de voz sigue reflejando el nivel, porque es información, no adorno.
+La línea de progreso es el único movimiento continuo: un ciclo de 1,2 s que no es una transición, siempre acompañado del texto de lo que ocurre.
+
+**Reducir movimiento.** Con `prefers-reduced-motion: reduce` (en Windows, Accesibilidad > Efectos visuales > Efectos de animación desactivado) se anulan todas las animaciones, transiciones y View Transitions, y las salidas de diálogos y listas no esperan: los cambios son instantáneos. La línea de progreso queda quieta y el texto del estado indica lo que pasa. El trazo de voz sigue reflejando el nivel, sin interpolar, porque es información, no adorno.
 
 ## 5. Componentes
 
 | Componente | Comportamiento |
 |---|---|
-| **Barra de señal** | Zona inferior fija: botón de voz, campo de texto, Analizar pantalla y estado escrito |
-| **Botón de voz** | 136 × 64 px. Cambia de "Hablar" a "Terminar" y, tras un error, a "Reintentar" |
+| **Barra de señal** | Zona inferior fija, siempre entera: el mensaje del estado (que se desplaza por dentro si no cabe) y una fila de controles que nunca se corta. Con poco ancho, los botones muestran solo el icono y el estado escrito queda para los lectores de pantalla |
+| **Botón de voz** | 136 × 64 px cuando cabe; cuadrado, solo con el icono, en barras estrechas. Cambia de "Hablar" a "Terminar" |
 | **Lectura** | Cifra grande, unidad y contexto. Para valores numéricos del sistema y del clima |
 | **Escala** | Barra plana con marcas 0, 25, 50, 75 y 100 |
 | **Filas de datos** | Etiqueta y valor separados por una línea fina. Sustituyen a las tarjetas |
 | **Resultado de archivo** | Nombre, extensión, ubicación, ruta absoluta y estado de existencia |
-| **Aclaración** | Recuadro con borde `query`, una pregunta y opciones como botones |
+| **Aclaración** | En la conversación: la pregunta en `query` y sus opciones como botones; la primera recibe el foco |
 | **Línea de cinta** | Hora, solicitud y resultado resumido |
 | **Fila de recordatorio e historial** | Misma estructura de fila, con estado escrito y acciones |
 | **Botones** | Primario (tinta), secundario (línea), destructivo (error), señal |
@@ -142,10 +149,10 @@ Hay siete estados. Todos se definen en ambos temas y se escriben siempre con pal
 |---|---|---|---|---|
 | En espera | `base`, línea superior `line` | `muted` | Hablar | No |
 | Escuchando | `signal`, bordes `on-signal`, trazo del micrófono | `on-signal` | Terminar | Sí |
-| Procesando | `base`, progreso en movimiento y paso concreto ("Transcribiendo") | `muted` | Inactiva | Sí |
-| Respondiendo | `base`, línea de progreso llena, "Escribiendo la respuesta" | `ink` | Inactiva | Sí |
+| Procesando | `base`, progreso en movimiento y paso concreto ("Transcribiendo tu voz", "Interpretando tu solicitud", "Analizando la imagen") | `muted` | Cancelar | Sí |
+| Respondiendo | `base`, línea de progreso llena, "Escribiendo la respuesta" | `ink` | Cancelar | Sí |
 | Esperando permiso (captura) | `signal`, aviso con el destino de la imagen | `on-signal` | Capturar | Sí |
-| Pendiente (aclaración) | `base`, línea superior `query`, pregunta y opciones | `query` | Opciones | Sí |
+| Pendiente (aclaración) | `base`, línea superior `query`, "Elige una opción en la conversación." | `query` | Cancelar | Sí |
 | Error | `base`, línea superior `error`, causa y siguiente paso | `error` | Reintentar | No |
 
 **Aviso de captura.** El destino de la imagen se toma del proveedor configurado, nunca está escrito a mano en la interfaz. Con Gemini dice:
@@ -169,7 +176,7 @@ Hay siete estados. Todos se definen en ambos temas y se escriben siempre con pal
 
 Todo el texto supera 4,5:1 y los límites de control superan 3:1 en ambos temas. La única excepción medida es `signal` sobre `base` claro, resuelta con el borde obligatorio.
 
-**Iconos:** un único conjunto, Lucide (de trazo), a través de `src/components/Icon.tsx`, que es el único archivo que importa `lucide-react` (lo comprueba `check-tailwind.mjs`). Grosor 1,75 con `absoluteStrokeWidth`, igual en los dos tamaños: `sm` (16 px) junto a texto de interfaz y estados, y `md` (20 px) en los botones principales. Los tamaños van en `rem` (`size-4`, `size-5`) y crecen con el texto. Un icono acompaña siempre a una palabra y se oculta a los lectores de pantalla; solo lleva nombre propio cuando es lo único que transmite algo (el fallo en la cinta). Los elementos de navegación usan texto.
+**Iconos:** un único conjunto, Lucide (de trazo), a través de `src/components/Icon.tsx`, que es el único archivo que importa `lucide-react` (lo comprueba `check-tailwind.mjs`). Grosor 1,75 con `absoluteStrokeWidth`, igual en los dos tamaños: `sm` (16 px) junto a texto de interfaz y estados, y `md` (20 px) en los botones principales. Los tamaños van en `rem` (`size-4`, `size-5`) y crecen con el texto. Un icono acompaña siempre a una palabra y se oculta a los lectores de pantalla; solo lleva nombre propio cuando es lo único que transmite algo (el fallo en la cinta). Los elementos de navegación llevan icono y nombre; en ventanas estrechas solo el icono, con el nombre como etiqueta accesible y como sugerencia al pasar el ratón.
 
 | Icono | Nombre | Uso |
 |---|---|---|
@@ -181,6 +188,10 @@ Todo el texto supera 4,5:1 y los límites de control superan 3:1 en ambos temas.
 | Círculo con exclamación | `overdue` | Vencido |
 | Círculo tachado | `cancelled` | Cancelada |
 | Campana | `reminder` | Estado vacío de Recordatorios |
+| Mensaje | `assistant` | Sección Asistente |
+| Campana simple | `reminders` | Sección Recordatorios |
+| Reloj con flecha | `history` | Sección Historial |
+| Controles deslizantes | `settings` | Sección Ajustes |
 
 **Estados con icono, palabra y color.** Ningún estado se distingue solo por el color (`StatusLabel`):
 
@@ -220,10 +231,11 @@ La pantalla vacía de Asistente muestra tres ejemplos de solicitudes reales que 
 Nexium no se diseña para las medidas de un equipo concreto. La interfaz se adapta a tres cosas a la vez: el tamaño de la ventana, la escala de pantalla del sistema y el tamaño de texto que elija la persona.
 
 - **Unidades relativas.** Tamaños de letra, espaciado, anchos máximos y puntos de corte en `rem`. Con el texto del sistema al 200 %, el punto de corte `wide` (56,25 rem) pasa de 900 a 1800 px: la composición estrecha se mantiene hasta que de verdad cabe la ancha.
-- **Composición.** Navegación arriba (estrecha) o a la izquierda (ancha); a la derecha, una rejilla con el área de lectura (mínimo 10 rem, desplazamiento propio) y la barra de señal (como mucho media ventana, con desplazamiento interno). Si ni así cabe todo, se desplaza la ventana entera: ningún control queda cortado ni fuera de alcance.
+- **Marco fijo.** El marco ocupa exactamente la ventana, que **nunca se desplaza**. La navegación es una columna fija a la izquierda (icono y nombre en ventanas anchas, solo icono en las estrechas; en ventanas muy bajas, sin la marca). A la derecha, la zona de la pantalla (`ScreenLayout`), con su propio desplazamiento y, en Ajustes, un pie fijo con Guardar fuera de esa zona; abajo, la barra de señal, siempre entera.
+- **Barra de señal según su ancho** (consultas de contenedor, `@bar-labels:` desde 34 rem y `@bar-status:` desde 50 rem): por debajo, botones solo con icono; después, con nombre; y en barras anchas, también el estado escrito.
 - **Contenedores.** Contenido centrado con ancho máximo (`max-w-content`, 60 rem) y texto a `max-w-reading` (40 rem). Filas con `flex-wrap` y `gap`, y elementos con `min-w-0` y una base flexible (`basis-48`, `basis-60`) en lugar de anchos fijos. Rutas y palabras largas se parten.
 - **Fecha y hora** en dos campos: un solo campo de fecha y hora no cabe en una ventana estrecha con el texto ampliado.
-- **Desplazamiento.** Cada pantalla empieza arriba al cambiar de sección, y el área principal reserva espacio (`scroll-pb-32`) para que un campo nunca quede bajo el pie fijo de Ajustes al llegar a él con el teclado.
+- **Desplazamiento.** Cada pantalla tiene su propia zona y empieza arriba. El pie de Ajustes está fuera de ella, así que ningún campo puede quedar debajo.
 
 **Tamaño de la ventana.** Preferido de 1100 × 720 y mínimo de **640 × 400**, en píxeles lógicos (`tauri.conf.json`). El mínimo debe caber en el área de trabajo de las pantallas pequeñas habituales: 1280 × 720 al 150 % deja 853 × 432 lógicos con la barra de tareas, y 1366 × 768 al 125 %, 1093 × 576. Por debajo de 640 de ancho, la barra de señal tendría que apilar cada control en su propia fila; por debajo de 400 de alto, el área de lectura quedaría por debajo de 10 rem. Al abrirse, si el tamaño preferido no cabe, la ventana ocupa el 90 % del área de trabajo sin bajar del mínimo (`src-tauri/src/platform/window_size.rs`).
 
@@ -233,7 +245,7 @@ Nexium no se diseña para las medidas de un equipo concreto. La interfaz se adap
 - 3 tamaños de texto del sistema: 100, 150 y 200 %, cambiando la letra predeterminada del navegador, como hace el sistema;
 - 6 proyectos: escalas de pantalla de 100, 125, 150, 175 y 200 %, y los dos temas.
 
-Fallan si hay desplazamiento horizontal, un control que no queda entero en la ventana tras desplazarse hasta él, uno cortado por un contenedor o tapado por otro elemento, o un texto que se sale de su caja. En Windows usan Edge, el mismo motor que WebView2; en Linux, Chromium. Con `NEXIUM_SHOTS=1` guardan una captura de cada combinación en `test-results/capturas`. Lo que no cubren (WebKit en macOS y Linux, la escala real del sistema con la ventana nativa) queda para la prueba manual.
+Primero comprueban el marco **sin desplazar nada**: fallan si la ventana o el marco se desplazan, si la barra de señal no está entera al pie de la ventana o se desplaza, si un control de la barra, de la navegación o «Guardar ajustes» no se ve entero, se sale de su zona o está tapado, o si la zona de contenido no tiene alto para un control. Después recorren cada control: fallan si hay desplazamiento horizontal, un control que no queda entero tras desplazarse hasta él, uno cortado o tapado, o un texto que se sale de su caja. En Windows usan Edge, el mismo motor que WebView2; en Linux, Chromium. Con `NEXIUM_SHOTS=1` guardan una captura de cada combinación en `test-results/capturas`. Lo que no cubren (WebKit en macOS y Linux, la escala real del sistema con la ventana nativa) queda para la prueba manual.
 
 ## 7. Reglas de Tailwind CSS
 
@@ -245,7 +257,7 @@ Se usa Tailwind CSS 4 con configuración en CSS, sin `tailwind.config.js`.
 4. **Radio y sombra restringidos:** el tema anula los valores por defecto para que `rounded-xl` y `shadow-lg` no estén disponibles.
 5. **`@apply` casi nunca:** la reutilización se hace con componentes de React.
 6. **Variantes por propiedades:** los componentes exponen `variant`, y un mapa tipado asocia cada variante con sus clases.
-7. **Comprobación automática:** `scripts/check-tailwind.mjs` (parte de `npm run lint`) falla si aparecen colores de la paleta por defecto, valores arbitrarios, radios o sombras no permitidos, degradados, la variante `dark:`, transiciones de algo que no sea opacidad o transformación, duraciones o curvas fuera de los tokens, o iconos importados fuera de `Icon.tsx`. Lo que no se puede expresar con utilidades del tema (la rejilla de la columna, el alto máximo de la barra, el foco sobre la señal) se define como `@utility` en `theme.css`. Es la vía alternativa prevista: el script es más simple y no depende de la compatibilidad de un plugin.
+7. **Comprobación automática:** `scripts/check-tailwind.mjs` (parte de `npm run lint`) falla si aparecen colores de la paleta por defecto, valores arbitrarios, radios o sombras no permitidos, degradados, la variante `dark:`, transiciones de algo que no sea opacidad o transformación, duraciones o curvas fuera de los tokens, o iconos importados fuera de `Icon.tsx`. Lo que no se puede expresar con utilidades del tema (el alto máximo del mensaje de la barra, el foco sobre la señal, el nombre de la transición de sección, la variante `short:` para ventanas bajas) se define como `@utility` o `@custom-variant` en `theme.css`. Es la vía alternativa prevista: el script es más simple y no depende de la compatibilidad de un plugin.
 
 ## 8. Coherencia
 

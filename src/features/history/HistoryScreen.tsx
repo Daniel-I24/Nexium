@@ -3,10 +3,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/Button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Notice } from "@/components/Notice";
+import { Loading } from "@/components/Progress";
 import { ScreenLayout } from "@/components/ScreenLayout";
 import { StatusLabel, type Status } from "@/components/StatusLabel";
 import { api, errorMessage } from "@/services/api";
 import type { Category, HistoryEntry, InteractionStatus } from "@/types/api";
+import { exitThen, stagger } from "@/utils/motion";
 import { count } from "@/utils/plural";
 
 const statusLabels: Record<InteractionStatus, { label: string; status: Status }> = {
@@ -48,6 +50,8 @@ export function HistoryScreen() {
   const [filter, setFilter] = useState<InteractionStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  /** Entradas que se están yendo: se animan antes de borrarse. `all` cuando se borra todo. */
+  const [leaving, setLeaving] = useState<Set<number> | "all">(new Set());
 
   const load = useCallback(() => {
     api
@@ -61,7 +65,18 @@ export function HistoryScreen() {
 
   useEffect(load, [load]);
 
-  const act = (action: Promise<void>) => action.then(load).catch((reason: unknown) => setError(errorMessage(reason)));
+  const act = (action: Promise<void>) =>
+    action
+      .then(load)
+      .catch((reason: unknown) => setError(errorMessage(reason)))
+      .finally(() => setLeaving(new Set()));
+
+  const remove = (id: number) =>
+    exitThen(
+      () => setLeaving((current) => new Set(current === "all" ? [] : [...current, id]).add(id)),
+      () => void act(api.deleteHistory(id)),
+    );
+  const isLeaving = (id: number) => leaving === "all" || leaving.has(id);
   const emptyText = filters.find((item) => item.value === filter)?.empty ?? "";
 
   return (
@@ -86,18 +101,18 @@ export function HistoryScreen() {
           )}
         </div>
         {error && <Notice tone="error">{error}</Notice>}
-        {entries === null && !error && (
-          <p role="status" className="m-0 text-muted">
-            Cargando el historial…
-          </p>
-        )}
+        {entries === null && !error && <Loading>Cargando el historial…</Loading>}
         {entries?.length === 0 && <p className="m-0 animate-enter text-muted">{emptyText}</p>}
         {entries && entries.length > 0 && (
           <ul aria-label="Solicitudes" className="m-0 flex list-none flex-col border-b border-hairline p-0">
-            {entries.map((entry) => {
+            {entries.map((entry, index) => {
               const status = statusLabels[entry.status];
               return (
-                <li key={entry.id} className="flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-hairline py-3">
+                <li
+                  key={entry.id}
+                  style={isLeaving(entry.id) ? undefined : stagger(index)}
+                  className={`flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-hairline py-3 ${isLeaving(entry.id) ? "animate-leave" : "animate-enter"}`}
+                >
                   <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
                     <strong className="break-words font-medium">{entry.request}</strong>
                     <span className="whitespace-pre-wrap break-words text-sm">{entry.response}</span>
@@ -109,7 +124,7 @@ export function HistoryScreen() {
                       <StatusLabel status={status.status}>{status.label}</StatusLabel>
                     </span>
                   </div>
-                  <Button variant="danger" aria-label={`Eliminar del historial: ${entry.request}`} onClick={() => void act(api.deleteHistory(entry.id))}>
+                  <Button variant="danger" aria-label={`Eliminar del historial: ${entry.request}`} disabled={isLeaving(entry.id)} onClick={() => remove(entry.id)}>
                     Eliminar
                   </Button>
                 </li>
@@ -125,7 +140,10 @@ export function HistoryScreen() {
           onCancel={() => setConfirmClear(false)}
           onConfirm={() => {
             setConfirmClear(false);
-            void act(api.clearHistory());
+            exitThen(
+              () => setLeaving("all"),
+              () => void act(api.clearHistory()),
+            );
           }}
         />
       </div>

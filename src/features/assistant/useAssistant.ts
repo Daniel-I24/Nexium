@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { barStateFromStage, type BarState } from "@/features/voice/barState";
+import { TRACE_BARS } from "@/features/voice/LevelTrace";
 import { api, errorMessage, events } from "@/services/api";
 import type { AssistantResponse, ReminderOption, SuggestedRequest } from "@/types/api";
 
-const LEVEL_HISTORY = 72;
 const CAPTURE_REQUEST = "Analiza lo que aparece en mi pantalla";
 const VOICE_REQUEST = "Solicitud por voz";
 const TAPE_LENGTH = 5;
@@ -54,7 +54,7 @@ export function useAssistant() {
   useEffect(() => {
     const subscriptions = [
       events.onStage(({ stage }) => setBar((previous) => (previous.kind === "captureConsent" ? previous : barStateFromStage(stage)))),
-      events.onLevel((level) => setLevels((previous) => [...previous, level].slice(-LEVEL_HISTORY))),
+      events.onLevel((level) => setLevels((previous) => [...previous, level].slice(-TRACE_BARS))),
     ];
     return () => subscriptions.forEach((subscription) => void subscription.then((unlisten) => unlisten()));
   }, []);

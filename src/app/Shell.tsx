@@ -22,7 +22,7 @@ export function Shell({ screen, sensing, onSelect, bar, children }: ShellProps) 
     <div data-shell className="flex h-dvh overflow-hidden bg-base text-ink">
       <Rail active={screen} sensing={sensing} onSelect={onSelect} />
       <div className="flex min-w-0 flex-1 flex-col bg-panel">
-        <main key={screen} className="flex min-h-0 flex-1 flex-col">
+        <main key={screen} className="view-section flex min-h-0 flex-1 flex-col">
           {children}
         </main>
         {bar}

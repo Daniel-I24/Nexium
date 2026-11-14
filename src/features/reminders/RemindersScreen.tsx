@@ -5,11 +5,13 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DueFields } from "@/components/DueFields";
 import { Icon } from "@/components/Icon";
 import { Notice } from "@/components/Notice";
+import { Loading } from "@/components/Progress";
 import { ScreenLayout } from "@/components/ScreenLayout";
 import { StatusLabel } from "@/components/StatusLabel";
 import { api, errorMessage, events } from "@/services/api";
 import type { Reminder } from "@/types/api";
 import { isCompleteLocal, toLocalInput } from "@/utils/dates";
+import { exitThen, stagger } from "@/utils/motion";
 
 const EXAMPLE = "Recuérdame entregar el proyecto el viernes a las nueve";
 const inputStyle = "h-11 w-full min-w-0 rounded-sm border border-line bg-panel px-3 text-md text-ink";
@@ -25,12 +27,14 @@ export function isOverdue(reminder: Reminder, now: Date = new Date()) {
 
 interface RowProps {
   reminder: Reminder;
+  index: number;
   onChanged: () => void;
   onError: (message: string) => void;
 }
 
-function ReminderRow({ reminder, onChanged, onError }: RowProps) {
+function ReminderRow({ reminder, index, onChanged, onError }: RowProps) {
   const [editing, setEditing] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [content, setContent] = useState(reminder.content);
   const [due, setDue] = useState(toLocalInput(reminder.dueAt));
@@ -45,14 +49,20 @@ function ReminderRow({ reminder, onChanged, onError }: RowProps) {
     }
   };
 
-  const remove = async () => {
+  const remove = () => {
     setConfirmDelete(false);
-    try {
-      await api.deleteReminder(reminder.id);
-      onChanged();
-    } catch (error) {
-      onError(errorMessage(error));
-    }
+    // La fila se aparta antes de borrarse; si el borrado falla, vuelve.
+    exitThen(
+      () => setLeaving(true),
+      () =>
+        void api
+          .deleteReminder(reminder.id)
+          .then(onChanged)
+          .catch((error: unknown) => {
+            setLeaving(false);
+            onError(errorMessage(error));
+          }),
+    );
   };
 
   if (editing) {
@@ -77,7 +87,10 @@ function ReminderRow({ reminder, onChanged, onError }: RowProps) {
 
   const overdue = isOverdue(reminder);
   return (
-    <li className={`flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline py-3 ${overdue ? "border-l-2 border-l-error pl-3" : ""}`}>
+    <li
+      style={leaving ? undefined : stagger(index)}
+      className={`flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline py-3 ${overdue ? "border-l-2 border-l-error pl-3" : ""} ${leaving ? "animate-leave" : "animate-enter"}`}
+    >
       <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
         <span className="break-words">{reminder.content}</span>
         <span className="font-mono text-sm text-muted">{longDate(reminder.dueAt)}</span>
@@ -97,7 +110,7 @@ function ReminderRow({ reminder, onChanged, onError }: RowProps) {
         description={`«${reminder.content}», ${longDate(reminder.dueAt)}. Nexium ya no te avisará. No se puede deshacer.`}
         confirmLabel="Eliminar"
         onCancel={() => setConfirmDelete(false)}
-        onConfirm={() => void remove()}
+        onConfirm={remove}
       />
     </li>
   );
@@ -147,16 +160,12 @@ export function RemindersScreen({ onPickExample }: { onPickExample: (text: strin
           Los avisos solo se emiten mientras Nexium está abierto o en la bandeja del sistema. Si lo cierras con Salir, verás los vencidos al volver a abrirlo.
         </p>
         {error && <Notice tone="error">{error}</Notice>}
-        {reminders === null && !error && (
-          <p role="status" className="m-0 text-muted">
-            Cargando recordatorios…
-          </p>
-        )}
+        {reminders === null && !error && <Loading>Cargando recordatorios…</Loading>}
         {reminders?.length === 0 && <EmptyReminders onPickExample={onPickExample} />}
         {reminders && reminders.length > 0 && (
           <ul aria-label="Recordatorios" className="m-0 flex list-none flex-col border-b border-hairline p-0">
-            {reminders.map((reminder) => (
-              <ReminderRow key={`${reminder.id}-${reminder.dueAt}`} reminder={reminder} onChanged={load} onError={setError} />
+            {reminders.map((reminder, index) => (
+              <ReminderRow key={`${reminder.id}-${reminder.dueAt}`} reminder={reminder} index={index} onChanged={load} onError={setError} />
             ))}
           </ul>
         )}

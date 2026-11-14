@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/Button";
 import { Notice } from "@/components/Notice";
+import { Loading } from "@/components/Progress";
 import { ScreenLayout } from "@/components/ScreenLayout";
 import { StatusLabel } from "@/components/StatusLabel";
 import { api, errorMessage, events } from "@/services/api";
@@ -90,9 +91,7 @@ export function SettingsScreen() {
           {message ? (
             <Notice tone="error">{message.text}</Notice>
           ) : (
-            <p role="status" className="m-0 text-muted">
-              Cargando ajustes…
-            </p>
+            <Loading>Cargando ajustes…</Loading>
           )}
         </div>
       </ScreenLayout>

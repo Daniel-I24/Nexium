@@ -45,30 +45,48 @@
 
   --shadow-*: initial;
 
-  /* Movimiento (docs/DISENO_VISUAL.md, sección 4). Solo opacidad y transformaciones, y cada animación
-     comunica algo: un cambio de estado, adónde mirar o que una acción se completó. */
+  /* Movimiento (docs/DISENO_VISUAL.md, sección 4). Solo opacidad y transformaciones, de 150 a 250 ms, sin rebotes.
+     Cada animación explica un cambio: qué llega, qué se va, adónde mirar o que una acción se completó. */
   --transition-duration-*: initial;
-  --transition-duration-fast: 120ms;
-  --transition-duration-base: 160ms;
-  --transition-duration-slow: 200ms;
+  /* Lo que sale, y los cambios en el sitio: la señal que se enciende, el estado de la barra. */
+  --transition-duration-fast: 150ms;
+  /* Lo que entra: una respuesta, un aviso, un elemento de lista. */
+  --transition-duration-base: 200ms;
+  /* Lo que cambia toda una zona: la sección y los diálogos. */
+  --transition-duration-slow: 250ms;
 
   --ease-*: initial;
-  /* Estándar: cambios en el sitio, como la señal que se enciende. */
+  /* Estándar: cambios en el sitio. */
   --ease-instrument: cubic-bezier(0.2, 0, 0, 1);
-  /* Entrada: lo nuevo llega rápido y se asienta. */
+  /* Entrada: llega rápido y se asienta. */
   --ease-enter: cubic-bezier(0, 0, 0, 1);
+  /* Salida: arranca despacio y se va. */
+  --ease-exit: cubic-bezier(0.3, 0, 1, 1);
 
   --animate-*: initial;
-  /* Progreso indeterminado de Procesando: es el único movimiento continuo. */
-  --animate-sweep: sweep 1.2s var(--ease-instrument) infinite;
-  /* Contenido nuevo (una respuesta, una pantalla, un aviso): aparece y sube 4 px. */
+  /* Contenido nuevo (un aviso, un elemento de lista, una pantalla de carga que termina): aparece y sube 8 px. */
   --animate-enter: enter var(--transition-duration-base) var(--ease-enter) both;
-  /* Cambio de pantalla: igual, algo más lento porque cambia toda el área. */
-  --animate-section: enter var(--transition-duration-slow) var(--ease-enter) both;
-  /* Cambio de estado de la barra en el mismo sitio: solo opacidad. */
+  /* Respuesta nueva: igual, algo más lenta y un instante después de que la anterior pase a la cinta. */
+  --animate-response: enter var(--transition-duration-slow) var(--ease-enter) 60ms both;
+  /* La respuesta anterior llega a la cinta desde abajo, desde donde estaba. */
+  --animate-to-tape: to-tape var(--transition-duration-base) var(--ease-enter) both;
+  /* Elemento de lista que se elimina: se desvanece y se aparta 8 px antes de desaparecer. */
+  --animate-leave: leave var(--transition-duration-fast) var(--ease-exit) both;
+  /* Contenido de la barra al cambiar de estado: aparece en el sitio y sube 4 px. */
+  --animate-bar: bar var(--transition-duration-fast) var(--ease-instrument) both;
+  /* Un detalle que se despliega en el sitio, como «Más información». */
   --animate-fade: fade var(--transition-duration-fast) var(--ease-instrument) both;
-  /* Diálogo de confirmación: aparece y se asienta desde el 98 %. */
-  --animate-dialog: dialog var(--transition-duration-base) var(--ease-enter) both;
+  /* Diálogo: el panel entra desde el 96 % y 8 px más abajo; el fondo se oscurece a la vez. */
+  --animate-dialog: dialog var(--transition-duration-slow) var(--ease-enter) both;
+  --animate-dialog-out: dialog-out var(--transition-duration-fast) var(--ease-exit) both;
+  --animate-backdrop: fade var(--transition-duration-slow) var(--ease-enter) both;
+  --animate-backdrop-out: fade-out var(--transition-duration-fast) var(--ease-exit) both;
+  /* Cambio de sección (View Transitions): la anterior se apaga deprisa hacia arriba y la nueva llega desde abajo
+     un instante después. Nunca queda la zona vacía: el fondo es el mismo y las dos se cruzan. */
+  --animate-section-out: section-out var(--transition-duration-fast) var(--ease-instrument) both;
+  --animate-section-in: section-in var(--transition-duration-slow) var(--ease-enter) 50ms both;
+  /* Progreso indeterminado mientras algo carga o procesa: el único movimiento continuo, y nunca sin texto al lado. */
+  --animate-sweep: sweep 1.2s var(--ease-instrument) infinite;
 
   /* En rem: con el texto ampliado, la composición estrecha se mantiene en ventanas más anchas. */
   --breakpoint-*: initial;
@@ -95,13 +113,34 @@
     to { transform: translateX(400%); }
   }
   @keyframes enter {
+    from { opacity: 0; transform: translateY(0.5rem); }
+  }
+  @keyframes to-tape {
+    from { opacity: 0; transform: translateY(1rem); }
+  }
+  @keyframes leave {
+    to { opacity: 0; transform: translateX(0.5rem); }
+  }
+  @keyframes bar {
     from { opacity: 0; transform: translateY(0.25rem); }
   }
   @keyframes fade {
     from { opacity: 0; }
   }
+  @keyframes fade-out {
+    to { opacity: 0; }
+  }
   @keyframes dialog {
-    from { opacity: 0; transform: scale(0.98); }
+    from { opacity: 0; transform: translateY(0.5rem) scale(0.96); }
+  }
+  @keyframes dialog-out {
+    to { opacity: 0; transform: scale(0.98); }
+  }
+  @keyframes section-out {
+    to { opacity: 0; transform: translateY(-0.25rem); }
+  }
+  @keyframes section-in {
+    from { opacity: 0; transform: translateY(0.5rem); }
   }
 }
 
@@ -149,6 +188,28 @@
   max-height: 25dvh;
 }
 
+/* Cambio de sección con View Transitions: solo se anima la zona de la pantalla; la navegación y la barra
+   cambian en el sitio. Tailwind no tiene utilidades para estos pseudoelementos, por eso son CSS propio. */
+@utility view-section {
+  view-transition-name: section;
+}
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-group(section) {
+  animation: none;
+}
+::view-transition-image-pair(section) {
+  isolation: auto;
+}
+::view-transition-old(section) {
+  animation: var(--animate-section-out);
+  mix-blend-mode: normal;
+}
+::view-transition-new(section) {
+  animation: var(--animate-section-in);
+  mix-blend-mode: normal;
+}
+
 /* Reserva siempre el hueco de la barra de desplazamiento: si no, el contenido centrado se mueve al aparecer. */
 @utility scrollbar-stable {
   scrollbar-gutter: stable;
@@ -191,6 +252,11 @@
       animation: none !important;
       transition: none !important;
       scroll-behavior: auto !important;
+    }
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+      animation: none !important;
     }
   }
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 
 import { Button } from "@/components/Button";
 import { Icon } from "@/components/Icon";
+import { ProgressLine } from "@/components/Progress";
 
 import type { BarState } from "./barState";
 import { LevelTrace } from "./LevelTrace";
@@ -95,10 +96,7 @@ function ProgressControls({ step, filled, status, onCancel }: { step: string; fi
     <>
       <div className="flex min-w-24 flex-1 basis-24 flex-col gap-1.5">
         <span className="break-words">{step}</span>
-        {/* Indeterminado mientras procesa; lleno al responder. Con Reducir movimiento queda quieto y el texto manda. */}
-        <div aria-hidden="true" data-clip-ok className={`h-0.5 overflow-hidden ${filled ? "bg-ink" : "bg-hairline"}`}>
-          {!filled && <div className="h-full w-1/4 animate-sweep bg-ink" />}
-        </div>
+        <ProgressLine filled={filled} />
       </div>
       <Button className="shrink-0" onClick={onCancel} {...{ [AUTOFOCUS]: "" }}>
         Cancelar
@@ -253,9 +251,9 @@ export function SignalBar(props: SignalBarProps) {
     <section ref={bar} aria-label="Barra de señal" data-tone={tone} className={`@container relative isolate flex shrink-0 flex-col bg-base ${toneBorders[tone]}`}>
       <span
         aria-hidden="true"
-        className={`absolute inset-0 -z-10 bg-signal transition-opacity duration-fast ease-instrument ${tone === "signal" ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 -z-10 bg-signal transition-opacity duration-base ease-instrument ${tone === "signal" ? "opacity-100" : "opacity-0"}`}
       />
-      <div key={kind} className="flex animate-fade flex-col">
+      <div key={kind} className="flex animate-bar flex-col">
         {message && (
           <div data-bar-message className="max-h-bar-message overflow-y-auto px-4 pt-3 short:pt-2">
             {message}

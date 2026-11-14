@@ -1,4 +1,6 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+
+import { exitThen } from "@/utils/motion";
 
 import { Button } from "./Button";
 
@@ -15,11 +17,13 @@ interface ConfirmDialogProps {
 /**
  * Confirmación de una acción destructiva. Usa el `<dialog>` modal del sistema: el resto de la ventana
  * queda inerte, Escape cancela y el foco empieza en Cancelar, para que Intro no borre por accidente.
- * Al cerrarse, el foco vuelve al botón que lo abrió.
+ * El fondo se oscurece mientras el panel entra; al cerrarse, los dos salen antes de que el foco vuelva
+ * al botón que lo abrió.
  */
 export function ConfirmDialog({ open, title, description, confirmLabel, onConfirm, onCancel }: ConfirmDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
+  const [closing, setClosing] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
 
@@ -31,11 +35,16 @@ export function ConfirmDialog({ open, title, description, confirmLabel, onConfir
     cancel.current?.focus();
     return () => {
       if (element.open) element.close();
+      setClosing(false);
       opener?.focus();
     };
   }, [open]);
 
   if (!open) return null;
+
+  const close = (action: () => void) => {
+    if (!closing) exitThen(() => setClosing(true), action);
+  };
 
   return (
     <dialog
@@ -46,9 +55,11 @@ export function ConfirmDialog({ open, title, description, confirmLabel, onConfir
       aria-describedby={descriptionId}
       onCancel={(event) => {
         event.preventDefault();
-        onCancel();
+        close(onCancel);
       }}
-      className="m-auto w-full max-w-dialog animate-dialog rounded-sm border border-line bg-panel p-0 text-ink backdrop:animate-fade"
+      className={`m-auto w-full max-w-dialog rounded-sm border border-line bg-panel p-0 text-ink ${
+        closing ? "animate-dialog-out backdrop:animate-backdrop-out" : "animate-dialog backdrop:animate-backdrop"
+      }`}
     >
       <div className="flex flex-col gap-4 p-6">
         <h2 id={titleId} className="m-0 text-lg font-semibold">
@@ -58,10 +69,10 @@ export function ConfirmDialog({ open, title, description, confirmLabel, onConfir
           {description}
         </p>
         <div className="flex flex-wrap justify-end gap-3">
-          <Button ref={cancel} onClick={onCancel}>
+          <Button ref={cancel} onClick={() => close(onCancel)}>
             Cancelar
           </Button>
-          <Button variant="danger" onClick={onConfirm}>
+          <Button variant="danger" onClick={() => close(onConfirm)}>
             {confirmLabel}
           </Button>
         </div>
