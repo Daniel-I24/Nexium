@@ -43,6 +43,14 @@ use crate::{
     },
 };
 
+/// Clave del aviso que explica, una sola vez, que cerrar la ventana no cierra Nexium.
+const TRAY_NOTICE: &str = "tray-notice";
+
+#[cfg(target_os = "macos")]
+const TRAY_NOTICE_BODY: &str = "Nexium sigue activo en la barra de menús y te avisará de tus recordatorios. Para cerrarlo del todo, abre su icono y elige Salir.";
+#[cfg(not(target_os = "macos"))]
+const TRAY_NOTICE_BODY: &str = "Nexium sigue activo en la bandeja del sistema y te avisará de tus recordatorios. Para cerrarlo del todo, haz clic derecho en su icono y elige Salir.";
+
 const REMINDER_CHECK_INTERVAL: Duration = Duration::from_secs(20);
 const SPEECH_IDLE_CHECK_INTERVAL: Duration = Duration::from_secs(30);
 
@@ -222,11 +230,17 @@ pub fn run() {
             let has_tray = build_tray(&handle).is_ok();
             if let Some(window) = app.get_webview_window("main") {
                 let hidden = window.clone();
+                let settings = app.state::<AppState>().settings.clone();
+                let notices = TauriNotifications::new(handle.clone());
                 window.on_window_event(move |event| {
                     if let WindowEvent::CloseRequested { api, .. } = event {
                         if has_tray {
                             api.prevent_close();
                             let _ = hidden.hide();
+                            // Solo la primera vez: después, la persona ya sabe dónde sigue Nexium.
+                            if settings.first_time(TRAY_NOTICE).unwrap_or(false) {
+                                let _ = notices.notify("Nexium sigue activo", TRAY_NOTICE_BODY);
+                            }
                         }
                     }
                 });

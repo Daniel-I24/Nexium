@@ -130,6 +130,16 @@ impl SettingsService {
         )?)
     }
 
+    /// Devuelve `true` solo la primera vez que se pide con esa clave, y lo deja anotado.
+    /// Sirve para avisos que se muestran una única vez, como el de la bandeja.
+    pub fn first_time(&self, key: &str) -> AppResult<bool> {
+        let inserted = self.db.lock()?.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?1, 'shown')",
+            params![format!("once:{key}")],
+        )?;
+        Ok(inserted == 1)
+    }
+
     pub fn authorized_paths(&self) -> AppResult<Vec<PathBuf>> {
         Ok(self
             .get()?
@@ -178,6 +188,16 @@ mod tests {
         assert!(settings.validate(&[], &models).is_err());
         let stored: Settings = serde_json::from_str(r#"{"speechModel":"small"}"#).unwrap();
         assert_eq!(stored.speech_idle_minutes, DEFAULT_SPEECH_IDLE_MINUTES);
+    }
+
+    #[test]
+    fn a_one_time_notice_is_only_first_once() {
+        let service = service();
+        assert!(service.first_time("tray").unwrap());
+        assert!(!service.first_time("tray").unwrap());
+        assert!(service.first_time("otro").unwrap());
+        service.save(&Settings::default()).unwrap();
+        assert!(!service.first_time("tray").unwrap());
     }
 
     #[test]
