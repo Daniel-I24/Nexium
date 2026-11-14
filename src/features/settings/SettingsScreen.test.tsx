@@ -78,3 +78,11 @@ describe("Ajustes: micrófono", () => {
     expect(await screen.findByText(/No se encontró ningún micrófono/)).toBeInTheDocument();
   });
 });
+
+describe("Ajustes: uso de IA", () => {
+  it("concuerda la cantidad de solicitudes y de tokens", async () => {
+    invoke.mockResolvedValue(view({ aiRequestsToday: 1, tokensToday: 1 }));
+    render(<SettingsScreen />);
+    expect(await screen.findByText("Hoy: 1 solicitud · 1 token")).toBeInTheDocument();
+  });
+});

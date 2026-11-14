@@ -407,11 +407,10 @@ impl FilesHandler {
             );
         }
         let count = outcome.files.len();
-        let summary = if count == 1 {
-            format!("1 coincidencia en {places}")
-        } else {
-            format!("{count} coincidencias en {places}")
-        };
+        let summary = format!(
+            "{} en {places}",
+            super::format::count(count, "coincidencia", "coincidencias")
+        );
         let note = outcome.truncated.then(|| {
             "Hay más coincidencias o carpetas muy grandes. Prueba con términos más concretos."
                 .to_owned()
@@ -665,7 +664,7 @@ impl CommandHandler for ReminderIntentHandler {
                         .collect();
                     Outcome::done(
                         Category::Reminders,
-                        format!("{count} recordatorios"),
+                        super::format::count(count, "recordatorio", "recordatorios"),
                         ResponseBody::Rows {
                             rows,
                             note: None,
@@ -860,6 +859,38 @@ mod tests {
         };
         let outcome = TimeHandler.handle(&Intent::Time, &context).await.unwrap();
         assert_eq!(outcome.summary, "14:00 · jueves 5 de noviembre");
+    }
+
+    #[tokio::test]
+    async fn the_reminder_count_agrees_with_the_noun() {
+        let reminders = crate::services::reminders::ReminderService::new(
+            crate::database::Database::in_memory().unwrap(),
+        );
+        let handler = ReminderIntentHandler {
+            reminders: reminders.clone(),
+        };
+        let context = HandlerContext {
+            request: "mis recordatorios".into(),
+            now: now(),
+            cancel: CancellationToken::new(),
+        };
+        let soon = (chrono::Utc::now() + Duration::days(1)).to_rfc3339();
+        reminders
+            .create("Pagar", &soon, chrono::Utc::now())
+            .unwrap();
+        let one = handler
+            .handle(&Intent::ListReminders, &context)
+            .await
+            .unwrap();
+        assert_eq!(one.summary, "1 recordatorio");
+        reminders
+            .create("Llamar", &soon, chrono::Utc::now())
+            .unwrap();
+        let two = handler
+            .handle(&Intent::ListReminders, &context)
+            .await
+            .unwrap();
+        assert_eq!(two.summary, "2 recordatorios");
     }
 
     #[tokio::test]

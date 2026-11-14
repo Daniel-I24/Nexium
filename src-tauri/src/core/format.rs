@@ -54,6 +54,11 @@ pub fn whole(value: f64) -> String {
     format!("{value:.0}")
 }
 
+/// Cantidad con el sustantivo concordado: "1 recordatorio", "0 recordatorios", "2 coincidencias".
+pub fn count(amount: usize, singular: &str, plural: &str) -> String {
+    format!("{amount} {}", if amount == 1 { singular } else { plural })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -65,6 +70,13 @@ mod tests {
             long_date(NaiveDate::from_ymd_opt(2026, 11, 5).unwrap()),
             "jueves 5 de noviembre"
         );
+    }
+
+    #[test]
+    fn counts_agree_with_the_noun() {
+        assert_eq!(count(0, "recordatorio", "recordatorios"), "0 recordatorios");
+        assert_eq!(count(1, "recordatorio", "recordatorios"), "1 recordatorio");
+        assert_eq!(count(2, "coincidencia", "coincidencias"), "2 coincidencias");
     }
 
     #[test]

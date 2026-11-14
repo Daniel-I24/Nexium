@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/Button";
 import { api, errorMessage, events } from "@/services/api";
 import type { AiServiceStatus, DownloadProgress, InputDevice, Settings, SettingsView } from "@/types/api";
+import { count } from "@/utils/plural";
 
 const statusLabels: Record<AiServiceStatus, string> = {
   notConfigured: "No incluido en esta versión",
@@ -111,7 +112,7 @@ export function SettingsScreen() {
           <input type="number" min={1} max={10000} value={draft.dailyAiLimit} onChange={(event) => update("dailyAiLimit", Number(event.target.value))} className={`font-mono ${inputStyle}`} />
         </Field>
         <p className="m-0 font-mono text-sm text-muted">
-          Hoy: {view.aiRequestsToday} solicitudes · {view.tokensToday} tokens
+          Hoy: {count(view.aiRequestsToday, "solicitud", "solicitudes")} · {count(view.tokensToday, "token", "tokens")}
         </p>
       </Section>
 
