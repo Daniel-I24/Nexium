@@ -68,6 +68,19 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+
+      # Diseño en navegador real: Edge en Windows (el motor de WebView2) y Chromium en Linux.
+      - name: Chromium para las pruebas de diseño
+        if: runner.os == 'Linux'
+        timeout-minutes: 10
+        run: npx playwright install --with-deps chromium
+      - name: Pruebas de diseño
+        if: runner.os != 'macOS'
+        timeout-minutes: 20
+        env:
+          NEXIUM_PW_CHANNEL: ${{ runner.os == 'Linux' && 'chromium' || 'msedge' }}
+        run: npm run test:layout
+
       - run: npm run build
 
       - name: Formato de Rust
