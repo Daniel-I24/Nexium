@@ -34,7 +34,8 @@ describe("respuestas con el contrato que produce Rust", () => {
     expect(screen.getByText("Informe")).toBeInTheDocument();
     expect(screen.getByText(".pdf")).toBeInTheDocument();
     expect(screen.getByText("C:\\a\\Informe.pdf")).toBeInTheDocument();
-    expect(screen.getByText(/Existe · en Documentos/)).toBeInTheDocument();
+    expect(screen.getByText("Existe")).toBeInTheDocument();
+    expect(screen.getByText("· en Documentos")).toBeInTheDocument();
   });
 
   it("no permite guardar un borrador sin fecha", () => {

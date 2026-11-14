@@ -21,32 +21,65 @@
   --font-sans: "Instrument Sans Variable", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
+  /* Escala tipográfica en rem: sigue el tamaño de texto del sistema. Cada tamaño lleva su interlineado,
+     más abierto en el texto pequeño y más cerrado en los títulos. */
   --text-*: initial;
   --text-xs: 0.75rem;
+  --text-xs--line-height: 1.45;
   --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.45;
   --text-md: 0.9375rem;
+  --text-md--line-height: 1.5;
   --text-lg: 1.125rem;
-  --text-xl: 2rem;
+  --text-lg--line-height: 1.4;
+  /* Títulos de pantalla: 32 px en ventanas anchas, unos 26 px en la mínima. */
+  --text-xl: clamp(1.625rem, 1.25rem + 1.2vw, 2rem);
+  --text-xl--line-height: 1.15;
   --text-reading: clamp(3rem, 7vw, 5.5rem);
+  --text-reading--line-height: 1;
   --text-unit: clamp(1.25rem, 2.6vw, 2rem);
+  --text-unit--line-height: 1;
 
   --radius-*: initial;
   --radius-sm: 2px;
 
   --shadow-*: initial;
 
-  --animate-*: initial;
-  --animate-sweep: sweep 1.2s ease-in-out infinite;
+  /* Movimiento (docs/DISENO_VISUAL.md, sección 4). Solo opacidad y transformaciones, y cada animación
+     comunica algo: un cambio de estado, adónde mirar o que una acción se completó. */
+  --transition-duration-*: initial;
+  --transition-duration-fast: 120ms;
+  --transition-duration-base: 160ms;
+  --transition-duration-slow: 200ms;
 
+  --ease-*: initial;
+  /* Estándar: cambios en el sitio, como la señal que se enciende. */
   --ease-instrument: cubic-bezier(0.2, 0, 0, 1);
+  /* Entrada: lo nuevo llega rápido y se asienta. */
+  --ease-enter: cubic-bezier(0, 0, 0, 1);
 
+  --animate-*: initial;
+  /* Progreso indeterminado de Procesando: es el único movimiento continuo. */
+  --animate-sweep: sweep 1.2s var(--ease-instrument) infinite;
+  /* Contenido nuevo (una respuesta, una pantalla, un aviso): aparece y sube 4 px. */
+  --animate-enter: enter var(--transition-duration-base) var(--ease-enter) both;
+  /* Cambio de pantalla: igual, algo más lento porque cambia toda el área. */
+  --animate-section: enter var(--transition-duration-slow) var(--ease-enter) both;
+  /* Cambio de estado de la barra en el mismo sitio: solo opacidad. */
+  --animate-fade: fade var(--transition-duration-fast) var(--ease-instrument) both;
+  /* Diálogo de confirmación: aparece y se asienta desde el 98 %. */
+  --animate-dialog: dialog var(--transition-duration-base) var(--ease-enter) both;
+
+  /* En rem: con el texto ampliado, la composición estrecha se mantiene en ventanas más anchas. */
   --breakpoint-*: initial;
+  --breakpoint-sm: 40rem;
   --breakpoint-wide: 56.25rem;
 
   --container-*: initial;
   --container-reading: 40rem;
   --container-content: 60rem;
   --container-rail: 11.5rem;
+  --container-dialog: 28rem;
 
   --tracking-tightest: -0.07em;
   /* En una fuente monoespaciada, la coma ocupa lo mismo que una cifra: a tamaño de lectura separa el número. */
@@ -55,6 +88,15 @@
   @keyframes sweep {
     from { transform: translateX(-100%); }
     to { transform: translateX(400%); }
+  }
+  @keyframes enter {
+    from { opacity: 0; transform: translateY(0.25rem); }
+  }
+  @keyframes fade {
+    from { opacity: 0; }
+  }
+  @keyframes dialog {
+    from { opacity: 0; transform: scale(0.98); }
   }
 }
 
@@ -69,6 +111,8 @@
   --nx-ok: #16623e;
   --nx-error: #a8152c;
   --nx-query: #1b4a8f;
+  /* El foco se dibuja con tinta. Sobre la señal amarilla, con on-signal (ver focus-on-signal). */
+  --nx-focus: var(--nx-ink);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -83,6 +127,22 @@
     --nx-error: #ff8a96;
     --nx-query: #8fb8f2;
   }
+}
+
+/* Sobre la señal amarilla, el foco usa on-signal: la tinta del tema oscuro no se vería. */
+@utility focus-on-signal {
+  --nx-focus: var(--color-on-signal);
+}
+
+/* Columna de la derecha: el área principal nunca baja de 10rem y la barra ocupa lo que necesite.
+   Si no caben las dos, la ventana entera se desplaza (ver Shell.tsx). */
+@utility grid-rows-shell {
+  grid-template-rows: minmax(10rem, 1fr) auto;
+}
+
+/* La barra de señal no pasa de media ventana: si su contenido no cabe, se desplaza por dentro. */
+@utility max-h-half-window {
+  max-height: 50dvh;
 }
 
 /* Reserva siempre el hueco de la barra de desplazamiento: si no, el contenido centrado se mueve al aparecer. */
@@ -100,19 +160,33 @@
   body {
     margin: 0;
     font-size: var(--text-md);
-    line-height: 1.45;
+    line-height: var(--text-md--line-height);
     overflow: hidden;
+  }
+
+  /* Fondo tras un diálogo: atenúa la ventana sin ocultarla. Con valores literales, porque en algunas vistas web
+     ::backdrop no hereda las variables de :root. */
+  dialog::backdrop {
+    background-color: rgb(20 24 26 / 0.45);
+  }
+  @media (prefers-color-scheme: dark) {
+    dialog::backdrop {
+      background-color: rgb(0 0 0 / 0.6);
+    }
   }
   button { cursor: pointer; }
   button:disabled { cursor: not-allowed; }
+  /* Siempre tinta, no el color del texto: el de un botón primario apenas se vería sobre el fondo. */
   :focus-visible {
-    outline: 2px solid currentColor;
+    outline: 2px solid var(--nx-focus);
     outline-offset: 2px;
   }
+  /* Con Reducir movimiento no se mueve nada: los estados cambian igual, pero de golpe. */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation: none !important;
       transition: none !important;
+      scroll-behavior: auto !important;
     }
   }
 }

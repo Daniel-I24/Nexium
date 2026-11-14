@@ -130,3 +130,49 @@ describe("barState", () => {
     expect(barStateFromStage("idle")).toEqual({ kind: "idle" });
   });
 });
+
+describe("SignalBar: foco y movimiento", () => {
+  const handlers = {
+    onSpeak: vi.fn(),
+    onStopListening: vi.fn(),
+    onCancel: vi.fn(),
+    onSubmitText: vi.fn(),
+    onAnalyzeScreen: vi.fn(),
+    onConfirmCapture: vi.fn(),
+    onRetry: vi.fn(),
+    onChooseReminderOption: vi.fn(),
+    onChooseSuggestion: vi.fn(),
+  };
+
+  it("si el foco estaba en la barra, pasa al control principal del estado nuevo", async () => {
+    const { rerender } = render(<SignalBar state={{ kind: "idle" }} levels={[]} {...handlers} />);
+    await userEvent.click(screen.getByRole("button", { name: "Hablar" }));
+    rerender(<SignalBar state={{ kind: "listening" }} levels={[]} {...handlers} />);
+    expect(screen.getByRole("button", { name: "Terminar" })).toHaveFocus();
+    rerender(<SignalBar state={{ kind: "processing", step: "Transcribiendo" }} levels={[]} {...handlers} />);
+    expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus();
+    rerender(<SignalBar state={{ kind: "idle" }} levels={[]} {...handlers} />);
+    expect(screen.getByLabelText("Escribe tu solicitud")).toHaveFocus();
+  });
+
+  it("al abrir Nexium no roba el foco", () => {
+    render(<SignalBar state={{ kind: "idle" }} levels={[]} {...handlers} />);
+    expect(document.body).toHaveFocus();
+  });
+
+  it("la capa amarilla solo se ve cuando Nexium oye o va a ver la pantalla", () => {
+    const { rerender, container } = render(<SignalBar state={{ kind: "idle" }} levels={[]} {...handlers} />);
+    const layer = () => container.querySelector("section > span[aria-hidden]");
+    expect(layer()).toHaveClass("opacity-0");
+    rerender(<SignalBar state={{ kind: "listening" }} levels={[]} {...handlers} />);
+    expect(layer()).toHaveClass("opacity-100");
+    expect(layer()).toHaveClass("transition-opacity");
+  });
+
+  it("el trazo del micrófono se mueve con una transformación, no cambiando el alto", () => {
+    const { container } = render(<SignalBar state={{ kind: "listening" }} levels={[0.5]} {...handlers} />);
+    const bar = container.querySelector("[aria-label='Nivel del micrófono'] span") as HTMLElement;
+    expect(bar.style.transform).toBe("scaleY(0.5)");
+    expect(bar.style.height).toBe("");
+  });
+});

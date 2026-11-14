@@ -1,10 +1,10 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ComponentPropsWithRef } from "react";
 
 export type ButtonVariant = "primary" | "secondary" | "danger" | "signal" | "onSignal";
 
 const variants: Record<ButtonVariant, string> = {
   primary: "bg-ink text-panel border-ink font-semibold",
-  secondary: "bg-transparent text-ink border-line",
+  secondary: "bg-transparent text-ink border-line hover:border-ink",
   danger: "bg-transparent text-error border-error",
   signal: "bg-on-signal text-signal border-on-signal font-semibold",
   onSignal: "bg-transparent text-on-signal border-on-signal",
@@ -12,15 +12,16 @@ const variants: Record<ButtonVariant, string> = {
 
 const disabledStyle = "disabled:bg-transparent disabled:text-muted disabled:border-line disabled:border-dashed disabled:font-normal";
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends ComponentPropsWithRef<"button"> {
   variant?: ButtonVariant;
 }
 
+/** Alto mínimo de 44 px y texto que puede partirse en dos líneas antes que salirse del botón. */
 export function Button({ variant = "secondary", className = "", type = "button", ...props }: ButtonProps) {
   return (
     <button
       type={type}
-      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border px-4 transition-colors duration-150 ease-instrument ${variants[variant]} ${disabledStyle} ${className}`}
+      className={`inline-flex min-h-11 max-w-full items-center justify-center gap-2 rounded-sm border px-4 py-1 text-center ${variants[variant]} ${disabledStyle} ${className}`}
       {...props}
     />
   );

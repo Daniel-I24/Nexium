@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/Button";
+import { Notice } from "@/components/Notice";
+import { StatusLabel } from "@/components/StatusLabel";
 import { api, errorMessage, events } from "@/services/api";
 import type { AiServiceStatus, DownloadProgress, InputDevice, Settings, SettingsView } from "@/types/api";
 import { count } from "@/utils/plural";
@@ -17,7 +19,7 @@ const statusLabels: Record<AiServiceStatus, string> = {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-3 border-t border-line pt-4">
+    <section className="flex max-w-reading flex-col gap-3 border-t border-line pt-4">
       <h2 className="m-0 text-lg font-medium">{title}</h2>
       {children}
     </section>
@@ -33,7 +35,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-const inputStyle = "h-11 rounded-sm border border-line bg-panel px-3 text-md text-ink";
+const inputStyle = "h-11 w-full min-w-0 rounded-sm border border-line bg-panel px-3 text-md text-ink";
 
 function deviceLabel(device: InputDevice) {
   const notes = [device.isDefault && "predeterminado de Windows", !device.isMicrophone && "no parece un micrófono"].filter(Boolean);
@@ -56,7 +58,7 @@ function MicrophoneNote({ chosen, active }: { chosen: string | null; active: str
 export function SettingsScreen() {
   const [view, setView] = useState<SettingsView | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
-  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [message, setMessage] = useState<{ text: string; error: boolean; at: number } | null>(null);
   const [download, setDownload] = useState<DownloadProgress | null>(null);
 
   const apply = (next: SettingsView) => {
@@ -65,7 +67,7 @@ export function SettingsScreen() {
   };
 
   useEffect(() => {
-    api.getSettings().then(apply).catch((error: unknown) => setMessage({ text: errorMessage(error), error: true }));
+    api.getSettings().then(apply).catch((error: unknown) => setMessage({ text: errorMessage(error), error: true, at: Date.now() }));
     const subscription = events.onDownload(setDownload);
     return () => void subscription.then((unlisten) => unlisten());
   }, []);
@@ -73,14 +75,20 @@ export function SettingsScreen() {
   const run = async (action: () => Promise<SettingsView>, done: string) => {
     try {
       apply(await action());
-      setMessage({ text: done, error: false });
+      setMessage({ text: done, error: false, at: Date.now() });
     } catch (error) {
-      setMessage({ text: errorMessage(error), error: true });
+      setMessage({ text: errorMessage(error), error: true, at: Date.now() });
     }
   };
 
   if (!view || !draft) {
-    return message ? <p className="m-0 text-error">{message.text}</p> : <p className="m-0 text-muted">Cargando ajustes</p>;
+    return message ? (
+      <Notice tone="error">{message.text}</Notice>
+    ) : (
+      <p role="status" className="m-0 text-muted">
+        Cargando ajustes…
+      </p>
+    );
   }
 
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => setDraft({ ...draft, [key]: value });
@@ -93,17 +101,16 @@ export function SettingsScreen() {
       await api.downloadSpeechModel(modelId);
       setDownload(null);
       apply(await api.getSettings());
-      setMessage({ text: "Modelo de voz descargado.", error: false });
+      setMessage({ text: "Modelo de voz descargado.", error: false, at: Date.now() });
     } catch (error) {
       setDownload(null);
-      setMessage({ text: errorMessage(error), error: true });
+      setMessage({ text: errorMessage(error), error: true, at: Date.now() });
     }
   };
 
   return (
-    <div className="flex flex-col gap-8 pb-8">
-      <h1 className="m-0 text-xl font-medium leading-tight">Ajustes</h1>
-      {message && <p role="status" className={`m-0 ${message.error ? "text-error" : "text-ok"}`}>{message.text}</p>}
+    <div className="flex flex-col gap-8">
+      <h1 className="m-0 text-xl font-medium">Ajustes</h1>
 
       <Section title={`Inteligencia artificial: ${view.provider.displayName}`}>
         <p className="m-0 border-t-2 border-query pt-2 text-sm">{view.provider.dataNotice}</p>
@@ -120,8 +127,8 @@ export function SettingsScreen() {
         <p className="m-0 text-sm text-muted">Nexium solo mira nombres de archivo en estas carpetas. No abre, modifica, mueve ni elimina nada.</p>
         {view.knownFolders.map((folder) => (
           <label key={folder} className="flex min-h-11 items-center gap-3">
-            <input type="checkbox" checked={draft.authorizedFolders.includes(folder)} onChange={(event) => toggleFolder(folder, event.target.checked)} />
-            <span className="break-all font-mono text-sm">{folder}</span>
+            <input type="checkbox" className="size-4 shrink-0 accent-ink" checked={draft.authorizedFolders.includes(folder)} onChange={(event) => toggleFolder(folder, event.target.checked)} />
+            <span className="min-w-0 break-all font-mono text-sm">{folder}</span>
           </label>
         ))}
       </Section>
@@ -131,14 +138,16 @@ export function SettingsScreen() {
         <ul className="m-0 flex list-none flex-col p-0">
           {view.speechModels.map((model) => (
             <li key={model.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline py-3">
-              <label className="flex min-w-48 flex-1 items-center gap-3">
-                <input type="radio" name="speech-model" disabled={!model.downloaded} checked={draft.speechModel === model.id} onChange={() => update("speechModel", model.id)} />
+              <label className="flex min-h-11 min-w-0 flex-1 basis-48 items-center gap-3">
+                <input type="radio" name="speech-model" className="size-4 shrink-0 accent-ink" disabled={!model.downloaded} checked={draft.speechModel === model.id} onChange={() => update("speechModel", model.id)} />
                 <span>
                   {model.displayName} <span className="font-mono text-sm text-muted">{model.sizeMb} MB</span>
                 </span>
               </label>
               {model.downloaded ? (
-                <span className="font-mono text-sm text-ok">Disponible</span>
+                <span className="text-sm">
+                  <StatusLabel status="completed">Disponible</StatusLabel>
+                </span>
               ) : (
                 <Button disabled={download !== null} onClick={() => void startDownload(model.id)}>
                   {download?.modelId === model.id ? `${download.downloadedMb} de ${download.totalMb} MB` : model.damaged ? "Volver a descargar" : "Descargar"}
@@ -177,10 +186,16 @@ export function SettingsScreen() {
         </p>
       </Section>
 
-      <div>
+      {/* Pie fijo al borde inferior del área: Guardar y su resultado siempre están a la vista, sin desplazarse. */}
+      <div className="sticky bottom-0 -mb-6 flex max-w-reading flex-wrap items-center gap-x-4 gap-y-2 border-t border-line bg-panel py-3 sm:-mb-8">
         <Button variant="primary" onClick={() => void run(() => api.saveSettings(draft), "Ajustes guardados.")}>
           Guardar ajustes
         </Button>
+        {message && (
+          <div key={message.at} className="min-w-0 flex-1 basis-48">
+            <Notice tone={message.error ? "error" : "ok"}>{message.text}</Notice>
+          </div>
+        )}
       </div>
     </div>
   );

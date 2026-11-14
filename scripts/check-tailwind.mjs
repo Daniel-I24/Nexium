@@ -11,7 +11,14 @@ const rules = [
   [/\bshadow-(?:sm|md|lg|xl|2xl|inner)\b/, "sombra"],
   [/\bbg-gradient-|\bbg-linear-/, "degradado"],
   [/\bdark:/, "variante dark: (los temas solo reasignan variables)"],
+  // Movimiento: solo opacidad y transformaciones, con las duraciones y curvas del tema.
+  [/\btransition(?:-(?:colors|all|shadow|discrete))?(?=["'`\s])/, "transición de algo que no es opacidad ni transformación"],
+  [/\bduration-\d+\b/, "duración fuera de los tokens (duration-fast, duration-base, duration-slow)"],
+  [/\b(?:ease-(?:in|out|in-out|linear)|animate-(?:spin|ping|pulse|bounce))\b/, "curva o animación fuera de los tokens"],
 ];
+
+// Un único conjunto de iconos: solo src/components/Icon.tsx importa lucide-react.
+const iconRule = [/from\s+["']lucide-react["']/, "icono importado fuera de src/components/Icon.tsx"];
 
 function* sources(dir) {
   for (const name of readdirSync(dir)) {
@@ -23,10 +30,11 @@ function* sources(dir) {
 
 let failures = 0;
 for (const file of sources("src")) {
+  const fileRules = file.replaceAll("\\", "/").endsWith("src/components/Icon.tsx") ? rules : [...rules, iconRule];
   readFileSync(file, "utf8")
     .split("\n")
     .forEach((line, index) => {
-      for (const [rule, reason] of rules) {
+      for (const [rule, reason] of fileRules) {
         if (rule.test(line)) {
           console.error(`${file}:${index + 1}: ${reason}: ${line.trim()}`);
           failures += 1;
