@@ -390,6 +390,24 @@ pub fn history_delete(state: State<'_, AppState>, id: i64) -> AppResult<()> {
     state.history.delete(id)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordedFailure {
+    id: i64,
+    created_at: String,
+}
+
+/// Registra un fallo que la interfaz muestra en la conversación pero que no llegó a pasar por el núcleo.
+#[tauri::command]
+pub fn history_record_failure(
+    state: State<'_, AppState>,
+    request: String,
+    cause: String,
+) -> AppResult<RecordedFailure> {
+    let (id, created_at) = state.history.record_failure(&request, &cause)?;
+    Ok(RecordedFailure { id, created_at })
+}
+
 #[tauri::command]
 pub fn history_clear(state: State<'_, AppState>) -> AppResult<()> {
     state.history.clear()

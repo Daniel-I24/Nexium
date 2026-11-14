@@ -35,6 +35,7 @@ export const api = {
   listHistory: (status: InteractionStatus | null) => invoke<HistoryEntry[]>("history_list", { status }),
   deleteHistory: (id: number) => invoke<undefined>("history_delete", { id }),
   clearHistory: () => invoke<undefined>("history_clear"),
+  recordFailure: (request: string, cause: string) => invoke<{ id: number; createdAt: string }>("history_record_failure", { request, cause }),
 
   getSettings: () => invoke<SettingsView>("settings_get"),
   saveSettings: (settings: Settings) => invoke<SettingsView>("settings_save", { settings }),

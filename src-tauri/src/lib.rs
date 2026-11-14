@@ -250,6 +250,7 @@ pub fn run() {
             commands::history_list,
             commands::history_delete,
             commands::history_clear,
+            commands::history_record_failure,
             commands::settings_get,
             commands::settings_save,
         ])

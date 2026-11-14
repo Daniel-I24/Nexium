@@ -28,6 +28,15 @@ function failedAttempt(request: string, error: unknown): AssistantResponse {
   };
 }
 
+/** El historial también guarda lo que falló antes de llegar al núcleo. Si no se puede guardar, la conversación sigue igual. */
+async function recordFailure(request: string, cause: string) {
+  try {
+    await api.recordFailure(request, cause);
+  } catch {
+    // El fallo ya se muestra en la conversación: no se añade un segundo error por no poder registrarlo.
+  }
+}
+
 /** Respuesta actual y cinta cambian juntas: separadas, un actualizador tendría que modificar la otra. */
 interface Session {
   current: AssistantResponse | null;
@@ -76,8 +85,11 @@ export function useAssistant() {
   /** Sin solicitud, el error solo cabe en la barra. Con ella, queda en la conversación junto a lo que se intentó. */
   const fail = useCallback(
     (error: unknown, request?: string) => {
-      if (request) present(failedAttempt(request, error));
-      else setBar({ kind: "error", message: errorMessage(error), retryable: true });
+      if (request) {
+        const attempt = failedAttempt(request, error);
+        present(attempt);
+        void recordFailure(request, attempt.summary);
+      } else setBar({ kind: "error", message: errorMessage(error), retryable: true });
     },
     [present],
   );

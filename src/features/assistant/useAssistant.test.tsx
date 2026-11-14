@@ -114,6 +114,28 @@ describe("useAssistant", () => {
     expect(result.current.current).toMatchObject({ request: "¿Qué tiempo hace?", body: { kind: "error", message: "Sin conexión." } });
   });
 
+  it("un fallo que se ve en la conversación queda en el historial como Fallida, con su causa", async () => {
+    invoke.mockRejectedValueOnce("Falta el modelo de voz.");
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.speak());
+    expect(invoke).toHaveBeenCalledWith("history_record_failure", { request: "Solicitud por voz", cause: "Falta el modelo de voz." });
+  });
+
+  it("si el historial no puede guardar el fallo, la conversación lo sigue mostrando", async () => {
+    invoke.mockRejectedValueOnce("Sin conexión.").mockRejectedValueOnce("Base de datos bloqueada.");
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("hola"));
+    expect(result.current.current).toMatchObject({ status: "failed", body: { message: "Sin conexión." } });
+    expect(result.current.bar).toEqual({ kind: "error", message: null, retryable: true });
+  });
+
+  it("una respuesta fallida del núcleo no se registra dos veces", async () => {
+    invoke.mockResolvedValueOnce(reply({ kind: "error", code: "network", message: "Sin red", hint: null }, "failed"));
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("hola"));
+    expect(invoke).not.toHaveBeenCalledWith("history_record_failure", expect.anything());
+  });
+
   it("dos fallos seguidos tienen identificadores distintos y negativos", async () => {
     invoke.mockRejectedValueOnce("a").mockRejectedValueOnce("b");
     const { result } = renderHook(() => useAssistant());
