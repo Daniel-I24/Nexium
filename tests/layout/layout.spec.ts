@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 import { auditLayout } from "./audit";
+import { auditFrame } from "./frame";
 
 /**
  * Pruebas de diseño en un navegador real: cada pantalla, diálogo y estado de la barra, en varios tamaños de
@@ -125,15 +126,13 @@ for (const [name, open] of Object.entries(views)) {
         await setTextScale(page, text);
         // Dos fotogramas: el diseño ya se recalculó y el desplazamiento se asentó.
         await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-        const found = await page.evaluate(auditLayout);
+        // Primero el marco, sin desplazar nada; después, cada control desplazándose hasta él.
+        const found = [...(await page.evaluate(auditFrame)), ...(await page.evaluate(auditLayout))];
         problems.push(...found.map((problem) => `${size.name} ${size.width}×${size.height}, texto ${text * 100} %: ${problem}`));
         if (shots) {
           const folder = `${shots}/${info.project.name}`;
           mkdirSync(folder, { recursive: true });
-          await page.evaluate(() => {
-            document.querySelector("main")?.scrollTo({ top: 0 });
-            document.querySelector("#root > div")?.scrollTo({ top: 0 });
-          });
+          await page.evaluate(() => document.querySelectorAll("[data-scroll-area]").forEach((area) => area.scrollTo({ top: 0 })));
           await page.screenshot({ path: `${folder}/${name}-${size.width}x${size.height}-texto${text * 100}.png` });
         }
       }

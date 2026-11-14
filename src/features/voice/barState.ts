@@ -1,4 +1,4 @@
-import type { ReminderOption, Stage, SuggestedRequest } from "@/types/api";
+import type { Stage } from "@/types/api";
 
 export type BarState =
   | { kind: "idle" }
@@ -6,7 +6,8 @@ export type BarState =
   | { kind: "processing"; step: string }
   | { kind: "responding" }
   | { kind: "captureConsent"; provider: string; notice: string }
-  | { kind: "clarify"; question: string; reminderOptions: ReminderOption[]; suggestions: SuggestedRequest[] }
+  /** Nexium espera una respuesta: las opciones están en la conversación. */
+  | { kind: "clarify" }
   /** `message` es null cuando el error ya se ve en la conversación: la barra no lo repite. */
   | { kind: "error"; message: string | null; retryable: boolean };
 

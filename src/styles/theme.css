@@ -79,6 +79,11 @@
   --container-reading: 40rem;
   --container-content: 60rem;
   --container-rail: 11.5rem;
+  --container-rail-compact: 3.75rem;
+  /* Anchos de la barra de señal (consultas de contenedor): desde aquí los botones muestran su nombre, y desde
+     el segundo, también el estado en texto. */
+  --container-bar-labels: 34rem;
+  --container-bar-status: 50rem;
   --container-dialog: 28rem;
 
   --tracking-tightest: -0.07em;
@@ -134,15 +139,14 @@
   --nx-focus: var(--color-on-signal);
 }
 
-/* Columna de la derecha: el área principal nunca baja de 10rem y la barra ocupa lo que necesite.
-   Si no caben las dos, la ventana entera se desplaza (ver Shell.tsx). */
-@utility grid-rows-shell {
-  grid-template-rows: minmax(10rem, 1fr) auto;
-}
+/* Ventanas bajas (por ejemplo, 1280 × 720 al 150 % con el texto ampliado): márgenes verticales más justos
+   y sin la marca en la navegación. En rem, como los demás puntos de corte. */
+@custom-variant short (@media (max-height: 30rem));
 
-/* La barra de señal no pasa de media ventana: si su contenido no cabe, se desplaza por dentro. */
-@utility max-h-half-window {
-  max-height: 50dvh;
+/* El mensaje de la barra de señal no pasa de un cuarto de la ventana: si no cabe, se desplaza por dentro
+   y los controles siguen enteros. */
+@utility max-h-bar-message {
+  max-height: 25dvh;
 }
 
 /* Reserva siempre el hueco de la barra de desplazamiento: si no, el contenido centrado se mueve al aparecer. */

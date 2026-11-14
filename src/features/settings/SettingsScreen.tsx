@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/Button";
 import { Notice } from "@/components/Notice";
+import { ScreenLayout } from "@/components/ScreenLayout";
 import { StatusLabel } from "@/components/StatusLabel";
 import { api, errorMessage, events } from "@/services/api";
 import type { AiServiceStatus, DownloadProgress, InputDevice, Settings, SettingsView } from "@/types/api";
@@ -82,12 +83,19 @@ export function SettingsScreen() {
   };
 
   if (!view || !draft) {
-    return message ? (
-      <Notice tone="error">{message.text}</Notice>
-    ) : (
-      <p role="status" className="m-0 text-muted">
-        Cargando ajustes…
-      </p>
+    return (
+      <ScreenLayout>
+        <div className="flex flex-col gap-8">
+          <h1 className="m-0 text-xl font-medium">Ajustes</h1>
+          {message ? (
+            <Notice tone="error">{message.text}</Notice>
+          ) : (
+            <p role="status" className="m-0 text-muted">
+              Cargando ajustes…
+            </p>
+          )}
+        </div>
+      </ScreenLayout>
     );
   }
 
@@ -108,95 +116,99 @@ export function SettingsScreen() {
     }
   };
 
+  // Guardar y su resultado van en el pie, fuera de la zona que se desplaza: se ven siempre.
+  const footer = (
+    <>
+      <Button variant="primary" onClick={() => void run(() => api.saveSettings(draft), "Ajustes guardados.")}>
+        Guardar ajustes
+      </Button>
+      {message && (
+        <div key={message.at} className="min-w-0 flex-1 basis-48">
+          <Notice tone={message.error ? "error" : "ok"}>{message.text}</Notice>
+        </div>
+      )}
+    </>
+  );
+
   return (
-    <div className="flex flex-col gap-8">
-      <h1 className="m-0 text-xl font-medium">Ajustes</h1>
+    <ScreenLayout footer={footer}>
+      <div className="flex flex-col gap-8">
+        <h1 className="m-0 text-xl font-medium">Ajustes</h1>
 
-      <Section title={`Inteligencia artificial: ${view.provider.displayName}`}>
-        <p className="m-0 border-t-2 border-query pt-2 text-sm">{view.provider.dataNotice}</p>
-        <p className="m-0 text-sm">Estado del servicio: {statusLabels[view.aiStatus]}</p>
-        <Field label="Límite diario de solicitudes de IA">
-          <input type="number" min={1} max={10000} value={draft.dailyAiLimit} onChange={(event) => update("dailyAiLimit", Number(event.target.value))} className={`font-mono ${inputStyle}`} />
-        </Field>
-        <p className="m-0 font-mono text-sm text-muted">
-          Hoy: {count(view.aiRequestsToday, "solicitud", "solicitudes")} · {count(view.tokensToday, "token", "tokens")}
-        </p>
-      </Section>
+        <Section title={`Inteligencia artificial: ${view.provider.displayName}`}>
+          <p className="m-0 border-t-2 border-query pt-2 text-sm">{view.provider.dataNotice}</p>
+          <p className="m-0 text-sm">Estado del servicio: {statusLabels[view.aiStatus]}</p>
+          <Field label="Límite diario de solicitudes de IA">
+            <input type="number" min={1} max={10000} value={draft.dailyAiLimit} onChange={(event) => update("dailyAiLimit", Number(event.target.value))} className={`font-mono ${inputStyle}`} />
+          </Field>
+          <p className="m-0 font-mono text-sm text-muted">
+            Hoy: {count(view.aiRequestsToday, "solicitud", "solicitudes")} · {count(view.tokensToday, "token", "tokens")}
+          </p>
+        </Section>
 
-      <Section title="Carpetas autorizadas para buscar">
-        <p className="m-0 text-sm text-muted">Nexium solo mira nombres de archivo en estas carpetas. No abre, modifica, mueve ni elimina nada.</p>
-        {view.knownFolders.map((folder) => (
-          <label key={folder} className="flex min-h-11 items-center gap-3">
-            <input type="checkbox" className="size-4 shrink-0 accent-ink" checked={draft.authorizedFolders.includes(folder)} onChange={(event) => toggleFolder(folder, event.target.checked)} />
-            <span className="min-w-0 break-all font-mono text-sm">{folder}</span>
-          </label>
-        ))}
-      </Section>
-
-      <Section title="Voz">
-        <p className="m-0 text-sm text-muted">La voz se transcribe en este equipo. El audio no sale de él ni se guarda.</p>
-        <ul className="m-0 flex list-none flex-col p-0">
-          {view.speechModels.map((model) => (
-            <li key={model.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline py-3">
-              <label className="flex min-h-11 min-w-0 flex-1 basis-48 items-center gap-3">
-                <input type="radio" name="speech-model" className="size-4 shrink-0 accent-ink" disabled={!model.downloaded} checked={draft.speechModel === model.id} onChange={() => update("speechModel", model.id)} />
-                <span>
-                  {model.displayName} <span className="font-mono text-sm text-muted">{model.sizeMb} MB</span>
-                </span>
-              </label>
-              {model.downloaded ? (
-                <span className="text-sm">
-                  <StatusLabel status="completed">Disponible</StatusLabel>
-                </span>
-              ) : (
-                <Button disabled={download !== null} onClick={() => void startDownload(model.id)}>
-                  {download?.modelId === model.id ? `${download.downloadedMb} de ${download.totalMb} MB` : model.damaged ? "Volver a descargar" : "Descargar"}
-                </Button>
-              )}
-            </li>
+        <Section title="Carpetas autorizadas para buscar">
+          <p className="m-0 text-sm text-muted">Nexium solo mira nombres de archivo en estas carpetas. No abre, modifica, mueve ni elimina nada.</p>
+          {view.knownFolders.map((folder) => (
+            <label key={folder} className="flex min-h-11 items-center gap-3">
+              <input type="checkbox" className="size-4 shrink-0 accent-ink" checked={draft.authorizedFolders.includes(folder)} onChange={(event) => toggleFolder(folder, event.target.checked)} />
+              <span className="min-w-0 break-all font-mono text-sm">{folder}</span>
+            </label>
           ))}
-        </ul>
-        <Field label="Micrófono">
-          <select value={draft.microphone ?? ""} onChange={(event) => update("microphone", event.target.value || null)} className={inputStyle}>
-            <option value="">Automático: el primer micrófono disponible</option>
-            {view.microphones.map((device) => (
-              <option key={device.name} value={device.name}>
-                {deviceLabel(device)}
-              </option>
+        </Section>
+
+        <Section title="Voz">
+          <p className="m-0 text-sm text-muted">La voz se transcribe en este equipo. El audio no sale de él ni se guarda.</p>
+          <ul className="m-0 flex list-none flex-col p-0">
+            {view.speechModels.map((model) => (
+              <li key={model.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline py-3">
+                <label className="flex min-h-11 min-w-0 flex-1 basis-48 items-center gap-3">
+                  <input type="radio" name="speech-model" className="size-4 shrink-0 accent-ink" disabled={!model.downloaded} checked={draft.speechModel === model.id} onChange={() => update("speechModel", model.id)} />
+                  <span>
+                    {model.displayName} <span className="font-mono text-sm text-muted">{model.sizeMb} MB</span>
+                  </span>
+                </label>
+                {model.downloaded ? (
+                  <span className="text-sm">
+                    <StatusLabel status="completed">Disponible</StatusLabel>
+                  </span>
+                ) : (
+                  <Button disabled={download !== null} onClick={() => void startDownload(model.id)}>
+                    {download?.modelId === model.id ? `${download.downloadedMb} de ${download.totalMb} MB` : model.damaged ? "Volver a descargar" : "Descargar"}
+                  </Button>
+                )}
+              </li>
             ))}
-          </select>
-        </Field>
-        <MicrophoneNote chosen={view.settings.microphone} active={view.activeMicrophone} />
-        <Field label="Liberar el modelo tras estos minutos sin uso">
-          <input type="number" min={1} max={240} value={draft.speechIdleMinutes} onChange={(event) => update("speechIdleMinutes", Number(event.target.value))} className={`font-mono ${inputStyle}`} />
-        </Field>
-        <p className="m-0 text-sm text-muted">El modelo se carga la primera vez que hablas y se mantiene en memoria para responder más rápido.</p>
-      </Section>
+          </ul>
+          <Field label="Micrófono">
+            <select value={draft.microphone ?? ""} onChange={(event) => update("microphone", event.target.value || null)} className={inputStyle}>
+              <option value="">Automático: el primer micrófono disponible</option>
+              {view.microphones.map((device) => (
+                <option key={device.name} value={device.name}>
+                  {deviceLabel(device)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <MicrophoneNote chosen={view.settings.microphone} active={view.activeMicrophone} />
+          <Field label="Liberar el modelo tras estos minutos sin uso">
+            <input type="number" min={1} max={240} value={draft.speechIdleMinutes} onChange={(event) => update("speechIdleMinutes", Number(event.target.value))} className={`font-mono ${inputStyle}`} />
+          </Field>
+          <p className="m-0 text-sm text-muted">El modelo se carga la primera vez que hablas y se mantiene en memoria para responder más rápido.</p>
+        </Section>
 
-      <Section title="Clima">
-        <Field label="Ciudad predeterminada">
-          <input value={draft.weatherCity} maxLength={100} onChange={(event) => update("weatherCity", event.target.value)} className={inputStyle} />
-        </Field>
-        <p className="m-0 text-sm text-muted">
-          Datos meteorológicos de{" "}
-          <button type="button" onClick={() => void api.openAttribution()} className="bg-transparent text-muted underline">
-            Open-Meteo
-          </button>{" "}
-          (CC BY 4.0). Su uso gratuito es solo para fines no comerciales.
-        </p>
-      </Section>
-
-      {/* Pie fijo al borde inferior del área: Guardar y su resultado siempre están a la vista, sin desplazarse. */}
-      <div className="sticky bottom-0 -mb-6 flex max-w-reading flex-wrap items-center gap-x-4 gap-y-2 border-t border-line bg-panel py-3 sm:-mb-8">
-        <Button variant="primary" onClick={() => void run(() => api.saveSettings(draft), "Ajustes guardados.")}>
-          Guardar ajustes
-        </Button>
-        {message && (
-          <div key={message.at} className="min-w-0 flex-1 basis-48">
-            <Notice tone={message.error ? "error" : "ok"}>{message.text}</Notice>
-          </div>
-        )}
+        <Section title="Clima">
+          <Field label="Ciudad predeterminada">
+            <input value={draft.weatherCity} maxLength={100} onChange={(event) => update("weatherCity", event.target.value)} className={inputStyle} />
+          </Field>
+          <p className="m-0 text-sm text-muted">
+            Datos meteorológicos de{" "}
+            <button type="button" onClick={() => void api.openAttribution()} className="bg-transparent text-muted underline">
+              Open-Meteo
+            </button>{" "}
+            (CC BY 4.0). Su uso gratuito es solo para fines no comerciales.
+          </p>
+        </Section>
       </div>
-    </div>
+    </ScreenLayout>
   );
 }

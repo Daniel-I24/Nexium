@@ -36,8 +36,6 @@ export function App() {
           onAnalyzeScreen={() => goToAssistant(() => void assistant.requestCapture())}
           onConfirmCapture={() => void assistant.confirmCapture()}
           onRetry={assistant.retry}
-          onChooseReminderOption={assistant.chooseReminderOption}
-          onChooseSuggestion={assistant.chooseSuggestion}
         />
       }
     >
@@ -48,6 +46,8 @@ export function App() {
           onPickExample={(text) => void assistant.submit(text)}
           onSaveReminder={(content, dueAt) => void assistant.saveReminder(content, dueAt)}
           onAuthorizeFolders={(folders, pendingRequest) => void assistant.authorizeFolders(folders, pendingRequest)}
+          onChooseReminderOption={assistant.chooseReminderOption}
+          onChooseSuggestion={assistant.chooseSuggestion}
         />
       )}
       {screen === "reminders" && <RemindersScreen onPickExample={(text) => goToAssistant(() => void assistant.submit(text))} />}

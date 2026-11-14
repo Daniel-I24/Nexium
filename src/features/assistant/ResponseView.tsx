@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icon";
 import { Scale } from "@/components/Scale";
 import { StatusLabel } from "@/components/StatusLabel";
 import { api } from "@/services/api";
-import type { Attribution, AssistantResponse, ReminderOption, ResponseBody } from "@/types/api";
+import type { Attribution, AssistantResponse, ReminderOption, ResponseBody, SuggestedRequest } from "@/types/api";
 
 import { isCompleteLocal, toLocalInput } from "@/utils/dates";
 
@@ -16,6 +16,26 @@ import { FileList } from "./FileList";
 export interface ResponseActions {
   onSaveReminder: (content: string, dueAt: string) => void;
   onAuthorizeFolders: (folders: string[], pendingRequest: string) => void;
+  onChooseReminderOption: (option: ReminderOption) => void;
+  onChooseSuggestion: (suggestion: SuggestedRequest) => void;
+}
+
+/** Pregunta de Nexium y sus respuestas posibles, juntas en la conversación. La primera recibe el foco. */
+function Choices({ question, choices }: { question: string; choices: { key: string; label: string; onChoose: () => void }[] }) {
+  return (
+    <div className="flex max-w-reading flex-col gap-3">
+      <p className="m-0 text-lg text-query">{question}</p>
+      {choices.length > 0 && (
+        <div role="group" aria-label={question} className="flex flex-wrap gap-2">
+          {choices.map((choice, index) => (
+            <Button key={choice.key} autoFocus={index === 0} onClick={choice.onChoose}>
+              {choice.label}
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function AttributionLine({ attribution }: { attribution: Attribution | null }) {
@@ -41,45 +61,58 @@ function ReadingValue({ value }: { value: string }) {
   );
 }
 
-function ReminderDraft({ body, onSave }: { body: { content: string; dueAt: string | null; options: ReminderOption[] }; onSave: ResponseActions["onSaveReminder"] }) {
+function ReminderDraft({
+  body,
+  onSave,
+  onChoose,
+}: {
+  body: { content: string; dueAt: string | null; question: string | null; options: ReminderOption[] };
+  onSave: ResponseActions["onSaveReminder"];
+  onChoose: ResponseActions["onChooseReminderOption"];
+}) {
   const [content, setContent] = useState(body.content);
   const [due, setDue] = useState(toLocalInput(body.dueAt));
   const valid = content.trim().length > 0 && isCompleteLocal(due);
   return (
-    <form
-      className="flex max-w-reading flex-col gap-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (valid) onSave(content.trim(), new Date(due).toISOString());
-      }}
-    >
-      <label className="flex flex-col gap-1 text-sm text-muted">
-        Recordatorio
-        <input
-          value={content}
-          maxLength={300}
-          onChange={(event) => setContent(event.target.value)}
-          className="h-11 w-full min-w-0 rounded-sm border border-line bg-panel px-3 text-md text-ink"
-        />
-      </label>
-      <DueFields value={due} onChange={setDue} />
-      <div>
-        <Button type="submit" variant="primary" disabled={!valid}>
-          Guardar recordatorio
-        </Button>
-      </div>
-    </form>
+    <div className="flex flex-col gap-6">
+      {body.question && (
+        <Choices question={body.question} choices={body.options.map((option) => ({ key: option.dueAt, label: option.label, onChoose: () => onChoose(option) }))} />
+      )}
+      <form
+        className="flex max-w-reading flex-col gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (valid) onSave(content.trim(), new Date(due).toISOString());
+        }}
+      >
+        <label className="flex flex-col gap-1 text-sm text-muted">
+          Recordatorio
+          <input
+            value={content}
+            maxLength={300}
+            onChange={(event) => setContent(event.target.value)}
+            className="h-11 w-full min-w-0 rounded-sm border border-line bg-panel px-3 text-md text-ink"
+          />
+        </label>
+        <DueFields value={due} onChange={setDue} />
+        <div>
+          <Button type="submit" variant="primary" disabled={!valid}>
+            Guardar recordatorio
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 }
 
 function ScreenAnalysisView({ summary, cause, steps }: { summary: string; cause: string | null; steps: string[] }) {
   return (
     <div className="flex max-w-reading flex-col gap-5">
-      <p className="m-0 text-lg font-semibold">{summary}</p>
+      <p className="m-0 break-words text-lg font-semibold">{summary}</p>
       {cause && (
         <section className="flex flex-col gap-1">
           <h2 className="m-0 text-sm font-medium text-muted">Causa probable</h2>
-          <p className="m-0 text-md">{cause}</p>
+          <p className="m-0 break-words text-md">{cause}</p>
         </section>
       )}
       {steps.length > 0 && (
@@ -91,7 +124,7 @@ function ScreenAnalysisView({ summary, cause, steps }: { summary: string; cause:
                 <span aria-hidden="true" className="font-mono text-muted">
                   {index + 1}
                 </span>
-                <span>{step}</span>
+                <span className="min-w-0 break-words">{step}</span>
               </li>
             ))}
           </ol>
@@ -139,7 +172,7 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
         </>
       );
     case "reminderDraft":
-      return <ReminderDraft body={body} onSave={actions.onSaveReminder} />;
+      return <ReminderDraft body={body} onSave={actions.onSaveReminder} onChoose={actions.onChooseReminderOption} />;
     case "reminderSaved":
       return (
         <div className="flex max-w-reading flex-col gap-1">
@@ -152,7 +185,12 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
         </div>
       );
     case "clarification":
-      return <p className="m-0 max-w-reading text-lg text-query">{body.question}</p>;
+      return (
+        <Choices
+          question={body.question}
+          choices={body.suggestions.map((suggestion) => ({ key: suggestion.request, label: suggestion.label, onChoose: () => actions.onChooseSuggestion(suggestion) }))}
+        />
+      );
     case "folderConsent":
       return (
         <div className="flex max-w-reading flex-col gap-3">

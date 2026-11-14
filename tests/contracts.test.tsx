@@ -12,7 +12,7 @@ import fixtures from "./contracts/responses.json";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => undefined)) }));
 
-const actions = { onSaveReminder: vi.fn(), onAuthorizeFolders: vi.fn() };
+const actions = { onSaveReminder: vi.fn(), onAuthorizeFolders: vi.fn(), onChooseReminderOption: vi.fn(), onChooseSuggestion: vi.fn() };
 const show = (key: keyof typeof fixtures) => render(<ResponseView response={fixtures[key] as AssistantResponse} actions={actions} />);
 
 describe("respuestas con el contrato que produce Rust", () => {

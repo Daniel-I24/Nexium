@@ -1,13 +1,19 @@
 import {
+  Bell,
   BellRing,
   CircleAlert,
   CircleCheck,
   CircleSlash,
   CircleX,
   Clock,
+  FileText,
+  FolderPlus,
+  History,
   Info,
+  MessageSquareText,
   Mic,
   ScanLine,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 
@@ -25,6 +31,12 @@ const icons = {
   cancelled: CircleSlash,
   info: Info,
   reminder: BellRing,
+  assistant: MessageSquareText,
+  reminders: Bell,
+  history: History,
+  settings: SlidersHorizontal,
+  folder: FolderPlus,
+  document: FileText,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;

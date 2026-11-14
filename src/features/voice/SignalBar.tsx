@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 
 import { Button } from "@/components/Button";
 import { Icon } from "@/components/Icon";
-import type { ReminderOption, SuggestedRequest } from "@/types/api";
 
 import type { BarState } from "./barState";
 import { LevelTrace } from "./LevelTrace";
@@ -17,8 +16,6 @@ interface SignalBarProps {
   onAnalyzeScreen: () => void;
   onConfirmCapture: () => void;
   onRetry: () => void;
-  onChooseReminderOption: (option: ReminderOption) => void;
-  onChooseSuggestion: (suggestion: SuggestedRequest) => void;
 }
 
 type Tone = "neutral" | "signal" | "query" | "error";
@@ -31,74 +28,34 @@ const toneBorders: Record<Tone, string> = {
   error: "border-t-2 border-error",
 };
 
-const voiceKey = "min-h-16 w-34 shrink-0";
+/** La tecla principal: ancha y alta cuando hay sitio; cuadrada, solo con el icono, cuando no. */
+const mainKey = "shrink-0 @bar-labels:min-h-16 @bar-labels:w-34";
 
 /** Control que recibe el foco cuando cambia el estado y el foco estaba en la barra (o se perdió con el cambio). */
 const AUTOFOCUS = "data-bar-focus";
 
+/** Nombre visible solo cuando cabe. Si no, sigue siendo el nombre accesible del botón. */
+function Label({ children }: { children: string }) {
+  return <span className="sr-only @bar-labels:not-sr-only">{children}</span>;
+}
+
+/** Estado en texto. En barras estrechas solo lo oyen los lectores de pantalla: los controles ya lo muestran. */
 function Status({ text, className = "" }: { text: string; className?: string }) {
   return (
-    <span role="status" aria-live="polite" className={`w-34 shrink-0 font-mono text-sm ${className}`}>
+    <span role="status" aria-live="polite" className={`sr-only font-mono text-sm @bar-status:not-sr-only @bar-status:w-34 @bar-status:shrink-0 ${className}`}>
       {text}
     </span>
   );
 }
 
-/** Un error se lee una sola vez: si ya está en la conversación, la barra solo ofrece qué hacer. */
-function ErrorContent({ message, retryable, onRetry, onClose }: { message: string | null; retryable: boolean; onRetry: () => void; onClose: () => void }) {
-  return (
-    <>
-      {retryable && (
-        <Button variant="primary" className={voiceKey} onClick={onRetry} {...{ [AUTOFOCUS]: "" }}>
-          Reintentar
-        </Button>
-      )}
-      {message ? (
-        <p role="status" aria-live="polite" className="m-0 flex min-w-0 flex-1 basis-48 items-start gap-2 text-error">
-          <span className="flex h-lh items-center">
-            <Icon name="failed" />
-          </span>
-          <span>{message}</span>
-        </p>
-      ) : (
-        <span role="status" aria-live="polite" className="sr-only">
-          No se pudo completar la solicitud. El motivo aparece en la conversación.
-        </span>
-      )}
-      <Button className={message ? undefined : "ml-auto"} onClick={onClose} {...(retryable ? {} : { [AUTOFOCUS]: "" })}>
-        Cerrar
-      </Button>
-    </>
-  );
+interface Content {
+  tone: Tone;
+  /** Texto que explica el estado. Si es largo, se desplaza por dentro: los controles nunca se cortan. */
+  message?: ReactNode;
+  controls: ReactNode;
 }
 
-/** Una frase basta para decidir. El aviso completo de privacidad queda a un clic. */
-function CaptureConsent({ provider, notice, onConfirm, onCancel }: { provider: string; notice: string; onConfirm: () => void; onCancel: () => void }) {
-  const [details, setDetails] = useState(false);
-  return (
-    <>
-      <Button variant="signal" className={voiceKey} onClick={onConfirm} {...{ [AUTOFOCUS]: "" }}>
-        Capturar
-      </Button>
-      {/* El aviso es lo que hay que leer: en una ventana estrecha ocupa su propia fila. */}
-      <div className="min-w-0 flex-1 basis-80">
-        <p className="m-0">
-          Se tomará una sola imagen de tu pantalla y se enviará a {provider}. No captures información personal.{" "}
-          <button type="button" aria-expanded={details} onClick={() => setDetails(!details)} className="bg-transparent p-0 font-semibold underline">
-            {details ? "Menos información" : "Más información"}
-          </button>
-        </p>
-        {details && <p className="m-0 mt-2 animate-fade text-sm">{notice} Nexium no guarda la imagen.</p>}
-      </div>
-      <Button variant="onSignal" onClick={onCancel}>
-        Cancelar
-      </Button>
-      <Status text="Esperando permiso" className="font-medium" />
-    </>
-  );
-}
-
-function IdleContent({ onSpeak, onSubmitText, onAnalyzeScreen }: Pick<SignalBarProps, "onSpeak" | "onSubmitText" | "onAnalyzeScreen">) {
+function IdleControls({ onSpeak, onSubmitText, onAnalyzeScreen }: Pick<SignalBarProps, "onSpeak" | "onSubmitText" | "onAnalyzeScreen">) {
   const [text, setText] = useState("");
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -109,11 +66,11 @@ function IdleContent({ onSpeak, onSubmitText, onAnalyzeScreen }: Pick<SignalBarP
   };
   return (
     <>
-      <Button variant="primary" className={voiceKey} onClick={onSpeak}>
+      <Button variant="primary" title="Hablar" className={mainKey} onClick={onSpeak}>
         <Icon name="mic" size="md" />
-        Hablar
+        <Label>Hablar</Label>
       </Button>
-      <form onSubmit={submit} className="min-w-0 flex-1 basis-48">
+      <form onSubmit={submit} className="min-w-24 flex-1 basis-24">
         <input
           aria-label="Escribe tu solicitud"
           placeholder="O escribe tu solicitud"
@@ -124,30 +81,26 @@ function IdleContent({ onSpeak, onSubmitText, onAnalyzeScreen }: Pick<SignalBarP
           {...{ [AUTOFOCUS]: "" }}
         />
       </form>
-      <Button onClick={onAnalyzeScreen}>
+      <Button title="Analizar pantalla" className="shrink-0" onClick={onAnalyzeScreen}>
         <Icon name="screen" size="md" />
-        Analizar pantalla
+        <Label>Analizar pantalla</Label>
       </Button>
       <Status text="En espera" className="text-muted" />
     </>
   );
 }
 
-function ProgressContent({ step, filled, status, onCancel }: { step: string; filled: boolean; status: string; onCancel: () => void }) {
+function ProgressControls({ step, filled, status, onCancel }: { step: string; filled: boolean; status: string; onCancel: () => void }) {
   return (
     <>
-      <Button disabled className={voiceKey}>
-        <Icon name="mic" size="md" />
-        Hablar
-      </Button>
-      <div className="flex min-w-0 flex-1 basis-48 flex-col gap-1.5">
-        <span>{step}</span>
+      <div className="flex min-w-24 flex-1 basis-24 flex-col gap-1.5">
+        <span className="break-words">{step}</span>
         {/* Indeterminado mientras procesa; lleno al responder. Con Reducir movimiento queda quieto y el texto manda. */}
         <div aria-hidden="true" data-clip-ok className={`h-0.5 overflow-hidden ${filled ? "bg-ink" : "bg-hairline"}`}>
           {!filled && <div className="h-full w-1/4 animate-sweep bg-ink" />}
         </div>
       </div>
-      <Button onClick={onCancel} {...{ [AUTOFOCUS]: "" }}>
+      <Button className="shrink-0" onClick={onCancel} {...{ [AUTOFOCUS]: "" }}>
         Cancelar
       </Button>
       <Status text={status} className={filled ? "font-medium text-ink" : "text-muted"} />
@@ -155,21 +108,58 @@ function ProgressContent({ step, filled, status, onCancel }: { step: string; fil
   );
 }
 
-function content(props: SignalBarProps): { tone: Tone; body: ReactNode } {
+/** Una frase basta para decidir. El aviso completo de privacidad queda a un clic. */
+function useCaptureConsent(provider: string, notice: string, onConfirm: () => void, onCancel: () => void): Content {
+  const [details, setDetails] = useState(false);
+  return {
+    tone: "signal",
+    message: (
+      <>
+        <p className="m-0">
+          Se tomará una sola imagen de tu pantalla y se enviará a {provider}. No captures información personal.{" "}
+          <button type="button" aria-expanded={details} onClick={() => setDetails(!details)} className="bg-transparent p-0 font-semibold underline">
+            {details ? "Menos información" : "Más información"}
+          </button>
+        </p>
+        {details && <p className="m-0 mt-2 animate-fade text-sm">{notice} Nexium no guarda la imagen.</p>}
+      </>
+    ),
+    controls: (
+      <>
+        <Button variant="signal" className="shrink-0" onClick={onConfirm} {...{ [AUTOFOCUS]: "" }}>
+          Capturar
+        </Button>
+        <Button variant="onSignal" className="shrink-0" onClick={onCancel}>
+          Cancelar
+        </Button>
+        <span className="flex-1" />
+        <Status text="Esperando permiso" className="font-medium" />
+      </>
+    ),
+  };
+}
+
+function useContent(props: SignalBarProps): Content {
   const { state, levels, onCancel } = props;
+  const consent = useCaptureConsent(
+    state.kind === "captureConsent" ? state.provider : "",
+    state.kind === "captureConsent" ? state.notice : "",
+    props.onConfirmCapture,
+    onCancel,
+  );
   switch (state.kind) {
     case "idle":
-      return { tone: "neutral", body: <IdleContent {...props} /> };
+      return { tone: "neutral", controls: <IdleControls {...props} /> };
     case "listening":
       return {
         tone: "signal",
-        body: (
+        controls: (
           <>
-            <Button variant="signal" className={voiceKey} onClick={props.onStopListening} {...{ [AUTOFOCUS]: "" }}>
+            <Button variant="signal" className={mainKey} onClick={props.onStopListening} {...{ [AUTOFOCUS]: "" }}>
               Terminar
             </Button>
             <LevelTrace levels={levels} />
-            <Button variant="onSignal" onClick={onCancel}>
+            <Button variant="onSignal" className="shrink-0" onClick={onCancel}>
               Cancelar
             </Button>
             <Status text="Escuchando" className="font-medium" />
@@ -177,48 +167,69 @@ function content(props: SignalBarProps): { tone: Tone; body: ReactNode } {
         ),
       };
     case "processing":
-      return { tone: "neutral", body: <ProgressContent step={state.step} filled={false} status="Procesando" onCancel={onCancel} /> };
+      return { tone: "neutral", controls: <ProgressControls step={state.step} filled={false} status="Procesando" onCancel={onCancel} /> };
     case "responding":
-      return { tone: "neutral", body: <ProgressContent step="Escribiendo la respuesta" filled status="Respondiendo" onCancel={onCancel} /> };
+      return { tone: "neutral", controls: <ProgressControls step="Escribiendo la respuesta" filled status="Respondiendo" onCancel={onCancel} /> };
     case "captureConsent":
-      return { tone: "signal", body: <CaptureConsent provider={state.provider} notice={state.notice} onConfirm={props.onConfirmCapture} onCancel={onCancel} /> };
+      return consent;
     case "clarify":
+      // Las opciones están en la conversación, junto a la pregunta: la barra solo indica que falta elegir.
       return {
         tone: "query",
-        body: (
+        controls: (
           <>
-            <p className="m-0 min-w-0 flex-1 basis-48 font-semibold text-query">{state.question}</p>
-            {state.reminderOptions.map((option, index) => (
-              <Button key={option.dueAt} onClick={() => props.onChooseReminderOption(option)} {...(index === 0 ? { [AUTOFOCUS]: "" } : {})}>
-                {option.label}
-              </Button>
-            ))}
-            {state.suggestions.map((suggestion, index) => (
-              <Button
-                key={suggestion.request}
-                onClick={() => props.onChooseSuggestion(suggestion)}
-                {...(index === 0 && state.reminderOptions.length === 0 ? { [AUTOFOCUS]: "" } : {})}
-              >
-                {suggestion.label}
-              </Button>
-            ))}
-            <Button onClick={onCancel}>Cancelar</Button>
+            <p className="m-0 min-w-24 flex-1 basis-24 font-semibold text-query">Elige una opción en la conversación.</p>
+            <Button className="shrink-0" onClick={onCancel} {...{ [AUTOFOCUS]: "" }}>
+              Cancelar
+            </Button>
             <Status text="Pendiente" className="text-query" />
           </>
         ),
       };
     case "error":
-      return { tone: "error", body: <ErrorContent message={state.message} retryable={state.retryable} onRetry={props.onRetry} onClose={onCancel} /> };
+      // Un error se lee una sola vez: si ya está en la conversación, la barra solo ofrece qué hacer.
+      return {
+        tone: "error",
+        message: state.message ? (
+          <p className="m-0 flex items-start gap-2 text-error">
+            <span className="flex h-lh items-center">
+              <Icon name="failed" />
+            </span>
+            <span className="min-w-0 break-words">{state.message}</span>
+          </p>
+        ) : undefined,
+        controls: (
+          <>
+            {state.retryable && (
+              <Button variant="primary" className="shrink-0" onClick={props.onRetry} {...{ [AUTOFOCUS]: "" }}>
+                Reintentar
+              </Button>
+            )}
+            <span role="status" aria-live="polite" className="sr-only">
+              {state.message ? `No se pudo completar la solicitud. ${state.message}` : "No se pudo completar la solicitud. El motivo aparece en la conversación."}
+            </span>
+            <span className="flex-1" />
+            <Button className="shrink-0" onClick={onCancel} {...(state.retryable ? {} : { [AUTOFOCUS]: "" })}>
+              Cerrar
+            </Button>
+          </>
+        ),
+      };
   }
 }
 
 /**
- * Barra de señal. El contenedor no cambia entre estados: así la capa amarilla se enciende y se apaga con
- * un fundido, y el contenido de cada estado entra con otro. Si el foco estaba en la barra, pasa al control
- * principal del estado nuevo en lugar de perderse.
+ * Barra de señal: siempre entera al pie de la ventana. Tiene dos partes:
+ *
+ * - el mensaje del estado, si lo hay, que se desplaza por dentro cuando no cabe;
+ * - la fila de controles, que nunca se desplaza ni se corta. Cuando la barra es estrecha, los botones muestran
+ *   solo su icono y el estado en texto queda para los lectores de pantalla.
+ *
+ * El contenedor no cambia entre estados: la capa amarilla se enciende y se apaga con un fundido, y el contenido
+ * de cada estado entra con otro. Si el foco estaba en la barra, pasa al control principal del estado nuevo.
  */
 export function SignalBar(props: SignalBarProps) {
-  const { tone, body } = content(props);
+  const { tone, message, controls } = useContent(props);
   const bar = useRef<HTMLElement>(null);
   const kind = props.state.kind;
   const mounted = useRef(false);
@@ -239,21 +250,18 @@ export function SignalBar(props: SignalBarProps) {
   }, [kind]);
 
   return (
-    <section
-      ref={bar}
-      aria-label="Barra de señal"
-      data-tone={tone}
-      className={`relative isolate flex max-h-half-window min-w-0 flex-col bg-base ${toneBorders[tone]}`}
-    >
+    <section ref={bar} aria-label="Barra de señal" data-tone={tone} className={`@container relative isolate flex shrink-0 flex-col bg-base ${toneBorders[tone]}`}>
       <span
         aria-hidden="true"
         className={`absolute inset-0 -z-10 bg-signal transition-opacity duration-fast ease-instrument ${tone === "signal" ? "opacity-100" : "opacity-0"}`}
       />
-      {/* Si el texto es muy grande y la ventana muy baja, la barra se desplaza por dentro en lugar de cortar controles. */}
-      <div className="min-h-0 overflow-y-auto">
-        <div key={kind} className="flex animate-fade flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3">
-          {body}
-        </div>
+      <div key={kind} className="flex animate-fade flex-col">
+        {message && (
+          <div data-bar-message className="max-h-bar-message overflow-y-auto px-4 pt-3 short:pt-2">
+            {message}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 short:py-2 @bar-labels:gap-x-4">{controls}</div>
       </div>
     </section>
   );

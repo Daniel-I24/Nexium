@@ -70,9 +70,9 @@ export function useAssistant() {
     }));
     const { body } = response;
     if (body.kind === "reminderDraft" && body.question) {
-      setBar({ kind: "clarify", question: body.question, reminderOptions: body.options, suggestions: [] });
+      setBar({ kind: "clarify" });
     } else if (body.kind === "clarification") {
-      setBar({ kind: "clarify", question: body.question, reminderOptions: [], suggestions: body.suggestions });
+      setBar({ kind: "clarify" });
     } else if (body.kind === "captureRequest") {
       void requestCaptureRef.current(body.question);
     } else if (body.kind === "error") {

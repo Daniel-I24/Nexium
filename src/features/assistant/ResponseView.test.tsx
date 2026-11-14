@@ -18,7 +18,7 @@ const response = (body: ResponseBody): AssistantResponse => ({
   body,
 });
 
-const actions = { onSaveReminder: vi.fn(), onAuthorizeFolders: vi.fn() };
+const actions = { onSaveReminder: vi.fn(), onAuthorizeFolders: vi.fn(), onChooseReminderOption: vi.fn(), onChooseSuggestion: vi.fn() };
 
 describe("origen", () => {
   it("todas las líneas de origen terminan con un punto, sin duplicarlo", () => {
@@ -62,5 +62,26 @@ describe("análisis de pantalla", () => {
     render(<ResponseView response={response({ kind: "screenAnalysis", summary: "<b>hola</b>", cause: null, steps: [] })} actions={actions} />);
     expect(screen.getByText("<b>hola</b>")).toBeInTheDocument();
     expect(document.querySelector("b")).toBeNull();
+  });
+});
+
+describe("aclaraciones", () => {
+  it("las opciones están junto a la pregunta y la primera recibe el foco", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const option = { label: "08:00", dueAt: "2026-11-12T08:00:00-05:00" };
+    const body: ResponseBody = { kind: "reminderDraft", content: "Llamar a mamá", dueAt: null, question: "¿A qué hora?", options: [option, { label: "20:00", dueAt: "2026-11-12T20:00:00-05:00" }] };
+    render(<ResponseView response={response(body)} actions={actions} />);
+    const choices = screen.getByRole("group", { name: "¿A qué hora?" });
+    expect(within(choices).getByRole("button", { name: "08:00" })).toHaveFocus();
+    await userEvent.click(within(choices).getByRole("button", { name: "08:00" }));
+    expect(actions.onChooseReminderOption).toHaveBeenCalledWith(option);
+  });
+
+  it("una sugerencia vuelve a enviar la solicitud completa", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const suggestion = { label: "Buscar un archivo", request: "Busca el archivo informe" };
+    render(<ResponseView response={response({ kind: "clarification", question: "¿Qué quieres hacer?", suggestions: [suggestion] })} actions={actions} />);
+    await userEvent.click(screen.getByRole("button", { name: "Buscar un archivo" }));
+    expect(actions.onChooseSuggestion).toHaveBeenCalledWith(suggestion);
   });
 });

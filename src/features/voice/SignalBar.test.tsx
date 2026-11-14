@@ -14,8 +14,6 @@ function setup(state: BarState) {
     onAnalyzeScreen: vi.fn(),
     onConfirmCapture: vi.fn(),
     onRetry: vi.fn(),
-    onChooseReminderOption: vi.fn(),
-    onChooseSuggestion: vi.fn(),
   };
   render(<SignalBar state={state} levels={[0.2, 0.8]} {...handlers} />);
   return handlers;
@@ -53,7 +51,7 @@ describe("SignalBar", () => {
     setup({ kind: "processing", step: "Transcribiendo tu voz en este equipo" });
     expect(status()).toHaveTextContent("Procesando");
     expect(screen.getByText("Transcribiendo tu voz en este equipo")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Hablar" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Hablar" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeEnabled();
   });
 
@@ -85,12 +83,18 @@ describe("SignalBar", () => {
     expect(screen.queryByText(/Google/)).not.toBeInTheDocument();
   });
 
-  it("una aclaración ofrece opciones", async () => {
-    const option = { label: "08:00", dueAt: "2026-11-12T08:00:00-05:00" };
-    const handlers = setup({ kind: "clarify", question: "¿A qué hora?", reminderOptions: [option], suggestions: [] });
+  it("una aclaración remite a las opciones de la conversación y se puede cancelar", async () => {
+    const handlers = setup({ kind: "clarify" });
     expect(status()).toHaveTextContent("Pendiente");
-    await userEvent.click(screen.getByRole("button", { name: "08:00" }));
-    expect(handlers.onChooseReminderOption).toHaveBeenCalledWith(option);
+    expect(screen.getByText("Elige una opción en la conversación.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(handlers.onCancel).toHaveBeenCalled();
+  });
+
+  it("los botones sin sitio para su nombre lo conservan como nombre accesible", () => {
+    setup({ kind: "idle" });
+    expect(screen.getByRole("button", { name: "Hablar" })).toHaveAttribute("title", "Hablar");
+    expect(screen.getByRole("button", { name: "Analizar pantalla" })).toHaveAttribute("title", "Analizar pantalla");
   });
 
   it("un error que no está en la conversación se explica en la barra, sin la etiqueta Error", async () => {

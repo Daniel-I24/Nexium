@@ -4,7 +4,7 @@
  */
 export function LevelTrace({ levels }: { levels: number[] }) {
   return (
-    <div role="img" aria-label="Nivel del micrófono" data-clip-ok className="flex h-11 min-w-0 flex-1 basis-48 items-center gap-0.5 overflow-hidden">
+    <div role="img" aria-label="Nivel del micrófono" data-clip-ok className="flex h-11 min-w-12 flex-1 basis-12 items-center gap-0.5 overflow-hidden">
       {levels.map((level, index) => (
         <span key={index} className="h-full min-w-0.5 flex-1 bg-on-signal" style={{ transform: `scaleY(${Math.max(0.06, Math.min(1, level))})` }} />
       ))}

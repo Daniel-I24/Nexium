@@ -5,6 +5,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DueFields } from "@/components/DueFields";
 import { Icon } from "@/components/Icon";
 import { Notice } from "@/components/Notice";
+import { ScreenLayout } from "@/components/ScreenLayout";
 import { StatusLabel } from "@/components/StatusLabel";
 import { api, errorMessage, events } from "@/services/api";
 import type { Reminder } from "@/types/api";
@@ -139,25 +140,27 @@ export function RemindersScreen({ onPickExample }: { onPickExample: (text: strin
   }, [load]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="m-0 text-xl font-medium">Recordatorios</h1>
-      <p className="m-0 max-w-reading text-sm text-muted">
-        Los avisos solo se emiten mientras Nexium está abierto o en la bandeja del sistema. Si lo cierras con Salir, verás los vencidos al volver a abrirlo.
-      </p>
-      {error && <Notice tone="error">{error}</Notice>}
-      {reminders === null && !error && (
-        <p role="status" className="m-0 text-muted">
-          Cargando recordatorios…
+    <ScreenLayout>
+      <div className="flex flex-col gap-4">
+        <h1 className="m-0 text-xl font-medium">Recordatorios</h1>
+        <p className="m-0 max-w-reading text-sm text-muted">
+          Los avisos solo se emiten mientras Nexium está abierto o en la bandeja del sistema. Si lo cierras con Salir, verás los vencidos al volver a abrirlo.
         </p>
-      )}
-      {reminders?.length === 0 && <EmptyReminders onPickExample={onPickExample} />}
-      {reminders && reminders.length > 0 && (
-        <ul aria-label="Recordatorios" className="m-0 flex list-none flex-col border-b border-hairline p-0">
-          {reminders.map((reminder) => (
-            <ReminderRow key={`${reminder.id}-${reminder.dueAt}`} reminder={reminder} onChanged={load} onError={setError} />
-          ))}
-        </ul>
-      )}
-    </div>
+        {error && <Notice tone="error">{error}</Notice>}
+        {reminders === null && !error && (
+          <p role="status" className="m-0 text-muted">
+            Cargando recordatorios…
+          </p>
+        )}
+        {reminders?.length === 0 && <EmptyReminders onPickExample={onPickExample} />}
+        {reminders && reminders.length > 0 && (
+          <ul aria-label="Recordatorios" className="m-0 flex list-none flex-col border-b border-hairline p-0">
+            {reminders.map((reminder) => (
+              <ReminderRow key={`${reminder.id}-${reminder.dueAt}`} reminder={reminder} onChanged={load} onError={setError} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </ScreenLayout>
   );
 }
