@@ -4,9 +4,10 @@ interface NexiumMarkProps {
   size?: number;
 }
 
+/** Decorativo: va siempre junto al nombre "Nexium", que ya lo leen los lectores de pantalla. */
 export function NexiumMark({ sensing = false, size = 28 }: NexiumMarkProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" role="img" aria-label="Símbolo de Nexium">
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" aria-hidden="true" focusable="false">
       <rect x="3" y="3" width="4" height="22" fill="currentColor" />
       <rect x="21" y="3" width="4" height="22" fill="currentColor" />
       <path d="M7 5 21 23" stroke="currentColor" strokeWidth="4" />

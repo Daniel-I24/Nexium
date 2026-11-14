@@ -192,6 +192,9 @@ pub fn voice_cancel<R: Runtime>(app: AppHandle<R>, state: State<'_, AppState>) {
     let _ = app.emit("assistant://stage", StagePayload { stage: Stage::Idle });
 }
 
+/// Cómo se nombra una solicitud por voz que no llegó a transcribirse, igual en la conversación y en el historial.
+pub const VOICE_REQUEST: &str = "Solicitud por voz";
+
 #[tauri::command]
 pub async fn voice_stop<R: Runtime>(
     app: AppHandle<R>,
@@ -232,7 +235,7 @@ pub async fn voice_stop<R: Runtime>(
     };
     if text.is_empty() {
         let (id, created_at) = state.history.record(
-            "(sin voz)",
+            VOICE_REQUEST,
             Category::General,
             InteractionStatus::Failed,
             "No se oyó ninguna solicitud",
@@ -240,7 +243,7 @@ pub async fn voice_stop<R: Runtime>(
         present_stage(&app).await;
         return Ok(Some(AssistantResponse {
             id,
-            request: "Sin solicitud".into(),
+            request: VOICE_REQUEST.into(),
             created_at,
             category: Category::General,
             status: InteractionStatus::Failed,
