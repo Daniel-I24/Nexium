@@ -22,6 +22,7 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     css: false,
     include: ["src/**/*.test.{ts,tsx}", "tests/**/*.test.{ts,tsx}"],
+    exclude: ["tests/layout/**", "node_modules/**"],
     coverage: { provider: "v8", include: ["src/**/*.{ts,tsx}"], exclude: ["src/**/*.test.{ts,tsx}"], reporter: ["text-summary", "json-summary"], reportsDirectory: "coverage" },
   },
 });
