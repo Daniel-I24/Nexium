@@ -85,3 +85,10 @@ describe("fuentes incluidas en la aplicación", () => {
     expect(fonts).not.toMatch(/format\(['"]woff['"]\)/);
   });
 });
+
+describe("abrir una sección", () => {
+  it("confirma en la conversación qué sección se abrió", () => {
+    show("navigate");
+    expect(screen.getByText("Abrí Recordatorios.")).toBeInTheDocument();
+  });
+});

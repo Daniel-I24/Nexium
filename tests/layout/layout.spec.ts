@@ -74,7 +74,7 @@ const views: Record<string, (page: Page) => Promise<void>> = {
   },
   "barra-procesando": async (page) => {
     await page.evaluate(() => window.harness.stage("transcribing"));
-    await expect(page.getByText("Transcribiendo tu voz en este equipo")).toBeVisible();
+    await expect(page.getByText("Transcribiendo tu voz en este equipo…")).toBeVisible();
   },
   "barra-respondiendo": async (page) => {
     await page.evaluate(() => window.harness.stage("responding"));

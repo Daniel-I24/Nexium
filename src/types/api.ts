@@ -43,6 +43,9 @@ export interface Attribution {
   url: string;
 }
 
+/** Secciones de la app que una orden puede abrir ("Abre los recordatorios"). */
+export type Section = "assistant" | "reminders" | "history" | "settings";
+
 export type ResponseBody =
   | { kind: "reading"; value: string; unit: string; context: string; percent: number | null; rows: DataRowContent[]; attribution: Attribution | null }
   | { kind: "rows"; rows: DataRowContent[]; note: string | null; attribution: Attribution | null }
@@ -54,6 +57,7 @@ export type ResponseBody =
   | { kind: "clarification"; question: string; suggestions: SuggestedRequest[] }
   | { kind: "folderConsent"; folders: string[]; pendingRequest: string }
   | { kind: "captureRequest"; question: string }
+  | { kind: "navigate"; section: Section }
   | { kind: "error"; code: string; message: string; hint: string | null };
 
 export interface AssistantResponse {

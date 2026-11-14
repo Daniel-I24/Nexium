@@ -33,6 +33,15 @@ describe("useAssistant", () => {
     expect(result.current.bar).toEqual({ kind: "idle" });
   });
 
+  it("una orden para abrir una sección cambia de pantalla", async () => {
+    invoke.mockResolvedValueOnce(reply({ kind: "navigate", section: "reminders" }));
+    const onNavigate = vi.fn();
+    const { result } = renderHook(() => useAssistant({ onNavigate }));
+    await act(() => result.current.submit("Abre los recordatorios"));
+    expect(onNavigate).toHaveBeenCalledWith("reminders");
+    expect(result.current.bar).toEqual({ kind: "idle" });
+  });
+
   it("la cinta no duplica entradas ni pasa de cinco, también en modo estricto", async () => {
     const { result } = renderHook(() => useAssistant(), { wrapper: StrictMode });
     for (const id of [1, 2, 3, 4, 5, 6, 7]) {

@@ -86,36 +86,85 @@ impl Drop for Recording {
     }
 }
 
-/// Si la entrada predeterminada no es un micrófono (por ejemplo, "Stereo Mix", que graba lo que suena en el
-/// equipo), se usa el primer micrófono disponible. Si no hay ninguno reconocible, se respeta la predeterminada.
+/// Qué es una entrada de audio, para elegirla sin preguntar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputKind {
+    /// El sistema la declara micrófono (integrado, USB, auriculares con micrófono).
+    Microphone,
+    /// El sistema no dice qué es. Puede ser un micrófono.
+    Unknown,
+    /// Graba lo que suena en el equipo, no la voz: "Stereo Mix", "Mezcla estéreo", cables virtuales.
+    SystemAudio,
+}
+
+/// Nombres de las entradas que graban el sonido del equipo. Algunos controladores no las marcan como
+/// virtuales, así que se reconocen también por el nombre, sin tildes ni mayúsculas.
+const SYSTEM_AUDIO_NAMES: &[&str] = &[
+    "stereo mix",
+    "stereomix",
+    "mezcla estereo",
+    "mezcla stereo",
+    "mix estereo",
+    "what u hear",
+    "wave out",
+    "loopback",
+    "monitor of",
+    "cable output",
+    "vb-audio",
+    "voicemeeter",
+    "blackhole",
+    "soundflower",
+];
+
+pub fn is_system_audio_name(name: &str) -> bool {
+    let name = crate::core::rules::normalize(name);
+    SYSTEM_AUDIO_NAMES
+        .iter()
+        .any(|candidate| name.contains(&crate::core::rules::normalize(candidate)))
+}
+
+/// Elección automática: el primer micrófono real, prefiriendo el predeterminado si lo es. Si el sistema no
+/// identifica ninguno, la primera entrada que no grabe el sonido del equipo. **Nunca** una de esas, aunque sea
+/// la predeterminada de Windows: con ella Nexium oiría lo que suena, no tu voz.
 pub fn pick_input<D>(
     default: Option<D>,
     inputs: impl IntoIterator<Item = D>,
-    is_microphone: impl Fn(&D) -> bool,
+    kind_of: impl Fn(&D) -> InputKind,
 ) -> Option<D> {
-    if default.as_ref().is_some_and(&is_microphone) {
+    let inputs: Vec<D> = inputs.into_iter().collect();
+    let default_kind = default.as_ref().map(&kind_of);
+    if default_kind == Some(InputKind::Microphone) {
         return default;
     }
-    inputs
-        .into_iter()
-        .find(|device| is_microphone(device))
-        .or(default)
+    let mut unknown = None;
+    for device in inputs {
+        match kind_of(&device) {
+            InputKind::Microphone => return Some(device),
+            InputKind::Unknown if unknown.is_none() => unknown = Some(device),
+            _ => {}
+        }
+    }
+    if default_kind == Some(InputKind::Unknown) {
+        return default;
+    }
+    unknown
 }
 
-/// El micrófono elegido en Ajustes, si sigue conectado; si no, la elección automática.
+/// El micrófono elegido en Ajustes, si sigue conectado (se respeta aunque no lo parezca: lo eligió la persona);
+/// si no, la elección automática.
 pub fn choose_input<D>(
     preferred: Option<&str>,
     default: Option<D>,
     inputs: Vec<D>,
     name_of: impl Fn(&D) -> String,
-    is_microphone: impl Fn(&D) -> bool,
+    kind_of: impl Fn(&D) -> InputKind,
 ) -> Option<D> {
     if let Some(wanted) = preferred {
         if let Some(index) = inputs.iter().position(|device| name_of(device) == wanted) {
             return inputs.into_iter().nth(index);
         }
     }
-    pick_input(default, inputs, is_microphone)
+    pick_input(default, inputs, kind_of)
 }
 
 /// Un dispositivo de entrada tal como se muestra en Ajustes.
@@ -138,7 +187,7 @@ pub fn input_devices() -> Vec<InputDevice> {
                 .map(|device| {
                     let name = device_name(&device);
                     InputDevice {
-                        is_microphone: is_microphone(&device),
+                        is_microphone: input_kind(&device) != InputKind::SystemAudio,
                         is_default: default.as_deref() == Some(name.as_str()),
                         name,
                     }
@@ -159,7 +208,7 @@ fn resolve_input(preferred: Option<&str>) -> Option<cpal::Device> {
         host.default_input_device(),
         inputs,
         device_name,
-        is_microphone,
+        input_kind,
     )
 }
 
@@ -168,13 +217,20 @@ pub fn active_input(preferred: Option<&str>) -> Option<String> {
     resolve_input(preferred).map(|device| device_name(&device))
 }
 
-fn is_microphone(device: &cpal::Device) -> bool {
-    device.description().is_ok_and(|description| {
-        matches!(
-            description.device_type(),
-            cpal::DeviceType::Microphone | cpal::DeviceType::Headset | cpal::DeviceType::Handset
-        )
-    })
+fn input_kind(device: &cpal::Device) -> InputKind {
+    if is_system_audio_name(&device_name(device)) {
+        return InputKind::SystemAudio;
+    }
+    match device
+        .description()
+        .map(|description| description.device_type())
+    {
+        Ok(
+            cpal::DeviceType::Microphone | cpal::DeviceType::Headset | cpal::DeviceType::Handset,
+        ) => InputKind::Microphone,
+        Ok(cpal::DeviceType::Virtual) => InputKind::SystemAudio,
+        _ => InputKind::Unknown,
+    }
 }
 
 fn device_name(device: &cpal::Device) -> String {
@@ -325,9 +381,18 @@ pub fn start_recording(
 mod tests {
     use super::*;
 
+    fn kind(device: &&str) -> InputKind {
+        if is_system_audio_name(device) {
+            InputKind::SystemAudio
+        } else if device.starts_with("Micrófono") {
+            InputKind::Microphone
+        } else {
+            InputKind::Unknown
+        }
+    }
+
     #[test]
     fn the_chosen_microphone_wins_while_it_is_connected() {
-        let is_mic = |device: &&str| device.starts_with("Micrófono");
         let name = |device: &&str| (*device).to_owned();
         let inputs = vec![
             "Stereo Mix",
@@ -340,17 +405,18 @@ mod tests {
                 Some("Stereo Mix"),
                 inputs.clone(),
                 name,
-                is_mic
+                kind
             ),
             Some("Micrófono de la cámara")
         );
+        // Elegido a mano en Ajustes, se respeta aunque no sea un micrófono.
         assert_eq!(
             choose_input(
                 Some("Stereo Mix"),
                 Some("Stereo Mix"),
                 inputs.clone(),
                 name,
-                is_mic
+                kind
             ),
             Some("Stereo Mix")
         );
@@ -360,37 +426,78 @@ mod tests {
                 Some("Stereo Mix"),
                 inputs.clone(),
                 name,
-                is_mic
+                kind
             ),
             Some("Micrófono integrado")
         );
         assert_eq!(
-            choose_input(None, Some("Stereo Mix"), inputs, name, is_mic),
+            choose_input(None, Some("Stereo Mix"), inputs, name, kind),
             Some("Micrófono integrado")
         );
     }
 
     #[test]
-    fn a_microphone_is_preferred_over_a_default_that_is_not_one() {
-        let is_mic = |device: &&str| device.starts_with("Micrófono");
+    fn the_automatic_choice_never_records_the_system_sound() {
         let inputs = ["Stereo Mix", "Micrófono integrado", "Micrófono USB"];
         assert_eq!(
-            pick_input(Some("Stereo Mix"), inputs, is_mic),
+            pick_input(Some("Stereo Mix"), inputs, kind),
             Some("Micrófono integrado")
         );
         assert_eq!(
-            pick_input(Some("Micrófono USB"), inputs, is_mic),
+            pick_input(Some("Micrófono USB"), inputs, kind),
             Some("Micrófono USB")
         );
+        // Aunque sea la única entrada y la predeterminada de Windows.
+        assert_eq!(pick_input(Some("Stereo Mix"), ["Stereo Mix"], kind), None);
         assert_eq!(
-            pick_input(Some("Stereo Mix"), ["Stereo Mix"], is_mic),
-            Some("Stereo Mix")
+            pick_input(
+                Some("Mezcla estéreo (Realtek(R) Audio)"),
+                ["Mezcla estéreo (Realtek(R) Audio)"],
+                kind
+            ),
+            None
         );
-        assert_eq!(pick_input(None, ["Línea"], is_mic), None);
+        // Si el sistema no dice qué es nada, vale la primera entrada que no grabe el sonido del equipo.
         assert_eq!(
-            pick_input(None, ["Línea", "Micrófono USB"], is_mic),
+            pick_input(
+                Some("Stereo Mix"),
+                ["Stereo Mix", "Línea (Realtek)", "Entrada USB"],
+                kind
+            ),
+            Some("Línea (Realtek)")
+        );
+        assert_eq!(
+            pick_input(
+                Some("Entrada USB"),
+                ["Línea (Realtek)", "Entrada USB"],
+                kind
+            ),
+            Some("Entrada USB")
+        );
+        assert_eq!(
+            pick_input(None, ["Línea", "Micrófono USB"], kind),
             Some("Micrófono USB")
         );
+    }
+
+    #[test]
+    fn system_sound_inputs_are_recognized_by_name() {
+        for name in [
+            "Stereo Mix (Realtek High Definition Audio)",
+            "Mezcla estéreo (Realtek(R) Audio)",
+            "CABLE Output (VB-Audio Virtual Cable)",
+            "Monitor of Built-in Audio Analog Stereo",
+            "BlackHole 2ch",
+        ] {
+            assert!(is_system_audio_name(name), "{name}");
+        }
+        for name in [
+            "Micrófono (Realtek(R) Audio)",
+            "Headset Microphone (Jabra)",
+            "Varios micrófonos (Intel® Smart Sound)",
+        ] {
+            assert!(!is_system_audio_name(name), "{name}");
+        }
     }
 
     #[test]

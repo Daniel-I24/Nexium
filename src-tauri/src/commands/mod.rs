@@ -3,7 +3,6 @@
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 use chrono::Utc;
@@ -25,6 +24,7 @@ use crate::{
     },
     services::{
         history::HistoryService,
+        performance::Timings,
         reminders::ReminderService,
         settings::{Settings, SettingsService},
         usage::UsageService,
@@ -88,9 +88,9 @@ struct StagePayload {
     stage: Stage,
 }
 
-/// Hace perceptible el estado Respondiendo antes de presentar el resultado.
+/// La solicitud terminó: la barra vuelve a En espera mientras la respuesta entra con su animación.
+/// Sin esperas artificiales, que se sumarían a cada orden.
 async fn present_stage<R: Runtime>(app: &AppHandle<R>) {
-    tokio::time::sleep(Duration::from_millis(150)).await;
     let _ = app.emit("assistant://stage", StagePayload { stage: Stage::Idle });
 }
 
@@ -174,6 +174,11 @@ pub fn voice_start<R: Runtime>(app: AppHandle<R>, state: State<'_, AppState>) ->
         .lock()
         .map_err(|_| AppError::Operation("El micrófono quedó bloqueado.".into()))? =
         Some(recording);
+    // El modelo se carga mientras hablas: al terminar la grabación solo queda transcribir.
+    let (speech, path) = (state.speech.clone(), state.models_dir.join(model.file));
+    tauri::async_runtime::spawn_blocking(move || {
+        let _ = speech.preload(&path);
+    });
     let _ = app.emit(
         "assistant://stage",
         StagePayload {
@@ -208,12 +213,14 @@ pub async fn voice_stop<R: Runtime>(
     let Some(recording) = recording else {
         return Ok(None);
     };
+    let mut timings = Timings::new("voz");
     let stage = stage_sink(&app);
     stage(Stage::Transcribing);
     let device = recording.device().to_owned();
     let samples = tokio::task::spawn_blocking(move || recording.finish())
         .await
         .map_err(|_| AppError::Operation("La grabación se interrumpió.".into()))?;
+    timings.mark("fin de grabación");
     let settings = state.settings.get()?;
     let model = speech::find_model(&settings.speech_model)
         .ok_or_else(|| AppError::Validation("Ese modelo de voz no existe.".into()))?;
@@ -226,7 +233,11 @@ pub async fn voice_stop<R: Runtime>(
         .transcribe(samples, state.models_dir.join(model.file), cancel.clone())
         .await;
     let text = match text {
-        Ok(text) => text,
+        Ok(transcript) => {
+            timings.add("carga del modelo", transcript.model_load);
+            timings.add("transcripción", transcript.transcription);
+            transcript.text
+        }
         Err(speech::SpeechError::Cancelled) => {
             present_stage(&app).await;
             return Ok(None);
@@ -234,6 +245,10 @@ pub async fn voice_stop<R: Runtime>(
         Err(error) => return Err(AppError::Operation(error.to_string())),
     };
     if text.is_empty() {
+        state
+            .assistant
+            .performance
+            .record(&timings, "sin solicitud", "general");
         let (id, created_at) = state.history.record(
             VOICE_REQUEST,
             Category::General,
@@ -259,7 +274,7 @@ pub async fn voice_stop<R: Runtime>(
     // Lo transcrito cumple el mismo límite que lo escrito.
     let response = state
         .assistant
-        .process(validate_text(&text)?, cancel, stage)
+        .process_timed(validate_text(&text)?, cancel, stage, timings)
         .await;
     present_stage(&app).await;
     Ok(Some(response))

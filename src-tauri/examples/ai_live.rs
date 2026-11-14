@@ -52,6 +52,7 @@ fn label(intent: &Intent) -> &'static str {
         Intent::SearchFiles(_) => "search_files",
         Intent::CreateReminder(_) => "create_reminder",
         Intent::ListReminders => "list_reminders",
+        Intent::OpenSection(_) => "open_section",
         Intent::AnalyzeScreen { .. } => "analyze_screen",
         Intent::Clarify { .. } => "clarify",
         Intent::Unknown => "unknown",

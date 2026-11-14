@@ -131,8 +131,13 @@ describe("barState", () => {
 
   it("traduce cada etapa del backend", () => {
     expect(barStateFromStage("responding")).toEqual({ kind: "responding" });
-    expect(barStateFromStage("transcribing")).toEqual({ kind: "processing", step: "Transcribiendo tu voz en este equipo" });
+    expect(barStateFromStage("transcribing")).toEqual({ kind: "processing", step: "Transcribiendo tu voz en este equipo…" });
     expect(barStateFromStage("idle")).toEqual({ kind: "idle" });
+  });
+
+  it("mientras la IA trabaja, dice qué está haciendo", () => {
+    expect(barStateFromStage("interpreting")).toEqual({ kind: "processing", step: "Interpretando tu solicitud…" });
+    expect(barStateFromStage("analyzing")).toEqual({ kind: "processing", step: "Analizando la imagen…" });
   });
 });
 

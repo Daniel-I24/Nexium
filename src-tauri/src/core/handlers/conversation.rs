@@ -5,6 +5,23 @@ use async_trait::async_trait;
 use super::{CommandHandler, HandlerContext, Outcome};
 use crate::models::{Category, Intent, InteractionStatus, ResponseBody, SuggestedRequest};
 
+/// Cambiar de sección: lo hace la interfaz al recibir la respuesta.
+pub struct NavigationHandler;
+
+#[async_trait]
+impl CommandHandler for NavigationHandler {
+    async fn handle(&self, intent: &Intent, _: &HandlerContext) -> Option<Outcome> {
+        let Intent::OpenSection(section) = intent else {
+            return None;
+        };
+        Some(Outcome::done(
+            Category::General,
+            format!("Abrí {}", section.label()),
+            ResponseBody::Navigate { section: *section },
+        ))
+    }
+}
+
 /// Solo pide permiso: la captura ocurre únicamente tras la confirmación expresa en la interfaz.
 pub struct ScreenHandler;
 

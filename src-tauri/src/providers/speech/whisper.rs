@@ -140,6 +140,28 @@ unsafe extern "C" fn abort_requested(user_data: *mut c_void) -> bool {
     unsafe { (*user_data.cast::<AtomicBool>()).load(Ordering::Relaxed) }
 }
 
+/// Vocabulario de Nexium como contexto previo. Whisper escribe mejor las palabras que ya ha "oído": sin él,
+/// "¿Cuánta RAM estoy usando?" llegó a transcribirse como "Cuentarrán estoy usando", y "Wi-Fi" como "fiesto".
+/// Es corto a propósito: cada palabra del contexto alarga la transcripción. Con esta lista, unos 0,1 s
+/// (`docs/RENDIMIENTO.md`); con una frase completa, medio segundo.
+pub const VOCABULARY_PROMPT: &str =
+    "RAM, CPU, batería, Wi-Fi, recordatorio, clima, pantalla, documento.";
+
+/// Con audio casi mudo, Whisper puede devolver el propio contexto previo como si se hubiera dicho.
+/// Una frase larga que sea un trozo literal del vocabulario no es una solicitud.
+pub fn is_prompt_echo(text: &str) -> bool {
+    let text = crate::core::rules::normalize(text);
+    text.split(' ').count() >= 5 && crate::core::rules::normalize(VOCABULARY_PROMPT).contains(&text)
+}
+
+/// Lo transcrito y cuánto tardó cada parte: esperar al modelo (si aún se estaba cargando) y transcribir.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Transcript {
+    pub text: String,
+    pub model_load: Duration,
+    pub transcription: Duration,
+}
+
 fn run_whisper(
     samples: &[f32],
     context: &WhisperContext,
@@ -159,6 +181,12 @@ fn run_whisper(
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
     params.set_print_special(false);
+    params.set_initial_prompt(VOCABULARY_PROMPT);
+    // Sin reintentos a otra temperatura: con frases cortas, repetir la decodificación puede triplicar la espera
+    // y no mejora la orden. Cada solicitud es independiente y cabe en un solo segmento.
+    params.set_temperature_inc(0.0);
+    params.set_no_context(true);
+    params.set_single_segment(true);
     // SAFETY: `cancelled` se mantiene vivo en esta función hasta después de `state.full`.
     unsafe { watch_cancellation(&mut params, &cancelled) };
     let outcome = state.full(params, samples);
@@ -201,7 +229,7 @@ impl SpeechProvider for WhisperSpeech {
         samples: Vec<f32>,
         model_path: PathBuf,
         cancel: CancellationToken,
-    ) -> Result<String, SpeechError> {
+    ) -> Result<Transcript, SpeechError> {
         if !model_path.exists() {
             return Err(SpeechError::ModelMissing);
         }
@@ -209,15 +237,27 @@ impl SpeechProvider for WhisperSpeech {
         let flag = cancelled.clone();
         let models = self.models.clone();
         let task = tokio::task::spawn_blocking(move || {
+            let started = Instant::now();
+            // Si la precarga sigue en curso, aquí se espera a que termine: esa espera es la carga que se nota.
             let context =
                 models.get_or_load(&model_path, Instant::now(), || load_whisper(&model_path))?;
-            let outcome = run_whisper(&samples, &context, flag);
+            let loaded = Instant::now();
+            let text = run_whisper(&samples, &context, flag)?;
             models.touch(Instant::now());
-            outcome
+            let text = clean_transcript(&text);
+            Ok(Transcript {
+                text: if is_prompt_echo(&text) {
+                    String::new()
+                } else {
+                    text
+                },
+                model_load: loaded - started,
+                transcription: loaded.elapsed(),
+            })
         });
         tokio::pin!(task);
         tokio::select! {
-            outcome = &mut task => outcome.map_err(|_| SpeechError::Failed("La transcripción se interrumpió.".into()))?.map(|text| clean_transcript(&text)),
+            outcome = &mut task => outcome.map_err(|_| SpeechError::Failed("La transcripción se interrumpió.".into()))?,
             () = cancel.cancelled() => {
                 cancelled.store(true, Ordering::Relaxed);
                 let _ = task.await;
@@ -266,9 +306,22 @@ mod tests {
         assert_eq!(
             speech
                 .transcribe(silence, model, CancellationToken::new())
-                .await,
+                .await
+                .map(|transcript| transcript.text),
             Ok(String::new())
         );
+    }
+
+    #[test]
+    fn the_vocabulary_prompt_is_not_taken_as_a_request() {
+        assert!(is_prompt_echo(
+            "Wi-Fi, recordatorio, clima, pantalla, documento."
+        ));
+        assert!(!is_prompt_echo("¿Cuánta RAM estoy usando?"));
+        assert!(!is_prompt_echo("Batería"));
+        assert!(!is_prompt_echo(
+            "Recuérdame revisar el clima de la pantalla del documento"
+        ));
     }
 
     #[test]

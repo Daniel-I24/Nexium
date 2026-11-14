@@ -11,19 +11,20 @@ export type BarState =
   /** `message` es null cuando el error ya se ve en la conversación: la barra no lo repite. */
   | { kind: "error"; message: string | null; retryable: boolean };
 
+/** Qué está haciendo Nexium en cada etapa. Los puntos suspensivos dicen que sigue en curso. */
 const stepLabels: Partial<Record<Stage, string>> = {
-  transcribing: "Transcribiendo tu voz en este equipo",
-  interpreting: "Interpretando tu solicitud",
-  executing: "Consultando",
-  capturing: "Tomando una sola captura",
-  analyzing: "Analizando la captura",
+  transcribing: "Transcribiendo tu voz en este equipo…",
+  interpreting: "Interpretando tu solicitud…",
+  executing: "Consultando…",
+  capturing: "Tomando una sola captura…",
+  analyzing: "Analizando la imagen…",
 };
 
 export function barStateFromStage(stage: Stage): BarState {
   if (stage === "idle") return { kind: "idle" };
   if (stage === "listening") return { kind: "listening" };
   if (stage === "responding") return { kind: "responding" };
-  return { kind: "processing", step: stepLabels[stage] ?? "Procesando" };
+  return { kind: "processing", step: stepLabels[stage] ?? "Procesando…" };
 }
 
 export function isSensing(state: BarState): boolean {

@@ -79,7 +79,7 @@ pub trait SpeechProvider: Send + Sync {
         samples: Vec<f32>,
         model_path: PathBuf,
         cancel: CancellationToken,
-    ) -> Result<String, SpeechError>;
+    ) -> Result<Transcript, SpeechError>;
     /// Carga el modelo si aún no está en memoria. Se llama al pulsar Hablar, en segundo plano,
     /// para que la transcripción no tenga que esperar a la carga al terminar la grabación.
     fn preload(&self, model_path: &Path) -> Result<(), SpeechError>;

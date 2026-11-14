@@ -2,7 +2,7 @@
 
 use nexium_lib::models::{
     AssistantResponse, Attribution, Category, DataRow, FileResult, InteractionStatus,
-    ReminderOption, ResponseBody,
+    ReminderOption, ResponseBody, Section,
 };
 use serde_json::Value;
 
@@ -205,6 +205,24 @@ fn weather() {
             "Open-Meteo, sin IA",
             "15 °C",
             body,
+        ),
+    );
+}
+
+#[test]
+fn navigate() {
+    assert_matches(
+        "navigate",
+        &response(
+            8,
+            "Abre los recordatorios",
+            Category::General,
+            InteractionStatus::Completed,
+            LOCAL,
+            "Abrí Recordatorios",
+            ResponseBody::Navigate {
+                section: Section::Reminders,
+            },
         ),
     );
 }

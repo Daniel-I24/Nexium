@@ -65,6 +65,8 @@ fn assistant() -> Assistant {
     let system = Arc::new(NativeSystemProvider::new(Arc::new(|| {
         Reading::Value(false)
     })));
+    // Como al abrir la app: el lector de CPU se prepara en segundo plano.
+    system.warm_up();
     let handlers: Vec<Box<dyn CommandHandler>> =
         vec![Box::new(TimeHandler), Box::new(SystemHandler { system })];
     Assistant {
@@ -75,6 +77,7 @@ fn assistant() -> Assistant {
         settings: SettingsService::new(db.clone()),
         history: HistoryService::new(db.clone()),
         usage: UsageService::new(db),
+        performance: Default::default(),
     }
 }
 
@@ -114,7 +117,8 @@ async fn main() {
         let text = speech
             .transcribe(samples, model.clone(), CancellationToken::new())
             .await
-            .expect("transcripción");
+            .expect("transcripción")
+            .text;
         let transcribe = t0.elapsed();
         let local = rules::match_local(&text).is_some();
         let t1 = Instant::now();

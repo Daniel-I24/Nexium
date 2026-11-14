@@ -7,7 +7,7 @@ use unicode_normalization::UnicodeNormalization;
 
 use super::format::MONTHS;
 use crate::{
-    models::{FileQuery, Intent, SystemMetric, WeatherWhen},
+    models::{FileQuery, Intent, Section, SystemMetric, WeatherWhen},
     providers::ai::schema::valid_file_name,
 };
 
@@ -62,13 +62,104 @@ fn regex(pattern: &str) -> Regex {
 
 static TIME: LazyLock<Regex> = LazyLock::new(|| {
     regex(
-        r"^(me dices |dime |sabes )?(que hora|a que hora estamos|la hora|que dia es|en que fecha|que fecha)",
+        r"^(me dices |dime |sabes )?(que hora|a que hora estamos|la hora|que dia es|en que fecha|que fecha)|\b(que hora es|que horas son|dime la hora|hora actual|que dia es hoy|fecha de hoy|fecha actual)\b",
     )
 });
 static CPU: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(cpu|procesador)\b"));
 static RAM: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(ram|memoria)\b"));
-static BATTERY: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(bateria|carga del equipo)\b"));
-static WIFI: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(wi ?-?fi|red inalambrica|a que red)\b"));
+static BATTERY: LazyLock<Regex> =
+    LazyLock::new(|| regex(r"\b(bateria|pila|carga del equipo|cuanta carga)\b"));
+static WIFI: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(wifi|red inalambrica|a que red)\b"));
+/// "Recuérdame" y lo que suele salir al transcribirlo ("Recuerda mi").
+static REMINDER_START: LazyLock<Regex> = LazyLock::new(|| {
+    regex(r"^(recuerdame|recuerda me|recuerda mi|recordame|recuerdeme|recordarme|acuerdame)\b")
+});
+/// "Abre los recordatorios", "ve a Ajustes": cambiar de sección no necesita IA.
+static OPEN_SECTION: LazyLock<Regex> = LazyLock::new(|| {
+    regex(
+        r"^(abre|abrir|abreme|ve al?|ir al?|vamos al?|llevame al?|pasa al?|cambia al?|entra al?|entrar al?)\b.*\b(asistente|recordatorios|historial|ajustes|configuracion|preferencias)\b",
+    )
+});
+/// Formas de escribir Wi-Fi que deja la transcripción. Se unifican antes de aplicar las reglas.
+static WIFI_VARIANTS: LazyLock<Regex> =
+    LazyLock::new(|| regex(r"\b(wi ?-?fi|guifi|uifi|wai ?fai|waifai)\b"));
+
+/// Palabras de las órdenes que una transcripción puede escribir con un error leve ("vateria", "procesadr").
+/// Solo palabras largas: en las cortas, una letra cambia el sentido ("hora" y "ahora").
+const VOCABULARY: &[&str] = &[
+    "bateria",
+    "procesador",
+    "memoria",
+    "internet",
+    "conectado",
+    "conexion",
+    "oscuro",
+    "temperatura",
+    "pronostico",
+    "lloviendo",
+    "recordatorio",
+    "recordatorios",
+    "recuerdame",
+    "ajustes",
+    "configuracion",
+    "pantalla",
+    "documento",
+    "archivo",
+];
+
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut previous = row[0];
+        row[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let next = (row[j + 1] + 1)
+                .min(row[j] + 1)
+                .min(previous + usize::from(ca != *cb));
+            previous = row[j + 1];
+            row[j + 1] = next;
+        }
+    }
+    row[b.len()]
+}
+
+/// Corrige una palabra si está a un error de una del vocabulario (a dos, si es muy larga).
+fn correct_word(word: &str) -> &str {
+    let length = word.chars().count();
+    if length < 5 || VOCABULARY.contains(&word) {
+        return word;
+    }
+    let tolerance = if length >= 9 { 2 } else { 1 };
+    VOCABULARY
+        .iter()
+        .filter(|candidate| candidate.len() >= 6)
+        .map(|candidate| (edit_distance(word, candidate), *candidate))
+        .filter(|(distance, _)| *distance <= tolerance)
+        .min_by_key(|(distance, _)| *distance)
+        .map_or(word, |(_, candidate)| candidate)
+}
+
+/// Texto listo para las reglas: normalizado, con las variantes unificadas y los errores leves corregidos.
+pub fn prepare(text: &str) -> String {
+    let text = WIFI_VARIANTS
+        .replace_all(&normalize(text), "wifi")
+        .into_owned();
+    text.split(' ')
+        .map(correct_word)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn section_in(text: &str) -> Option<Section> {
+    let captures = OPEN_SECTION.captures(text)?;
+    Some(match captures.get(2)?.as_str() {
+        "asistente" => Section::Assistant,
+        "recordatorios" => Section::Reminders,
+        "historial" => Section::History,
+        _ => Section::Settings,
+    })
+}
 static INTERNET: LazyLock<Regex> = LazyLock::new(|| {
     regex(r"\b(internet|conexion a la red|estoy conectado|tengo conexion|hay conexion)\b")
 });
@@ -227,13 +318,15 @@ pub fn ambiguous_date_question(original: &str) -> Option<Intent> {
 
 /// Devuelve una intención solo si la frase no deja lugar a dudas.
 pub fn match_local(original: &str) -> Option<Intent> {
-    let text = normalize(original);
-    if text.starts_with("recuerdame")
-        || text.starts_with("recordarme")
+    let text = prepare(original);
+    if REMINDER_START.is_match(&text)
         || text.contains("ponme un recordatorio")
         || text.contains("crea un recordatorio")
     {
         return ambiguous_date_question(original);
+    }
+    if let Some(section) = section_in(&text) {
+        return Some(Intent::OpenSection(section));
     }
     if LIST_REMINDERS.is_match(&text) {
         return Some(Intent::ListReminders);
@@ -327,6 +420,85 @@ mod tests {
         for (phrase, expected) in cases {
             assert_eq!(match_local(phrase), expected, "{phrase}");
         }
+    }
+
+    #[test]
+    fn tolerates_frequent_variants_and_slight_transcription_errors() {
+        let cases = [
+            ("¿Cuánta batería tengo?", system(SystemMetric::Battery)),
+            ("cuanta bateria tengo", system(SystemMetric::Battery)),
+            ("CUÁNTA BATERÍA TENGO", system(SystemMetric::Battery)),
+            ("cuánta vateria me queda", system(SystemMetric::Battery)),
+            ("¿Me alcanza la pila?", system(SystemMetric::Battery)),
+            ("cuanta ram", system(SystemMetric::Ram)),
+            ("Cuánta memoria RAM me queda.", system(SystemMetric::Ram)),
+            ("¿Cómo va el procesadr?", system(SystemMetric::Cpu)),
+            ("estoy conectado", system(SystemMetric::Internet)),
+            (
+                "¿Estoy conectado a Internet?",
+                system(SystemMetric::Internet),
+            ),
+            (
+                "¿A qué red wifi estoy conectado?",
+                system(SystemMetric::Wifi),
+            ),
+            ("estado del wi fi", system(SystemMetric::Wifi)),
+            ("¿Tengo el guifi encendido?", system(SystemMetric::Wifi)),
+            (
+                "¿Está activado el modo obscuro?",
+                system(SystemMetric::DarkMode),
+            ),
+            ("Oye, ¿qué hora es?", Some(Intent::Time)),
+            ("¿Qué horas son?", Some(Intent::Time)),
+            ("¿Qué horas es?", Some(Intent::Time)),
+            ("dime la fecha de hoy", Some(Intent::Time)),
+        ];
+        for (phrase, expected) in cases {
+            assert_eq!(match_local(phrase), expected, "{phrase}");
+        }
+    }
+
+    #[test]
+    fn opens_sections_without_ai() {
+        for (phrase, section) in [
+            ("Abre los recordatorios.", Section::Reminders),
+            ("abre el historial", Section::History),
+            ("Ve a Ajustes", Section::Settings),
+            ("ir a la configuración", Section::Settings),
+            ("Llévame al asistente", Section::Assistant),
+        ] {
+            assert_eq!(
+                match_local(phrase),
+                Some(Intent::OpenSection(section)),
+                "{phrase}"
+            );
+        }
+        // Preguntar por los recordatorios los muestra en la conversación; no cambia de sección.
+        assert_eq!(
+            match_local("¿Qué recordatorios tengo?"),
+            Some(Intent::ListReminders)
+        );
+    }
+
+    #[test]
+    fn a_reminder_transcribed_as_recuerda_mi_is_still_a_reminder() {
+        // Sin fecha numérica ambigua, la orden sigue a la IA para extraer contenido y fecha.
+        assert_eq!(
+            match_local("Recuerda mi llamar a mamá mañana a las cinco."),
+            None
+        );
+        assert!(matches!(
+            match_local("Recuerda mi pagar el 5/6 a las 10:00"),
+            Some(Intent::Clarify { .. })
+        ));
+    }
+
+    #[test]
+    fn short_words_are_not_corrected_into_others() {
+        assert_eq!(prepare("ahora"), "ahora");
+        assert_eq!(prepare("historia del arte"), "historia del arte");
+        assert_eq!(prepare("Bacteria"), "bateria");
+        assert_eq!(edit_distance("procesadr", "procesador"), 1);
     }
 
     #[test]

@@ -105,5 +105,15 @@
       "rows": [{ "label": "Pronóstico de hoy", "value": "9 °C a 19 °C · lluvia", "mono": true, "unavailable": false }],
       "attribution": { "text": "Datos meteorológicos de Open-Meteo (CC BY 4.0)", "url": "https://open-meteo.com/" }
     }
+  },
+  "navigate": {
+    "id": 8,
+    "request": "Abre los recordatorios",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "general",
+    "status": "completed",
+    "originLabel": "lectura directa del equipo, sin IA",
+    "summary": "Abrí Recordatorios",
+    "body": { "kind": "navigate", "section": "reminders" }
   }
 }

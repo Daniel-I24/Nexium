@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use tokio_util::sync::CancellationToken;
 
-pub use conversation::{ClarifyHandler, ScreenHandler};
+pub use conversation::{ClarifyHandler, NavigationHandler, ScreenHandler};
 pub use files::FilesHandler;
 pub use reminders::{draft_reminder, ReminderIntentHandler};
 pub use system::SystemHandler;

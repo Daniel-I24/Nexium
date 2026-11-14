@@ -1,9 +1,10 @@
 import { Icon } from "@/components/Icon";
 import { NexiumMark } from "@/components/NexiumMark";
+import type { Section } from "@/types/api";
 
-export type Screen = "assistant" | "reminders" | "history" | "settings";
+export type Screen = Section;
 
-const items: { id: Screen; label: string }[] = [
+export const items: { id: Screen; label: string }[] = [
   { id: "assistant", label: "Asistente" },
   { id: "reminders", label: "Recordatorios" },
   { id: "history", label: "Historial" },

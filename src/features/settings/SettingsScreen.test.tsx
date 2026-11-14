@@ -54,7 +54,7 @@ describe("Ajustes: micrófono", () => {
     invoke.mockResolvedValue(view());
     render(<SettingsScreen />);
     expect(await screen.findByText("Nexium usará: Microphone Array.")).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Stereo Mix (predeterminado de Windows, no parece un micrófono)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Stereo Mix (predeterminado de Windows, graba el sonido del equipo, no tu voz)" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Micrófono" })).toHaveValue("");
   });
 

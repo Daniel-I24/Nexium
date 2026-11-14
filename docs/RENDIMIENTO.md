@@ -48,6 +48,48 @@ Commit `b320f79`. Misma máquina y mismo método, conectada a la corriente. Cuat
 - El arranque en caliente parece unos 60 ms más lento, pero la línea base se tomó con una sola serie, otro día y sin repetir. Para afirmarlo habría que volver a compilar `6748435` y medir las dos versiones seguidas.
 - En una serie, el conjunto de trabajo bajó a 93 MB: Windows recortó la memoria de la ventana en reposo. La memoria privada no cambió.
 
+## Velocidad de las solicitudes: 14 de noviembre de 2026
+
+Objetivos: una orden local por voz en menos de 3 s en total, una orden escrita local en menos de 300 ms y la interpretación con IA con una mediana inferior a 3 s.
+
+### Cómo se mide
+
+- **En la app:** cada solicitud deja una línea en `rendimiento.log`, en la carpeta de datos de Nexium (en Windows, `%APPDATA%\io.github.daniel-i24.nexium\rendimiento.log`), con el tiempo de cada etapa: fin de grabación, carga del modelo, transcripción, interpretación y respuesta. Solo guarda duraciones, si se resolvió en local o con IA y la categoría; nunca el texto pedido ni la respuesta. Se recorta solo al pasar de 256 KB. Ejemplo:
+
+  ```
+  2026-11-14 16:44:02 voz · local · system | fin de grabación 9 ms · carga del modelo 0 ms · transcripción 1068 ms · interpretación 0 ms · respuesta 251 ms · total 1331 ms
+  ```
+
+- **Voz, en el banco de pruebas:** `src-tauri/examples/voice_pipeline_bench.rs` recorre la misma cadena que la app (modelo precargado, transcripción con Whisper `small`, intérprete local y respuesta) con 30 clips de órdenes: 15 frases dichas a dos velocidades por la voz española de Windows (Microsoft Helena), a 16 kHz. Es habla sintética y limpia: con una voz y un micrófono reales los tiempos y los aciertos pueden cambiar, y eso queda para la prueba manual.
+- **IA:** `src-tauri/examples/ai_live.rs frases` contra el servidor desplegado, con 25 frases que necesitan IA y 7 s de pausa entre ellas.
+- **Equipo:** el de la línea base (AMD Ryzen 5 7535HS, 16 GB), con batería y sin conectar a la corriente; Whisper con 6 hilos. Los tiempos cambian en otras CPU.
+
+### Antes y después
+
+| Medida | Antes | Después |
+|---|---|---|
+| Orden local por voz: transcripción y respuesta, mediana | 910 ms | 1141 ms |
+| Orden local por voz: máximo | 3293 ms (la primera pregunta de CPU) | 1433 ms |
+| Carga del modelo al terminar de hablar | 572 ms, en la primera orden tras abrir o liberar el modelo | 0 ms: se carga mientras hablas (455 a 527 ms) |
+| Espera fija al terminar cada solicitud | 150 ms | 0 ms |
+| Órdenes de los 30 clips resueltas sin IA | 21 | 24 |
+| Orden escrita local: mediana | 0,3 ms | 0,7 ms |
+| Orden escrita local: máximo (uso de CPU) | 2452 ms la primera vez, 266 ms después | 253 ms |
+| Interpretación con IA: mediana (25 frases) | 1218 ms | Sin cambios en el servidor |
+
+**Total de una orden local por voz.** Al soltar Terminar quedan el fin de grabación (unos 10 ms), la transcripción y la respuesta: unos 1,1 a 1,4 s en este equipo, por debajo de los 3 s. Los «unos 12 s» de la prueba manual no se reprodujeron con el modelo cargado; las causas que sumaban tiempo después de hablar eran la carga del modelo (ahora en paralelo a la grabación), la primera lectura de CPU (ahora preparada al abrir Nexium) y la espera fija de 150 ms. `rendimiento.log` dirá en la prueba manual qué etapa tarda en cada equipo.
+
+**Por qué la mediana de la voz sube algo.** El contexto previo de Whisper (`VOCABULARY_PROMPT`: «RAM, CPU, batería, Wi-Fi, recordatorio, clima, pantalla, documento.») cuesta unos 0,1 s por transcripción y hace que «RAM» y «Wi-Fi» se escriban bien: con él se resuelven en local 3 órdenes más de 30. Una frase completa como contexto costaba medio segundo, así que se dejó la lista corta. Las dos mediciones se hicieron con batería, y la segunda con la carga más baja (del 98 % al 19 %): parte de la diferencia es del equipo.
+
+**Cambios que explican el resultado.**
+
+- **Precarga del modelo** al pulsar Hablar, en segundo plano. Si la grabación termina antes de que acabe de cargarse, la transcripción espera solo lo que falte.
+- **Whisper sin reintentos de temperatura** (`temperature_inc = 0`), sin contexto entre solicitudes y en un solo segmento: con frases cortas, repetir la decodificación puede multiplicar la espera y no mejora la orden.
+- **Lector de CPU persistente**, en su propio hilo y preparado al abrir Nexium: crearlo cuesta de 1,2 a 2,4 s en Windows.
+- **Intérprete local más tolerante:** normaliza tildes, signos y mayúsculas, unifica las formas de escribir Wi-Fi, corrige errores leves en palabras largas de las órdenes («vateria», «procesadr»), reconoce variantes frecuentes («cuánta batería tengo», «estoy conectado», «qué horas son», «Recuerda mi…») y abre secciones sin IA («Abre los recordatorios»).
+
+**IA.** La mediana ya estaba en 1,2 s (de 1,0 a 2,7 s, las 25 frases correctas), por debajo de los 3 s. Mientras la IA trabaja, la barra dice qué hace: «Interpretando tu solicitud…» o «Analizando la imagen…».
+
 ## Comprobaciones del ejecutable de distribución
 
 Búsqueda de texto en `nexium.exe`:

@@ -201,6 +201,10 @@ pub enum ResponseBody {
     CaptureRequest {
         question: String,
     },
+    /// Abre una sección de la app. La interfaz cambia de pantalla al recibirla.
+    Navigate {
+        section: Section,
+    },
     Error {
         code: String,
         message: String,
@@ -290,6 +294,27 @@ pub enum SystemMetric {
     Overview,
 }
 
+/// Secciones de la app que se pueden abrir con una orden.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Section {
+    Assistant,
+    Reminders,
+    History,
+    Settings,
+}
+
+impl Section {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Assistant => "Asistente",
+            Self::Reminders => "Recordatorios",
+            Self::History => "Historial",
+            Self::Settings => "Ajustes",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WeatherWhen {
     Now,
@@ -323,6 +348,7 @@ pub enum Intent {
     SearchFiles(FileQuery),
     CreateReminder(ReminderRequest),
     ListReminders,
+    OpenSection(Section),
     AnalyzeScreen {
         question: String,
     },

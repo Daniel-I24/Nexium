@@ -14,12 +14,13 @@ import { Shell } from "./Shell";
 
 export function App() {
   const [screen, setScreenNow] = useState<Screen>("assistant");
-  const assistant = useAssistant();
 
   /** El cambio de sección se anima: la anterior sale mientras entra la nueva. */
   const setScreen = (next: Screen) => {
     if (next !== screen) withViewTransition(() => setScreenNow(next));
   };
+
+  const assistant = useAssistant({ onNavigate: setScreen });
 
   const goToAssistant = (action: () => void) => {
     setScreen("assistant");

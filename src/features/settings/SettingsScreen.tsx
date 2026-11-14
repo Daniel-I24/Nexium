@@ -40,7 +40,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 const inputStyle = "h-11 w-full min-w-0 rounded-sm border border-line bg-panel px-3 text-md text-ink";
 
 function deviceLabel(device: InputDevice) {
-  const notes = [device.isDefault && "predeterminado de Windows", !device.isMicrophone && "no parece un micrófono"].filter(Boolean);
+  const notes = [device.isDefault && "predeterminado de Windows", !device.isMicrophone && "graba el sonido del equipo, no tu voz"].filter(Boolean);
   return notes.length > 0 ? `${device.name} (${notes.join(", ")})` : device.name;
 }
 

@@ -18,7 +18,12 @@ use crate::{
         ai::{AiProvider, AiStatusTracker, InterpretRequest, VisionRequest},
         capture::{CaptureError, ScreenCaptureProvider},
     },
-    services::{history::HistoryService, settings::SettingsService, usage::UsageService},
+    services::{
+        history::HistoryService,
+        performance::{PerformanceLog, Timings},
+        settings::SettingsService,
+        usage::UsageService,
+    },
 };
 
 pub const MAX_REQUEST_LENGTH: usize = 500;
@@ -33,6 +38,8 @@ pub struct Assistant {
     pub settings: SettingsService,
     pub history: HistoryService,
     pub usage: UsageService,
+    /// Tiempos de cada etapa (`rendimiento.log`). Sin ruta, no escribe nada.
+    pub performance: PerformanceLog,
 }
 
 enum Resolved {
@@ -162,9 +169,41 @@ impl Assistant {
         cancel: CancellationToken,
         stage: StageSink,
     ) -> AssistantResponse {
-        let text = text.trim();
+        self.process_timed(text, cancel, stage, Timings::new("texto"))
+            .await
+    }
+
+    /// Como `process`, continuando la medición de una solicitud que empezó antes (por ejemplo, por voz).
+    pub async fn process_timed(
+        &self,
+        text: &str,
+        cancel: CancellationToken,
+        stage: StageSink,
+        mut timings: Timings,
+    ) -> AssistantResponse {
+        let resolved = self.resolve(text.trim(), &cancel, &stage).await;
+        timings.mark("interpretación");
+        let resolved_by = match &resolved {
+            Resolved::Ai(_) => "IA",
+            Resolved::Failed(_) => "sin resolver",
+            _ => "local",
+        };
+        let response = self.execute(text.trim(), resolved, cancel, stage).await;
+        timings.mark("respuesta");
+        self.performance
+            .record(&timings, resolved_by, response.category.as_str());
+        response
+    }
+
+    async fn execute(
+        &self,
+        text: &str,
+        resolved: Resolved,
+        cancel: CancellationToken,
+        stage: StageSink,
+    ) -> AssistantResponse {
         let provider = self.ai.display_name().to_owned();
-        let (intent, origin, note) = match self.resolve(text, &cancel, &stage).await {
+        let (intent, origin, note) = match resolved {
             Resolved::Local(intent @ Intent::Clarify { .. }) => {
                 (intent, "reglas locales, sin IA".to_owned(), None)
             }
@@ -512,6 +551,7 @@ mod tests {
             settings,
             history: HistoryService::new(db.clone()),
             usage: UsageService::new(db),
+            performance: Default::default(),
         };
         Harness {
             assistant,

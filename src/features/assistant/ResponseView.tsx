@@ -7,11 +7,13 @@ import { Icon } from "@/components/Icon";
 import { Scale } from "@/components/Scale";
 import { StatusLabel } from "@/components/StatusLabel";
 import { api } from "@/services/api";
-import type { Attribution, AssistantResponse, ReminderOption, ResponseBody, SuggestedRequest } from "@/types/api";
+import type { Attribution, AssistantResponse, ReminderOption, ResponseBody, Section, SuggestedRequest } from "@/types/api";
 
 import { isCompleteLocal, toLocalInput } from "@/utils/dates";
 
 import { FileList } from "./FileList";
+
+const sectionLabels: Record<Section, string> = { assistant: "Asistente", reminders: "Recordatorios", history: "Historial", settings: "Ajustes" };
 
 export interface ResponseActions {
   onSaveReminder: (content: string, dueAt: string) => void;
@@ -209,6 +211,8 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
           </div>
         </div>
       );
+    case "navigate":
+      return <p className="m-0 text-lg">Abrí {sectionLabels[body.section]}.</p>;
     case "captureRequest":
       return <p className="m-0 text-lg">Necesito tu permiso para tomar una captura.</p>;
     case "error":

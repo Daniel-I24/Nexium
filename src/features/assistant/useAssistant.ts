@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { barStateFromStage, type BarState } from "@/features/voice/barState";
 import { TRACE_BARS } from "@/features/voice/LevelTrace";
 import { api, errorMessage, events } from "@/services/api";
-import type { AssistantResponse, ReminderOption, SuggestedRequest } from "@/types/api";
+import type { AssistantResponse, ReminderOption, Section, SuggestedRequest } from "@/types/api";
 
 const CAPTURE_REQUEST = "Analiza lo que aparece en mi pantalla";
 const VOICE_REQUEST = "Solicitud por voz";
@@ -43,13 +43,23 @@ interface Session {
   tape: AssistantResponse[];
 }
 
-export function useAssistant() {
+interface AssistantOptions {
+  /** Una orden como "Abre los recordatorios" cambia de sección. */
+  onNavigate?: (section: Section) => void;
+}
+
+export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   const [bar, setBar] = useState<BarState>({ kind: "idle" });
   const [levels, setLevels] = useState<number[]>([]);
   const [{ current, tape }, setSession] = useState<Session>({ current: null, tape: [] });
   const lastRequest = useRef<string | null>(null);
   const captureQuestion = useRef(CAPTURE_REQUEST);
   const requestCaptureRef = useRef<(question: string) => Promise<void>>(() => Promise.resolve());
+  const navigateRef = useRef(onNavigate);
+
+  useEffect(() => {
+    navigateRef.current = onNavigate;
+  }, [onNavigate]);
 
   useEffect(() => {
     const subscriptions = [
@@ -75,6 +85,9 @@ export function useAssistant() {
       setBar({ kind: "clarify" });
     } else if (body.kind === "captureRequest") {
       void requestCaptureRef.current(body.question);
+    } else if (body.kind === "navigate") {
+      setBar({ kind: "idle" });
+      navigateRef.current?.(body.section);
     } else if (body.kind === "error") {
       setBar({ kind: "error", message: null, retryable: !notRetryable.has(body.code) });
     } else {
@@ -156,7 +169,7 @@ export function useAssistant() {
   }, [requestCapture]);
 
   const confirmCapture = useCallback(async () => {
-    setBar({ kind: "processing", step: "Tomando una sola captura" });
+    setBar({ kind: "processing", step: "Tomando una sola captura…" });
     try {
       present(await api.analyzeScreen(captureQuestion.current));
     } catch (error) {

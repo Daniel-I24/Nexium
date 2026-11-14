@@ -22,8 +22,8 @@ use crate::{
     core::{
         assistant::Assistant,
         handlers::{
-            ClarifyHandler, CommandHandler, FilesHandler, ReminderIntentHandler, ScreenHandler,
-            SystemHandler, TimeHandler, WeatherHandler,
+            ClarifyHandler, CommandHandler, FilesHandler, NavigationHandler, ReminderIntentHandler,
+            ScreenHandler, SystemHandler, TimeHandler, WeatherHandler,
         },
     },
     database::Database,
@@ -38,8 +38,8 @@ use crate::{
         weather::OpenMeteo,
     },
     services::{
-        history::HistoryService, reminders::ReminderService, settings::SettingsService,
-        usage::UsageService,
+        history::HistoryService, performance::PerformanceLog, reminders::ReminderService,
+        settings::SettingsService, usage::UsageService,
     },
 };
 
@@ -100,6 +100,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
         Some(Ok(_)) => Reading::Value(false),
         _ => Reading::Unavailable("Este sistema no indica si el modo oscuro está activo.".into()),
     })));
+    system.warm_up();
     let handlers: Vec<Box<dyn CommandHandler>> = vec![
         Box::new(TimeHandler),
         Box::new(SystemHandler { system }),
@@ -116,6 +117,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
             reminders: reminders.clone(),
         }),
         Box::new(ScreenHandler),
+        Box::new(NavigationHandler),
         Box::new(ClarifyHandler),
     ];
     let assistant = Arc::new(Assistant {
@@ -126,6 +128,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
         settings: settings.clone(),
         history: history.clone(),
         usage: usage.clone(),
+        performance: PerformanceLog::new(data_dir.join("rendimiento.log")),
     });
     Ok(AppState {
         assistant,
