@@ -50,7 +50,7 @@ export function App() {
           onAuthorizeFolders={(folders, pendingRequest) => void assistant.authorizeFolders(folders, pendingRequest)}
         />
       )}
-      {screen === "reminders" && <RemindersScreen />}
+      {screen === "reminders" && <RemindersScreen onPickExample={(text) => goToAssistant(() => void assistant.submit(text))} />}
       {screen === "history" && <HistoryScreen />}
       {screen === "settings" && <SettingsScreen />}
     </Shell>
