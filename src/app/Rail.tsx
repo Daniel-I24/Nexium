@@ -42,7 +42,7 @@ export function Rail({ active, sensing, onSelect }: RailProps) {
                 aria-current={selected ? "page" : undefined}
                 title={item.label}
                 onClick={() => onSelect(item.id)}
-                className={`flex min-h-11 w-full items-center justify-center gap-3 border-l-2 bg-transparent px-2 text-left wide:justify-start wide:px-4 ${
+                className={`flex min-h-11 w-full cursor-pointer items-center justify-center gap-3 border-l-2 bg-transparent px-2 text-left wide:justify-start wide:px-4 ${
                   selected ? "border-ink bg-panel font-semibold text-ink" : "border-transparent text-muted hover:text-ink"
                 }`}
               >

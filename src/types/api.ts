@@ -11,7 +11,6 @@ export type Category =
 
 export type InteractionStatus = "completed" | "pending" | "failed" | "cancelled";
 
-export type Origin = "local" | "ai" | "external";
 
 export interface DataRowContent {
   label: string;

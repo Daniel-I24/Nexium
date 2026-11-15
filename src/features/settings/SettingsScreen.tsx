@@ -251,7 +251,7 @@ export function SettingsScreen() {
           <p className="m-0 text-sm text-muted">Se usa cuando no nombras una ciudad. Al guardar, Nexium la comprueba con Open-Meteo y guarda su nombre oficial.</p>
           <p className="m-0 text-sm text-muted">
             Datos meteorológicos de{" "}
-            <button type="button" onClick={() => void api.openAttribution()} className="bg-transparent text-muted underline">
+            <button type="button" onClick={() => void api.openAttribution()} className="cursor-pointer bg-transparent text-muted underline">
               Open-Meteo
             </button>{" "}
             (CC BY 4.0). Su uso gratuito es solo para fines no comerciales.

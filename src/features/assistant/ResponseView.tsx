@@ -49,7 +49,7 @@ function AttributionLine({ attribution }: { attribution: Attribution | null }) {
   if (!attribution) return null;
   return (
     <p className="m-0 text-sm text-muted">
-      <button type="button" onClick={() => void api.openAttribution()} className="bg-transparent text-left text-muted underline">
+      <button type="button" onClick={() => void api.openAttribution()} className="cursor-pointer bg-transparent text-left text-muted underline">
         {attribution.text}
       </button>
     </p>

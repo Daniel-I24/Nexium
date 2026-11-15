@@ -10,7 +10,7 @@ const variants: Record<ButtonVariant, string> = {
   onSignal: "bg-transparent text-on-signal border-on-signal",
 };
 
-const disabledStyle = "disabled:bg-transparent disabled:text-muted disabled:border-line disabled:border-dashed disabled:font-normal";
+const disabledStyle = "disabled:cursor-not-allowed disabled:bg-transparent disabled:text-muted disabled:border-line disabled:border-dashed disabled:font-normal";
 
 interface ButtonProps extends ComponentPropsWithRef<"button"> {
   variant?: ButtonVariant;
@@ -21,7 +21,7 @@ export function Button({ variant = "secondary", className = "", type = "button",
   return (
     <button
       type={type}
-      className={`inline-flex min-h-11 max-w-full items-center justify-center gap-2 rounded-sm border px-4 py-1 text-center ${variants[variant]} ${disabledStyle} ${className}`}
+      className={`inline-flex min-h-11 max-w-full cursor-pointer items-center justify-center gap-2 rounded-sm border px-4 py-1 text-center ${variants[variant]} ${disabledStyle} ${className}`}
       {...props}
     />
   );

@@ -1,6 +1,6 @@
 //! Contratos con la interfaz. `src/types/api.ts` refleja estos tipos.
 
-use chrono::{DateTime, Local, NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -426,8 +426,4 @@ pub enum Intent {
         suggestions: Vec<String>,
     },
     Unknown,
-}
-
-pub fn now_local() -> DateTime<Local> {
-    Local::now()
 }

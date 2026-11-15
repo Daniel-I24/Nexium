@@ -115,7 +115,7 @@ function useCaptureConsent(provider: string, notice: string, onConfirm: () => vo
       <>
         <p className="m-0">
           Se tomará una sola imagen de tu pantalla y se enviará a {provider}. No captures información personal.{" "}
-          <button type="button" aria-expanded={details} onClick={() => setDetails(!details)} className="bg-transparent p-0 font-semibold underline">
+          <button type="button" aria-expanded={details} onClick={() => setDetails(!details)} className="cursor-pointer bg-transparent p-0 font-semibold underline">
             {details ? "Menos información" : "Más información"}
           </button>
         </p>

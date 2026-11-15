@@ -8,7 +8,7 @@ export function EmptyState({ onPick }: { onPick: (text: string) => void }) {
       <ul className="m-0 flex list-none flex-col border-b border-hairline p-0">
         {examples.map((example) => (
           <li key={example} className="border-t border-hairline">
-            <button type="button" onClick={() => onPick(example)} className="min-h-11 w-full bg-transparent py-2 text-left text-ink hover:underline">
+            <button type="button" onClick={() => onPick(example)} className="min-h-11 w-full cursor-pointer bg-transparent py-2 text-left text-ink hover:underline">
               {example}
             </button>
           </li>

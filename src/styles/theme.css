@@ -216,19 +216,6 @@
 }
 
 @layer base {
-  html {
-    font-family: var(--font-sans);
-    font-size: 100%;
-    background: var(--nx-base);
-    color: var(--nx-ink);
-  }
-  body {
-    margin: 0;
-    font-size: var(--text-md);
-    line-height: var(--text-md--line-height);
-    overflow: hidden;
-  }
-
   /* Fondo tras un diálogo: atenúa la ventana sin ocultarla. Con valores literales, porque en algunas vistas web
      ::backdrop no hereda las variables de :root. */
   dialog::backdrop {
@@ -239,8 +226,6 @@
       background-color: rgb(0 0 0 / 0.6);
     }
   }
-  button { cursor: pointer; }
-  button:disabled { cursor: not-allowed; }
   /* Siempre tinta, no el color del texto: el de un botón primario apenas se vería sobre el fondo. */
   :focus-visible {
     outline: 2px solid var(--nx-focus);
