@@ -167,7 +167,7 @@ function useContent(props: SignalBarProps): Content {
     case "processing":
       return { tone: "neutral", controls: <ProgressControls step={state.step} filled={false} status="Procesando" onCancel={onCancel} /> };
     case "responding":
-      return { tone: "neutral", controls: <ProgressControls step="Escribiendo la respuesta" filled status="Respondiendo" onCancel={onCancel} /> };
+      return { tone: "neutral", controls: <ProgressControls step="Escribiendo la respuesta…" filled status="Respondiendo" onCancel={onCancel} /> };
     case "captureConsent":
       return consent;
     case "clarify":

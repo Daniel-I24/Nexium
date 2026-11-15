@@ -95,9 +95,40 @@ fn shorten(text: String, max: usize) -> String {
     format!("{}…", kept.trim_end_matches([',', ';', ':', ' ']))
 }
 
-/// Texto que la interfaz muestra tal cual: sin Markdown y con longitud acotada.
+static ENTITY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"&(#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|amp|lt|gt|quot|apos|nbsp);")
+        .expect("expresión regular válida")
+});
+
+/// El modelo a veces escribe entidades HTML («qu&#xe9;») o caracteres de control. Se traducen o se quitan.
+pub fn decode_entities(text: &str) -> String {
+    let decoded = ENTITY.replace_all(text, |captures: &regex::Captures| {
+        let entity = &captures[1];
+        let character = match entity {
+            "amp" => Some('&'),
+            "lt" => Some('<'),
+            "gt" => Some('>'),
+            "quot" => Some('"'),
+            "apos" => Some('\''),
+            "nbsp" => Some(' '),
+            _ if entity.starts_with("#x") || entity.starts_with("#X") => {
+                u32::from_str_radix(&entity[2..], 16)
+                    .ok()
+                    .and_then(char::from_u32)
+            }
+            _ => entity[1..].parse().ok().and_then(char::from_u32),
+        };
+        character.map_or_else(String::new, String::from)
+    });
+    decoded
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n')
+        .collect()
+}
+
+/// Texto que la interfaz muestra tal cual: sin Markdown, sin entidades HTML y con longitud acotada.
 fn prose(text: Option<String>, max: usize) -> Option<String> {
-    text.map(|value| shorten(plain_text(&value), max))
+    text.map(|value| shorten(plain_text(&decode_entities(&value)), max))
         .filter(|value| !value.is_empty())
 }
 
@@ -284,6 +315,19 @@ pub fn parse_document_summary(text: &str) -> Result<DocumentSummary, AiError> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn html_entities_and_control_characters_are_cleaned() {
+        assert_eq!(
+            decode_entities("\u{19}A qu&#xe9; hora de la tarde deseas el aviso?"),
+            "A qué hora de la tarde deseas el aviso?"
+        );
+        assert_eq!(
+            decode_entities("Tom &amp; Jerry &#191;s&#237;?"),
+            "Tom & Jerry ¿sí?"
+        );
+        assert_eq!(decode_entities("dos\nlíneas"), "dos\nlíneas");
+    }
 
     fn parse(text: &str) -> Result<Intent, AiError> {
         parse_interpretation(text, "pregunta")

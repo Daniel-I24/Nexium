@@ -64,11 +64,12 @@ impl FilesHandler {
             .search
             .search(query.clone(), allowed.clone(), context.cancel.clone())
             .await;
-        let places = allowed
-            .iter()
-            .map(|folder| folder.label.as_str())
-            .collect::<Vec<_>>()
-            .join(" y ");
+        let places = crate::core::format::list(
+            &allowed
+                .iter()
+                .map(|folder| folder.label.as_str())
+                .collect::<Vec<_>>(),
+        );
         if outcome.files.is_empty() && context.cancel.is_cancelled() {
             return Outcome::failed(Category::Files, "cancelled", "Búsqueda cancelada.", None);
         }

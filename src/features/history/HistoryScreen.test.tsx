@@ -68,7 +68,7 @@ describe("Historial: Borrar todo", () => {
 
   it("con un filtro activo advierte que también se borra lo que no se ve", () => {
     expect(clearDescription("failed", 1)).toContain("también las que no muestra el filtro «Fallidas»");
-    expect(clearDescription(null, 1)).toContain("Se borrarán la única entrada del historial");
+    expect(clearDescription(null, 1)).toContain("Se borrará la única entrada del historial");
   });
 });
 

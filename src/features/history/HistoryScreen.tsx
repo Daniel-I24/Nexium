@@ -40,7 +40,7 @@ export function clearDescription(filter: InteractionStatus | null, visible: numb
   const option = filters.find((item) => item.value === filter);
   const what =
     filter === null || !option
-      ? `Se borrarán ${visible === 1 ? "la única entrada" : `las ${count(visible, "entrada", "entradas")}`} del historial de este equipo.`
+      ? `${visible === 1 ? "Se borrará la única entrada" : `Se borrarán las ${count(visible, "entrada", "entradas")}`} del historial de este equipo.`
       : `Se borrarán todas las entradas del historial de este equipo, también las que no muestra el filtro «${option.label}».`;
   return `${what} También se vacía la conversación del Asistente. Los recordatorios guardados no se tocan. No se puede deshacer.`;
 }

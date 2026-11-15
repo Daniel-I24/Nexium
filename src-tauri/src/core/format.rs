@@ -59,9 +59,31 @@ pub fn count(amount: usize, singular: &str, plural: &str) -> String {
     format!("{amount} {}", if amount == 1 { singular } else { plural })
 }
 
+/// Enumeración en español: "A", "A y B", "A, B y C".
+pub fn list(items: &[&str]) -> String {
+    match items {
+        [] => String::new(),
+        [only] => (*only).to_owned(),
+        [rest @ .., last] => format!("{} y {last}", rest.join(", ")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lists_read_naturally() {
+        assert_eq!(list(&["Documentos"]), "Documentos");
+        assert_eq!(
+            list(&["Documentos", "Escritorio"]),
+            "Documentos y Escritorio"
+        );
+        assert_eq!(
+            list(&["Documentos", "Escritorio", "Proyectos"]),
+            "Documentos, Escritorio y Proyectos"
+        );
+    }
     use chrono::NaiveDate;
 
     #[test]

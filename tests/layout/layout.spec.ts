@@ -87,7 +87,7 @@ const views: Record<string, (page: Page) => Promise<void>> = {
   },
   "barra-respondiendo": async (page) => {
     await page.evaluate(() => window.harness.stage("responding"));
-    await expect(page.getByText("Escribiendo la respuesta")).toBeVisible();
+    await expect(page.getByText("Escribiendo la respuesta…")).toBeVisible();
   },
   "barra-captura": async (page) => {
     await page.getByRole("button", { name: "Analizar pantalla" }).click();

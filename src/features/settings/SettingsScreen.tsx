@@ -55,7 +55,7 @@ function MicrophoneNote({ chosen, active }: { chosen: string | null; active: str
       </p>
     );
   }
-  return <p className="m-0 text-sm text-muted">Nexium usará: {active}.</p>;
+  return <p className="m-0 text-sm text-muted">Nexium usará {active}.</p>;
 }
 
 export function SettingsScreen() {
@@ -167,7 +167,7 @@ export function SettingsScreen() {
 
         <Section title={`Inteligencia artificial: ${view.provider.displayName}`}>
           <p className="m-0 border-t-2 border-query pt-2 text-sm">{view.provider.dataNotice}</p>
-          <p className="m-0 text-sm">Estado del servicio: {statusLabels[view.aiStatus]}</p>
+          <p className="m-0 text-sm">Estado del servicio: {statusLabels[view.aiStatus]}.</p>
           <Field label="Límite diario de solicitudes de IA">
             <input type="number" min={1} max={10000} value={draft.dailyAiLimit} onChange={(event) => update("dailyAiLimit", Number(event.target.value))} className={`font-mono ${inputStyle}`} />
           </Field>

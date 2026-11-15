@@ -53,7 +53,7 @@ describe("Ajustes: micrófono", () => {
   it("dice qué micrófono usará Nexium y marca los dispositivos que no lo son", async () => {
     invoke.mockResolvedValue(view());
     render(<SettingsScreen />);
-    expect(await screen.findByText("Nexium usará: Microphone Array.")).toBeInTheDocument();
+    expect(await screen.findByText("Nexium usará Microphone Array.")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Stereo Mix (predeterminado de Windows, graba el sonido del equipo, no tu voz)" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Micrófono" })).toHaveValue("");
   });
@@ -116,5 +116,13 @@ describe("Ajustes: carpetas autorizadas", () => {
     expect(invoke).toHaveBeenCalledWith("folders_remove", { folder: "D:\\Proyectos" });
     expect(await screen.findByText("Todavía no hay ninguna carpeta autorizada.")).toBeInTheDocument();
     expect(invoke).not.toHaveBeenCalledWith("settings_save", expect.anything());
+  });
+});
+
+describe("Ajustes: textos", () => {
+  it("el estado del servicio es una frase completa, con su punto final", async () => {
+    invoke.mockResolvedValue(view({ aiStatus: "notUsedYet" }));
+    render(<SettingsScreen />);
+    expect(await screen.findByText("Estado del servicio: Incluido. Sin usar todavía en esta sesión.")).toBeInTheDocument();
   });
 });
