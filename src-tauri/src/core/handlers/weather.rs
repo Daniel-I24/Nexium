@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use super::{CommandHandler, HandlerContext, Outcome};
 use crate::{
     core::format::{decimal, whole},
-    models::{Attribution, Category, DataRow, Intent, ResponseBody, SuggestedRequest, WeatherWhen},
+    models::{Attribution, Category, DataRow, Intent, ResponseBody, WeatherWhen},
     providers::weather::{WeatherError, WeatherProvider, ATTRIBUTION_TEXT, ATTRIBUTION_URL},
     services::settings::SettingsService,
 };
@@ -38,7 +38,7 @@ impl WeatherHandler {
             return Outcome::pending(
                 Category::Weather,
                 "Falta la ciudad",
-                ResponseBody::Clarification { question: "¿De qué ciudad quieres el clima? Dímelo en tu solicitud, o configura una en Ajustes.".into(), suggestions: Vec::<SuggestedRequest>::new() },
+                ResponseBody::WeatherCityQuestion { when },
             );
         };
         let report = match self.weather.report(&city).await {

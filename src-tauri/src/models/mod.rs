@@ -222,6 +222,10 @@ pub enum ResponseBody {
         /// Solo se envió el principio del documento.
         truncated: bool,
     },
+    /// La solicitud de clima no nombra ciudad y no hay una en Ajustes: se pregunta, y se ofrece guardarla.
+    WeatherCityQuestion {
+        when: WeatherWhen,
+    },
     /// Abre una sección de la app. La interfaz cambia de pantalla al recibirla.
     Navigate {
         section: Section,
@@ -374,7 +378,8 @@ impl Section {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum WeatherWhen {
     Now,
     Today,

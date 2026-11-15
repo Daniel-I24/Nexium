@@ -13,6 +13,7 @@ import { isCompleteLocal, toLocalInput } from "@/utils/dates";
 
 import { DocumentAnalysisView, DocumentConsent, FolderConsent } from "./Consents";
 import { FileList } from "./FileList";
+import { WeatherCityQuestion } from "./WeatherCityQuestion";
 import type { FolderChoice } from "./useAssistant";
 
 const sectionLabels: Record<Section, string> = { assistant: "Asistente", reminders: "Recordatorios", history: "Historial", settings: "Ajustes" };
@@ -203,6 +204,8 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
       return <DocumentConsent {...body} onAnalyze={actions.onAnalyzeDocument} onDismiss={actions.onDismiss} />;
     case "documentAnalysis":
       return <DocumentAnalysisView task={body.task} summary={body.summary} points={body.points} truncated={body.truncated} />;
+    case "weatherCityQuestion":
+      return <WeatherCityQuestion when={body.when} onAsk={(request) => actions.onChooseSuggestion({ label: request, request })} />;
     case "navigate":
       return <p className="m-0 text-lg">Abrí {sectionLabels[body.section]}.</p>;
     case "captureRequest":

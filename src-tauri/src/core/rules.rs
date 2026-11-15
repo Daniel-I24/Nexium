@@ -252,19 +252,44 @@ pub fn normalize(text: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-fn title_case(text: &str) -> String {
-    text.split_whitespace()
-        .map(|word| {
-            let mut chars = word.chars();
-            chars.next().map_or_else(String::new, |first| {
-                first.to_uppercase().chain(chars).collect()
-            })
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+/// Conserva la grafía del usuario ("Bogotá") cuando la encuentra en la frase.
+/// Palabras que señalan un sitio sin nombrarlo: "en la ciudad en la que me encuentro", "aquí", "donde estoy".
+const NOT_A_PLACE: &[&str] = &[
+    "aca",
+    "ahi",
+    "alla",
+    "aqui",
+    "ciudad",
+    "donde",
+    "encuentro",
+    "esta",
+    "estoy",
+    "este",
+    "lugar",
+    "me",
+    "mi",
+    "mis",
+    "pais",
+    "que",
+    "region",
+    "sitio",
+    "ubicacion",
+    "vivo",
+    "zona",
+];
+
+/// Si un texto ya normalizado puede ser el nombre de un lugar. "Bogotá" o "El Cairo" sí; "la ciudad en la que
+/// me encuentro" no: entonces la solicitud no nombra ninguna ciudad.
+pub fn is_place_name(normalized: &str) -> bool {
+    let words: Vec<&str> = normalized
+        .split(' ')
+        .filter(|word| !word.is_empty())
+        .collect();
+    !words.is_empty() && words.len() <= 5 && !words.iter().any(|word| NOT_A_PLACE.contains(word))
 }
 
-/// Conserva la grafía del usuario ("Bogotá") cuando la encuentra en la frase.
+/// El nombre tal como lo escribió la persona ("Bogotá"), sin cambiar sus mayúsculas: Open-Meteo devuelve
+/// después el nombre oficial, que es el que se muestra en la respuesta.
 fn original_city(original: &str, normalized_city: &str) -> String {
     let words: Vec<&str> = original
         .split([' ', ',', '?', '¿', '.'])
@@ -274,11 +299,11 @@ fn original_city(original: &str, normalized_city: &str) -> String {
                 .any(|part| normalize(word) == part)
         })
         .collect();
-    title_case(&if words.is_empty() {
+    if words.is_empty() {
         normalized_city.to_owned()
     } else {
         words.join(" ")
-    })
+    }
 }
 
 fn weather_intent(original: &str, text: &str) -> Intent {
@@ -292,6 +317,7 @@ fn weather_intent(original: &str, text: &str) -> Intent {
     let city = WEATHER_CITY
         .captures(text)
         .and_then(|c| c.get(1))
+        .filter(|m| is_place_name(m.as_str()))
         .map(|m| original_city(original, m.as_str()));
     Intent::Weather { city, when }
 }
@@ -593,6 +619,38 @@ mod tests {
         assert_eq!(prepare("historia del arte"), "historia del arte");
         assert_eq!(prepare("Bacteria"), "bateria");
         assert_eq!(edit_distance("procesadr", "procesador"), 1);
+    }
+
+    #[test]
+    fn a_phrase_about_where_i_am_is_not_a_city() {
+        for phrase in [
+            "Dame el clima en la ciudad en la que me encuentro",
+            "¿Qué temperatura hace aquí?",
+            "¿Cómo está el clima en mi ciudad?",
+            "¿Va a llover en donde estoy?",
+        ] {
+            assert!(
+                matches!(
+                    match_local(phrase),
+                    Some(Intent::Weather { city: None, .. })
+                ),
+                "{phrase}"
+            );
+        }
+        assert!(is_place_name("el cairo"));
+        assert!(is_place_name("san jose de las lajas"));
+        assert!(!is_place_name("la ciudad en la que me encuentro"));
+    }
+
+    #[test]
+    fn the_city_keeps_how_it_was_written() {
+        assert_eq!(
+            match_local("clima en nueva york"),
+            Some(Intent::Weather {
+                city: Some("nueva york".into()),
+                when: WeatherWhen::Now
+            })
+        );
     }
 
     #[test]

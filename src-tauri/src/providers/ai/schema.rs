@@ -148,7 +148,10 @@ pub fn parse_interpretation(text: &str, fallback_question: &str) -> Result<Inten
             Some(_) => return Err(AiError::InvalidResponse),
         }),
         "weather" => Intent::Weather {
-            city: clean(raw.city),
+            // "Mi ciudad" o "donde estoy" no son una ciudad: entonces se usa la de Ajustes o se pregunta.
+            city: clean(raw.city).filter(|city| {
+                crate::core::rules::is_place_name(&crate::core::rules::normalize(city))
+            }),
             when: match raw.when.as_deref() {
                 Some("tomorrow") => WeatherWhen::Tomorrow,
                 Some("today") => WeatherWhen::Today,

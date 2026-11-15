@@ -107,6 +107,7 @@ const responses: Record<string, () => AssistantResponse> = {
       { kind: "folderConsent", folders: [longPath.replace(/\\[^\\]+$/, ""), "C:\\Users\\usuario\\Desktop"], pendingRequest: "Busca mi informe" },
       "pending",
     ),
+  "sin ciudad": () => response("Dame el clima en la ciudad en la que me encuentro", { kind: "weatherCityQuestion", when: "now" }, "pending"),
   documento: () =>
     response(
       "Resume mi documento de bases de datos",

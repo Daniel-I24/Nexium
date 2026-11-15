@@ -27,6 +27,8 @@ export const api = {
   /** Abre el selector de archivos del sistema. `null` si se cerró sin elegir. */
   pickDocument: () => invoke<DocumentCandidate | null>("document_pick"),
   openAttribution: () => invoke<undefined>("open_attribution"),
+  /** Comprueba la ciudad con Open-Meteo, la guarda y devuelve su nombre oficial. */
+  setWeatherCity: (city: string) => invoke<string>("weather_city_set", { city }),
 
   startVoice: () => invoke<undefined>("voice_start"),
   stopVoice: () => invoke<AssistantResponse | null>("voice_stop"),

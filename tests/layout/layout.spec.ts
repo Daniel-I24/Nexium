@@ -69,6 +69,10 @@ const views: Record<string, (page: Page) => Promise<void>> = {
     await expect(page.getByRole("radio", { name: /Apuntes de bases de datos/ })).toBeVisible();
   },
   "asistente-resumen": (page) => submit(page, "resumen"),
+  "asistente-clima-sin-ciudad": async (page) => {
+    await submit(page, "sin ciudad");
+    await expect(page.getByRole("button", { name: "Consultar el clima" })).toBeVisible();
+  },
   "barra-escuchando": async (page) => {
     await page.getByRole("button", { name: "Hablar" }).click();
     await page.evaluate(async () => {

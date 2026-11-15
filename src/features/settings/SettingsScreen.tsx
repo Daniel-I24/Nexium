@@ -245,9 +245,10 @@ export function SettingsScreen() {
         </Section>
 
         <Section title="Clima">
-          <Field label="Ciudad predeterminada">
+          <Field label="Ciudad para el clima">
             <input value={draft.weatherCity} maxLength={100} onChange={(event) => update("weatherCity", event.target.value)} className={inputStyle} />
           </Field>
+          <p className="m-0 text-sm text-muted">Se usa cuando no nombras una ciudad. Al guardar, Nexium la comprueba con Open-Meteo y guarda su nombre oficial.</p>
           <p className="m-0 text-sm text-muted">
             Datos meteorológicos de{" "}
             <button type="button" onClick={() => void api.openAttribution()} className="bg-transparent text-muted underline">

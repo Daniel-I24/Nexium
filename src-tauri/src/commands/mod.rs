@@ -2,6 +2,7 @@
 
 pub mod documents;
 pub mod folders;
+pub mod weather;
 
 use std::{
     path::PathBuf,
@@ -24,7 +25,7 @@ use crate::{
         documents::DocumentOffers,
         files::AuthorizedFolder,
         speech::{self, Recording, SpeechModelStatus, SpeechProvider},
-        weather::ATTRIBUTION_URL,
+        weather::{WeatherProvider, ATTRIBUTION_URL},
     },
     services::{
         history::HistoryService,
@@ -42,6 +43,8 @@ pub struct AppState {
     pub settings: SettingsService,
     pub history: HistoryService,
     pub reminders: ReminderService,
+    /// Open-Meteo, también para comprobar la ciudad de Ajustes.
+    pub weather: Arc<dyn WeatherProvider>,
     pub usage: UsageService,
     pub known_folders: Vec<AuthorizedFolder>,
     /// Archivos ofrecidos para resumir: la interfaz solo conoce su identificador.
@@ -473,9 +476,19 @@ pub fn settings_get(state: State<'_, AppState>) -> AppResult<SettingsView> {
     settings_view(&state)
 }
 
+/// La ciudad del clima, si cambia, se comprueba con Open-Meteo y se guarda con su nombre oficial.
 #[tauri::command]
-pub fn settings_save(state: State<'_, AppState>, settings: Settings) -> AppResult<SettingsView> {
+pub async fn settings_save(
+    state: State<'_, AppState>,
+    mut settings: Settings,
+) -> AppResult<SettingsView> {
     settings.validate(&speech::catalog_ids())?;
+    let city = settings.weather_city.trim().to_owned();
+    if city.is_empty() {
+        settings.weather_city.clear();
+    } else if city != state.settings.get()?.weather_city {
+        settings.weather_city = weather::verified_city(state.weather.as_ref(), &city).await?;
+    }
     state.settings.save_editable(&settings)?;
     settings_view(&state)
 }

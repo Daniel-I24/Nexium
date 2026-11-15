@@ -91,6 +91,7 @@ describe("operaciones", () => {
     expect(sent.input).toBe("Busca mi informe");
     expect(sent.system_instruction).toContain("Monday 2026-11-09 10:30, zona -05:00");
     expect(sent.system_instruction).not.toContain("{now}");
+    expect(sent.system_instruction).toContain("null si no nombra ninguno o se refiere a donde está");
   });
 
   it("analiza una captura con el modelo de visión", async () => {

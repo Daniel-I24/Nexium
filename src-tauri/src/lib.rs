@@ -36,7 +36,7 @@ use crate::{
         notification::{NotificationProvider, TauriNotifications},
         speech::{SpeechProvider, WhisperSpeech},
         system::NativeSystemProvider,
-        weather::OpenMeteo,
+        weather::{OpenMeteo, WeatherProvider},
     },
     services::{
         history::HistoryService, performance::PerformanceLog, reminders::ReminderService,
@@ -92,6 +92,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
     let ai = build_ai(settings.install_id()?);
     let folders = known_folders(app);
     let offers = Arc::new(DocumentOffers::default());
+    let weather: Arc<dyn WeatherProvider> = Arc::new(OpenMeteo::default());
 
     let theme_app = app.clone();
     let system = Arc::new(NativeSystemProvider::new(Arc::new(move || match theme_app
@@ -121,7 +122,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
             provider: ai.display_name().to_owned(),
         }),
         Box::new(WeatherHandler {
-            weather: Arc::new(OpenMeteo::default()),
+            weather: weather.clone(),
             settings: settings.clone(),
         }),
         Box::new(ReminderIntentHandler {
@@ -151,6 +152,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
         usage,
         known_folders: folders,
         offers,
+        weather,
         models_dir: data_dir.join("models"),
         cancel: Mutex::new(CancellationToken::new()),
         recording: Mutex::new(None),
@@ -272,6 +274,7 @@ pub fn run() {
             commands::folders::folders_remove,
             commands::documents::document_analyze,
             commands::documents::document_pick,
+            commands::weather::weather_city_set,
             commands::open_attribution,
             commands::voice_start,
             commands::voice_stop,

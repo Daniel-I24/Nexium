@@ -38,6 +38,8 @@ pub struct WeatherReport {
 #[async_trait]
 pub trait WeatherProvider: Send + Sync {
     async fn report(&self, city: &str) -> Result<WeatherReport, WeatherError>;
+    /// Nombre oficial de una ciudad ("medellin" pasa a "Medellín"), o `CityNotFound` si no existe.
+    async fn find_city(&self, city: &str) -> Result<String, WeatherError>;
 }
 
 pub struct OpenMeteo {
@@ -148,9 +150,8 @@ fn day(daily: &Daily, index: usize) -> Result<DayForecast, WeatherError> {
     })
 }
 
-#[async_trait]
-impl WeatherProvider for OpenMeteo {
-    async fn report(&self, city: &str) -> Result<WeatherReport, WeatherError> {
+impl OpenMeteo {
+    async fn geocode(&self, city: &str) -> Result<Place, WeatherError> {
         let places: GeocodingResponse = self
             .get(
                 format!("{}/search", self.geocoding_url),
@@ -162,11 +163,22 @@ impl WeatherProvider for OpenMeteo {
                 ],
             )
             .await?;
-        let place = places
+        places
             .results
             .into_iter()
             .next()
-            .ok_or(WeatherError::CityNotFound)?;
+            .ok_or(WeatherError::CityNotFound)
+    }
+}
+
+#[async_trait]
+impl WeatherProvider for OpenMeteo {
+    async fn find_city(&self, city: &str) -> Result<String, WeatherError> {
+        Ok(self.geocode(city).await?.name)
+    }
+
+    async fn report(&self, city: &str) -> Result<WeatherReport, WeatherError> {
+        let place = self.geocode(city).await?;
         let forecast: ForecastResponse = self
             .get(
                 format!("{}/forecast", self.forecast_url),
@@ -241,6 +253,16 @@ mod tests {
         assert_eq!(report.condition, "parcialmente nublado");
         assert_eq!(report.today.max_c, 19.0);
         assert_eq!(report.tomorrow.condition, "lluvia");
+    }
+
+    #[tokio::test]
+    async fn a_city_is_found_by_its_official_name() {
+        let server = server_with_data().await;
+        assert_eq!(client(&server).find_city("Bogotá").await.unwrap(), "Bogotá");
+        assert_eq!(
+            client(&server).find_city("Nolugar").await.unwrap_err(),
+            WeatherError::CityNotFound
+        );
     }
 
     #[tokio::test]

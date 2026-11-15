@@ -32,6 +32,8 @@ export interface FileResult {
 
 export type DocumentTask = "summarize" | "analyze";
 
+export type WeatherWhen = "now" | "today" | "tomorrow";
+
 /** Un archivo ofrecido para resumir: la interfaz solo conoce su identificador, nunca envía la ruta. */
 export interface DocumentCandidate {
   token: string;
@@ -71,6 +73,7 @@ export type ResponseBody =
   | { kind: "captureRequest"; question: string }
   | { kind: "documentConsent"; task: DocumentTask; provider: string; candidates: DocumentCandidate[]; maxCharacters: number; note: string | null }
   | { kind: "documentAnalysis"; fileName: string; task: DocumentTask; summary: string; points: string[]; truncated: boolean }
+  | { kind: "weatherCityQuestion"; when: WeatherWhen }
   | { kind: "navigate"; section: Section }
   | { kind: "error"; code: string; message: string; hint: string | null };
 
