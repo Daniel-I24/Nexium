@@ -1,20 +1,27 @@
 import type { Env } from "./env";
 import { ApiError, errorResponse, errorStatus } from "./errors";
-import { analyzeRequest, callGemini, interpretRequest, type ModelAnswer } from "./gemini";
+import { analyzeRequest, callGemini, documentRequest, interpretRequest, type ModelAnswer, type Upstream } from "./gemini";
 import { enforceLimits } from "./limiter";
 import { assertRegionAllowed } from "./region";
-import { installId, interpretInput, ipBucket, MAX_INTERPRET_BODY, readCapture, readObject } from "./validation";
+import { documentInput, installId, interpretInput, ipBucket, MAX_DOCUMENT_BODY, MAX_INTERPRET_BODY, readCapture, readObject } from "./validation";
 
 export { UsageCounter } from "./limiter";
 
-type Operation = "interpret" | "analyze";
+type Operation = "interpret" | "analyze" | "document";
 
-const OPERATIONS: Record<string, Operation> = { "/v1/interpret": "interpret", "/v1/analyze": "analyze" };
+const OPERATIONS: Record<string, Operation> = { "/v1/interpret": "interpret", "/v1/analyze": "analyze", "/v1/document": "document" };
+
+/** Lee y valida el cuerpo de cada operación antes de gastar cupo. */
+async function upstreamFor(operation: Operation, request: Request): Promise<Upstream> {
+  if (operation === "interpret") return interpretRequest(interpretInput(await readObject(request, MAX_INTERPRET_BODY)));
+  if (operation === "document") return documentRequest(documentInput(await readObject(request, MAX_DOCUMENT_BODY)));
+  return analyzeRequest(await readCapture(request));
+}
 
 async function run(operation: Operation, request: Request, env: Env): Promise<ModelAnswer> {
   assertRegionAllowed(request.cf?.country);
   const install = installId(request.headers.get("X-Nexium-Install"));
-  const upstream = operation === "interpret" ? interpretRequest(interpretInput(await readObject(request, MAX_INTERPRET_BODY))) : analyzeRequest(await readCapture(request));
+  const upstream = await upstreamFor(operation, request);
   if (!env.GEMINI_API_KEY) throw new ApiError("unavailable");
   await enforceLimits(env, env.LIMITS[operation], operation, install, ipBucket(request.headers.get("CF-Connecting-IP") ?? "unknown"));
   return callGemini(upstream, env.GEMINI_API_KEY);

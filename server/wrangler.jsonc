@@ -22,6 +22,11 @@
         "install": { "perMinute": 3, "perDay": 20 },
         "ip": { "perMinute": 15, "perDay": 200 },
         "global": { "perMinute": 30, "perDay": 50 }
+      },
+      "document": {
+        "install": { "perMinute": 3, "perDay": 20 },
+        "ip": { "perMinute": 15, "perDay": 200 },
+        "global": { "perMinute": 30, "perDay": 100 }
       }
     }
   }

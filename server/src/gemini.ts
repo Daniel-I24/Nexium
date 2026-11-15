@@ -1,6 +1,6 @@
 import contract from "./ai-contract.json";
 import { ApiError, type ErrorCode } from "./errors";
-import type { AnalyzeInput, InterpretInput } from "./validation";
+import type { AnalyzeInput, DocumentInput, InterpretInput } from "./validation";
 
 const RETRY_DELAY_MS = 1000;
 /** Un reintento con menos tiempo que esto fallaría casi seguro: mejor responder ya. */
@@ -51,6 +51,25 @@ export function interpretRequest({ text, now }: InterpretInput): Upstream {
         store: false,
         system_instruction: systemInstruction.replace("{now}", now),
         input: text,
+        generation_config: { max_output_tokens: maxOutputTokens, thinking_level: thinkingLevel },
+        response_format: { type: "text", mime_type: "application/json", schema: responseSchema },
+      }),
+  };
+}
+
+/** El documento va como dato, con su formato delante; las instrucciones dependen de la tarea. */
+export function documentRequest({ task, format, text }: DocumentInput): Upstream {
+  const { model, timeoutMs, totalTimeoutMs, maxOutputTokens, thinkingLevel, systemInstruction, responseSchema } = contract.document;
+  return {
+    model,
+    timeoutMs,
+    totalTimeoutMs,
+    body: (chosen) =>
+      JSON.stringify({
+        model: chosen,
+        store: false,
+        system_instruction: systemInstruction[task],
+        input: `Formato: ${format}\n\n${text}`,
         generation_config: { max_output_tokens: maxOutputTokens, thinking_level: thinkingLevel },
         response_format: { type: "text", mime_type: "application/json", schema: responseSchema },
       }),

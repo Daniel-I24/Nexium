@@ -13,6 +13,6 @@ export interface OperationLimits {
 
 export interface Env {
   GEMINI_API_KEY?: string;
-  LIMITS: { interpret: OperationLimits; analyze: OperationLimits };
+  LIMITS: { interpret: OperationLimits; analyze: OperationLimits; document: OperationLimits };
   USAGE_COUNTER: DurableObjectNamespace<UsageCounter>;
 }
