@@ -116,7 +116,7 @@ export function HistoryScreen({ onCleared }: { onCleared: () => void }) {
                 >
                   <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
                     <strong className="wrap-anywhere font-medium">{entry.request}</strong>
-                    <span className="whitespace-pre-wrap wrap-anywhere text-sm">{entry.response}</span>
+                    <span className="whitespace-pre-line wrap-anywhere text-sm">{entry.response}</span>
                     <span className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
                       <span className="font-mono">{new Date(entry.createdAt).toLocaleString("es", { dateStyle: "short", timeStyle: "short" })}</span>
                       <span aria-hidden="true">·</span>

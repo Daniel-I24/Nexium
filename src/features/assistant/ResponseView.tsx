@@ -167,7 +167,7 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
         </>
       );
     case "text":
-      return <p className="m-0 max-w-reading whitespace-pre-wrap wrap-anywhere text-lg">{body.text}</p>;
+      return <p className="m-0 max-w-reading whitespace-pre-line wrap-anywhere text-lg">{body.text}</p>;
     case "screenAnalysis":
       return <ScreenAnalysisView summary={body.summary} cause={body.cause} steps={body.steps} />;
     case "files":
