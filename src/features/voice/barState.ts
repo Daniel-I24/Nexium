@@ -18,6 +18,8 @@ const stepLabels: Partial<Record<Stage, string>> = {
   executing: "Consultando…",
   capturing: "Tomando una sola captura…",
   analyzing: "Analizando la imagen…",
+  reading: "Leyendo el documento en este equipo…",
+  summarizing: "Analizando el documento…",
 };
 
 export function barStateFromStage(stage: Stage): BarState {

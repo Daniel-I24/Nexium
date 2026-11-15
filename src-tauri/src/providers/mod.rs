@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod capture;
+pub mod documents;
 pub mod files;
 pub mod notification;
 pub mod speech;

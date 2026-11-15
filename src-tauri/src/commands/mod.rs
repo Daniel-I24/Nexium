@@ -1,5 +1,8 @@
 //! Capa IPC: valida la entrada y delega. No existe ningún comando genérico ni acceso a rutas o procesos.
 
+pub mod documents;
+pub mod folders;
+
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -18,6 +21,7 @@ use crate::{
     },
     providers::{
         ai::{AiProvider, AiServiceStatus},
+        documents::DocumentOffers,
         files::AuthorizedFolder,
         speech::{self, Recording, SpeechModelStatus, SpeechProvider},
         weather::ATTRIBUTION_URL,
@@ -40,6 +44,8 @@ pub struct AppState {
     pub reminders: ReminderService,
     pub usage: UsageService,
     pub known_folders: Vec<AuthorizedFolder>,
+    /// Archivos ofrecidos para resumir: la interfaz solo conoce su identificador.
+    pub offers: Arc<DocumentOffers>,
     pub models_dir: PathBuf,
     pub cancel: Mutex<CancellationToken>,
     pub recording: Mutex<Option<Recording>>,
@@ -66,7 +72,7 @@ impl AppState {
 }
 
 impl AppState {
-    fn fresh_cancel(&self) -> CancellationToken {
+    pub(crate) fn fresh_cancel(&self) -> CancellationToken {
         let token = CancellationToken::new();
         if let Ok(mut current) = self.cancel.lock() {
             current.cancel();
@@ -76,7 +82,7 @@ impl AppState {
     }
 }
 
-fn stage_sink<R: Runtime>(app: &AppHandle<R>) -> StageSink {
+pub(crate) fn stage_sink<R: Runtime>(app: &AppHandle<R>) -> StageSink {
     let app = app.clone();
     Arc::new(move |stage: Stage| {
         let _ = app.emit("assistant://stage", StagePayload { stage });
@@ -90,7 +96,7 @@ struct StagePayload {
 
 /// La solicitud terminó: la barra vuelve a En espera mientras la respuesta entra con su animación.
 /// Sin esperas artificiales, que se sumarían a cada orden.
-async fn present_stage<R: Runtime>(app: &AppHandle<R>) {
+pub(crate) async fn present_stage<R: Runtime>(app: &AppHandle<R>) {
     let _ = app.emit("assistant://stage", StagePayload { stage: Stage::Idle });
 }
 
@@ -127,20 +133,6 @@ pub fn assistant_cancel(state: State<'_, AppState>) {
     if let Ok(token) = state.cancel.lock() {
         token.cancel();
     }
-}
-
-#[tauri::command]
-pub fn folders_authorize(state: State<'_, AppState>, folders: Vec<String>) -> AppResult<()> {
-    let known: Vec<String> = state
-        .known_folders
-        .iter()
-        .map(|folder| folder.path.to_string_lossy().into_owned())
-        .collect();
-    let mut settings = state.settings.get()?;
-    settings.authorized_folders = folders;
-    settings.folders_confirmed = true;
-    settings.validate(&known, &speech::catalog_ids())?;
-    state.settings.save(&settings)
 }
 
 /// Solo abre la dirección fija de la atribución: la interfaz no puede pedir otra.
@@ -483,12 +475,7 @@ pub fn settings_get(state: State<'_, AppState>) -> AppResult<SettingsView> {
 
 #[tauri::command]
 pub fn settings_save(state: State<'_, AppState>, settings: Settings) -> AppResult<SettingsView> {
-    let known: Vec<String> = state
-        .known_folders
-        .iter()
-        .map(|folder| folder.path.to_string_lossy().into_owned())
-        .collect();
-    settings.validate(&known, &speech::catalog_ids())?;
-    state.settings.save(&settings)?;
+    settings.validate(&speech::catalog_ids())?;
+    state.settings.save_editable(&settings)?;
     settings_view(&state)
 }

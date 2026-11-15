@@ -14,6 +14,7 @@ export function FileList({ files }: { files: FileResult[] }) {
           <span className="flex flex-wrap items-center gap-x-1 text-sm">
             <StatusLabel status={file.exists ? "completed" : "failed"}>{file.exists ? "Existe" : "Ya no existe"}</StatusLabel>
             <span className="text-muted">· en {file.location}</span>
+            {file.matchedInContent && <span className="text-muted">· coincide en el contenido</span>}
           </span>
         </li>
       ))}

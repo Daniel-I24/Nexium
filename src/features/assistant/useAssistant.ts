@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { barStateFromStage, type BarState } from "@/features/voice/barState";
 import { TRACE_BARS } from "@/features/voice/LevelTrace";
 import { api, errorMessage, events } from "@/services/api";
-import type { AssistantResponse, ReminderOption, Section, SuggestedRequest } from "@/types/api";
+import type { AssistantResponse, DocumentCandidate, DocumentTask, ReminderOption, Section, SuggestedRequest } from "@/types/api";
+
+export type FolderChoice = "known" | "pick";
 
 const CAPTURE_REQUEST = "Analiza lo que aparece en mi pantalla";
 const VOICE_REQUEST = "Solicitud por voz";
@@ -209,17 +211,39 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
 
   const chooseSuggestion = useCallback((suggestion: SuggestedRequest) => void submit(suggestion.request), [submit]);
 
+  /** Da permiso (Documentos y Escritorio, u otra carpeta elegida en el sistema) y continúa la solicitud sola. */
   const authorizeFolders = useCallback(
-    async (folders: string[], pendingRequest: string) => {
+    async (choice: FolderChoice, pendingRequest: string) => {
       try {
-        await api.authorizeFolders(folders);
-        await submit(pendingRequest);
+        const folders = choice === "known" ? await api.allowKnownFolders() : await api.pickFolder();
+        if (folders) await submit(pendingRequest);
       } catch (error) {
         fail(error);
       }
     },
     [fail, submit],
   );
+
+  /** Lee el archivo confirmado y lo envía a resumir o analizar. */
+  const analyzeDocument = useCallback(
+    async (candidate: DocumentCandidate, task: DocumentTask) => {
+      setBar(barStateFromStage("reading"));
+      try {
+        present(await api.analyzeDocument(candidate.token, task));
+      } catch (error) {
+        fail(error, `${task === "summarize" ? "Resumen" : "Análisis"} de «${candidate.name}${candidate.extension}»`);
+      }
+    },
+    [fail, present],
+  );
+
+  /** "Cancelar" en un permiso de la conversación: no se hizo ni se envió nada. */
+  const dismissCurrent = useCallback((message: string) => {
+    setSession((session) =>
+      session.current ? { ...session, current: { ...session.current, status: "cancelled", summary: message, body: { kind: "text", text: message } } } : session,
+    );
+    setBar({ kind: "idle" });
+  }, []);
 
   return {
     bar,
@@ -237,5 +261,7 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     chooseReminderOption,
     chooseSuggestion,
     authorizeFolders,
+    analyzeDocument,
+    dismissCurrent,
   };
 }

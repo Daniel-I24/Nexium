@@ -43,7 +43,7 @@
     "body": {
       "kind": "files",
       "summary": "1 coincidencia en Documentos",
-      "files": [{ "name": "Informe", "extension": ".pdf", "location": "Documentos", "path": "C:\\a\\Informe.pdf", "exists": true }],
+      "files": [{ "name": "Informe", "extension": ".pdf", "location": "Documentos", "path": "C:\\a\\Informe.pdf", "exists": true, "matchedInContent": false }],
       "note": null
     }
   },
@@ -115,5 +115,39 @@
     "originLabel": "lectura directa del equipo, sin IA",
     "summary": "Abrí Recordatorios",
     "body": { "kind": "navigate", "section": "reminders" }
+  },
+  "documentConsent": {
+    "id": 9,
+    "request": "Resume mi documento de bases de datos",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "files",
+    "status": "pending",
+    "originLabel": "lectura directa del equipo, sin IA",
+    "summary": "Pendiente de confirmación",
+    "body": {
+      "kind": "documentConsent",
+      "task": "summarize",
+      "provider": "Google Gemini",
+      "candidates": [{ "token": "t-1", "name": "Bases de datos", "extension": ".pdf", "location": "Documentos" }],
+      "maxCharacters": 30000,
+      "note": null
+    }
+  },
+  "documentAnalysis": {
+    "id": 10,
+    "request": "Resumen de «Bases de datos.pdf»",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "files",
+    "status": "completed",
+    "originLabel": "documento leído en este equipo y resumido con IA (Google Gemini). Su contenido no se guarda",
+    "summary": "Guía de la asignatura.",
+    "body": {
+      "kind": "documentAnalysis",
+      "fileName": "Bases de datos.pdf",
+      "task": "summarize",
+      "summary": "Guía de la asignatura.",
+      "points": ["Tres unidades.", "Dos parciales y un proyecto."],
+      "truncated": true
+    }
   }
 }

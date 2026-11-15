@@ -9,15 +9,16 @@ use reqwest::{header::CONTENT_TYPE, RequestBuilder, Response};
 use serde::Deserialize;
 use serde_json::json;
 
-use super::{schema, AiAnswer, AiProvider, InterpretRequest, VisionRequest};
+use super::{schema, AiAnswer, AiProvider, DocumentRequest, InterpretRequest, VisionRequest};
 use crate::{
     error::AiError,
-    models::{Intent, ScreenAnalysis},
+    models::{DocumentSummary, Intent, ScreenAnalysis},
 };
 
 /// Mayores que los del servidor, que puede reintentar una vez: quien corta primero es él.
 const INTERPRET_TIMEOUT: Duration = Duration::from_secs(45);
 const VISION_TIMEOUT: Duration = Duration::from_secs(130);
+const DOCUMENT_TIMEOUT: Duration = Duration::from_secs(90);
 const INSTALL_HEADER: &str = "X-Nexium-Install";
 const CAPTURE_CONTENT_TYPE: &str = "application/x-nexium-capture";
 
@@ -162,6 +163,25 @@ impl AiProvider for NexiumServer {
         .await?;
         Ok(AiAnswer {
             value: schema::parse_screen_analysis(&reply.output)?,
+            tokens: reply.tokens,
+        })
+    }
+
+    async fn analyze_document(
+        &self,
+        request: DocumentRequest,
+    ) -> Result<AiAnswer<DocumentSummary>, AiError> {
+        let reply = Self::send(
+            self.request("/v1/document", DOCUMENT_TIMEOUT)?
+                .json(&json!({
+                    "task": request.task.as_str(),
+                    "format": request.format,
+                    "text": request.text,
+                })),
+        )
+        .await?;
+        Ok(AiAnswer {
+            value: schema::parse_document_summary(&reply.output)?,
             tokens: reply.tokens,
         })
     }

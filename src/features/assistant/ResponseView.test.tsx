@@ -18,7 +18,7 @@ const response = (body: ResponseBody): AssistantResponse => ({
   body,
 });
 
-const actions = { onSaveReminder: vi.fn(), onAuthorizeFolders: vi.fn(), onChooseReminderOption: vi.fn(), onChooseSuggestion: vi.fn() };
+const actions = { onSaveReminder: vi.fn(), onAuthorizeFolders: vi.fn(), onChooseReminderOption: vi.fn(), onChooseSuggestion: vi.fn(), onAnalyzeDocument: vi.fn(), onDismiss: vi.fn() };
 
 describe("origen", () => {
   it("todas las líneas de origen terminan con un punto, sin duplicarlo", () => {

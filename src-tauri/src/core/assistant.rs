@@ -52,7 +52,7 @@ enum Resolved {
 
 impl Assistant {
     /// Comprueba lo que no cuesta nada antes de gastar cuota.
-    fn check_ai_available(&self) -> Result<(), AiError> {
+    pub(crate) fn check_ai_available(&self) -> Result<(), AiError> {
         if !self.ai.is_configured() {
             return Err(AiError::NotConfigured);
         }
@@ -90,7 +90,7 @@ impl Assistant {
         }
     }
 
-    fn ai_failure(&self, category: Category, error: &AiError) -> Outcome {
+    pub(crate) fn ai_failure(&self, category: Category, error: &AiError) -> Outcome {
         let (message, hint) = self.describe_ai_error(error);
         Outcome::failed(category, error.code(), message, hint)
     }
@@ -145,7 +145,12 @@ impl Assistant {
         }
     }
 
-    fn finish(&self, request: &str, outcome: Outcome, origin: &str) -> AssistantResponse {
+    pub(crate) fn finish(
+        &self,
+        request: &str,
+        outcome: Outcome,
+        origin: &str,
+    ) -> AssistantResponse {
         let (id, created_at) = self
             .history
             .record(request, outcome.category, outcome.status, &outcome.summary)
@@ -449,6 +454,20 @@ mod tests {
                 tokens: 9,
             })
         }
+        async fn analyze_document(
+            &self,
+            request: crate::providers::ai::DocumentRequest,
+        ) -> Result<AiAnswer<crate::models::DocumentSummary>, AiError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            assert!(!request.text.is_empty());
+            Ok(AiAnswer {
+                value: crate::models::DocumentSummary {
+                    summary: "Trata de bases de datos.".into(),
+                    points: vec!["Explica la normalización.".into()],
+                },
+                tokens: 11,
+            })
+        }
     }
 
     struct FakeSystem;
@@ -530,6 +549,15 @@ mod tests {
                     label: "Documentos".into(),
                 }],
             }),
+            Box::new(crate::core::handlers::DocumentsHandler {
+                files: FilesHandler {
+                    search: Arc::new(LocalFileSearch),
+                    settings: settings.clone(),
+                    known_folders: vec![],
+                },
+                offers: Arc::default(),
+                provider: "Proveedor de prueba".into(),
+            }),
             Box::new(ReminderIntentHandler {
                 reminders: ReminderService::new(db.clone()),
             }),
@@ -574,8 +602,82 @@ mod tests {
     fn authorize(harness: &Harness) {
         let mut settings = harness.assistant.settings.get().unwrap();
         settings.authorized_folders = vec![harness._folder.path().to_string_lossy().into_owned()];
-        settings.folders_confirmed = true;
         harness.assistant.settings.save(&settings).unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_document_needs_folders_and_then_is_offered_without_sending_anything() {
+        let h = harness(None, true, false);
+        let response = ask(&h.assistant, "Resume mi informe de programación").await;
+        assert!(matches!(response.body, ResponseBody::FolderConsent { .. }));
+        authorize(&h);
+        let response = ask(&h.assistant, "Resume mi informe de programación").await;
+        let ResponseBody::DocumentConsent {
+            candidates,
+            provider,
+            task,
+            ..
+        } = response.body
+        else {
+            panic!("{:?}", response.body)
+        };
+        assert_eq!(task, crate::models::DocumentTask::Summarize);
+        assert_eq!(provider, "Proveedor de prueba");
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].name, "informe programacion");
+        // Ofrecer un archivo no lo lee ni lo envía.
+        assert_eq!(h.ai_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn a_document_summary_never_stores_its_content() {
+        let h = harness(None, true, false);
+        let file = h._folder.path().join("acta.txt");
+        std::fs::write(
+            &file,
+            "Contenido privado del acta de la reunión de presupuesto.",
+        )
+        .unwrap();
+        let response = h
+            .assistant
+            .analyze_document(
+                &file,
+                crate::models::DocumentTask::Summarize,
+                CancellationToken::new(),
+                silent(),
+            )
+            .await;
+        assert_eq!(response.request, "Resumen de «acta.txt»");
+        let ResponseBody::DocumentAnalysis {
+            summary, points, ..
+        } = &response.body
+        else {
+            panic!("{:?}", response.body)
+        };
+        assert_eq!(summary, "Trata de bases de datos.");
+        assert_eq!(points.len(), 1);
+        let history = h.assistant.history.list(None).unwrap();
+        assert_eq!(history[0].request, "Resumen de «acta.txt»");
+        assert!(!history[0].response.contains("Contenido privado"));
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_document_is_explained_without_calling_the_ai() {
+        let h = harness(None, true, false);
+        let file = h._folder.path().join("foto.png");
+        std::fs::write(&file, "x").unwrap();
+        let response = h
+            .assistant
+            .analyze_document(
+                &file,
+                crate::models::DocumentTask::Analyze,
+                CancellationToken::new(),
+                silent(),
+            )
+            .await;
+        assert_eq!(response.status, InteractionStatus::Failed);
+        assert!(response.summary.contains("No sé leer archivos .png"));
+        assert_eq!(h.ai_calls.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]

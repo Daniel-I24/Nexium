@@ -52,7 +52,9 @@ export function App() {
           tape={assistant.tape}
           onPickExample={(text) => void assistant.submit(text)}
           onSaveReminder={(content, dueAt) => void assistant.saveReminder(content, dueAt)}
-          onAuthorizeFolders={(folders, pendingRequest) => void assistant.authorizeFolders(folders, pendingRequest)}
+          onAuthorizeFolders={(choice, pendingRequest) => void assistant.authorizeFolders(choice, pendingRequest)}
+          onAnalyzeDocument={(candidate, task) => void assistant.analyzeDocument(candidate, task)}
+          onDismiss={assistant.dismissCurrent}
           onChooseReminderOption={assistant.chooseReminderOption}
           onChooseSuggestion={assistant.chooseSuggestion}
         />

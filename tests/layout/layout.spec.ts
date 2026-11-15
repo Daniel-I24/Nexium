@@ -64,6 +64,11 @@ const views: Record<string, (page: Page) => Promise<void>> = {
     await expect(page.getByRole("button", { name: "Buscar un archivo" })).toBeVisible();
   },
   "asistente-carpetas": (page) => submit(page, "carpetas"),
+  "asistente-documento": async (page) => {
+    await submit(page, "documento");
+    await expect(page.getByRole("radio", { name: /Apuntes de bases de datos/ })).toBeVisible();
+  },
+  "asistente-resumen": (page) => submit(page, "resumen"),
   "barra-escuchando": async (page) => {
     await page.getByRole("button", { name: "Hablar" }).click();
     await page.evaluate(async () => {
@@ -106,7 +111,7 @@ const views: Record<string, (page: Page) => Promise<void>> = {
   "ajustes-guardado": async (page) => {
     await screen(page, "Ajustes");
     await page.getByRole("button", { name: "Guardar ajustes" }).click();
-    await expect(page.getByText("Ajustes guardados.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ajustes guardados" })).toBeVisible();
   },
 };
 

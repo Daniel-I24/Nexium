@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::{
     error::AiError,
-    models::{Intent, ScreenAnalysis},
+    models::{DocumentSummary, DocumentTask, Intent, ScreenAnalysis},
 };
 
 pub struct InterpretRequest {
@@ -24,6 +24,14 @@ pub struct InterpretRequest {
 pub struct VisionRequest {
     pub image_jpeg: Vec<u8>,
     pub question: String,
+}
+
+/// Texto de un documento, ya extraído en el equipo y recortado, para resumirlo o analizarlo.
+pub struct DocumentRequest {
+    pub task: DocumentTask,
+    /// Extensión sin punto (`pdf`, `docx`, `txt`, `md`, `csv`). El nombre del archivo no se envía.
+    pub format: String,
+    pub text: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,6 +53,10 @@ pub trait AiProvider: Send + Sync {
         &self,
         request: VisionRequest,
     ) -> Result<AiAnswer<ScreenAnalysis>, AiError>;
+    async fn analyze_document(
+        &self,
+        request: DocumentRequest,
+    ) -> Result<AiAnswer<DocumentSummary>, AiError>;
 }
 
 /// Estado del servicio según su último uso real: consultarlo aparte gastaría cuota.

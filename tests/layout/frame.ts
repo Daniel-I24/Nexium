@@ -73,7 +73,7 @@ export function auditFrame(): string[] {
   if (nav) for (const control of nav.querySelectorAll("button")) if (shown(control)) checkFixed(control, nav, "la navegación");
 
   for (const button of document.querySelectorAll("button")) {
-    if (button.textContent?.trim() === "Guardar ajustes" && shown(button)) {
+    if (button.hasAttribute("data-save") && shown(button)) {
       if (button.closest("[data-scroll-area]")) problems.push("«Guardar ajustes» está dentro de la zona que se desplaza.");
       checkFixed(button, button.parentElement ?? document.body, "el pie de Ajustes");
     }

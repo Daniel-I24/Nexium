@@ -3,6 +3,8 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type {
   AssistantResponse,
+  DocumentCandidate,
+  DocumentTask,
   DownloadProgress,
   HistoryEntry,
   InteractionStatus,
@@ -16,7 +18,14 @@ import type {
 export const api = {
   submitRequest: (text: string) => invoke<AssistantResponse>("assistant_submit", { text }),
   cancel: () => invoke<undefined>("assistant_cancel"),
-  authorizeFolders: (folders: string[]) => invoke<undefined>("folders_authorize", { folders }),
+  allowKnownFolders: () => invoke<string[]>("folders_allow_known"),
+  /** Abre el selector de carpetas del sistema. `null` si se cerró sin elegir. */
+  pickFolder: () => invoke<string[] | null>("folders_pick"),
+  removeFolder: (folder: string) => invoke<string[]>("folders_remove", { folder }),
+
+  analyzeDocument: (token: string, task: DocumentTask) => invoke<AssistantResponse>("document_analyze", { token, task }),
+  /** Abre el selector de archivos del sistema. `null` si se cerró sin elegir. */
+  pickDocument: () => invoke<DocumentCandidate | null>("document_pick"),
   openAttribution: () => invoke<undefined>("open_attribution"),
 
   startVoice: () => invoke<undefined>("voice_start"),

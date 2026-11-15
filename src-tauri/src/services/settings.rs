@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::path::Path;
 
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -11,6 +11,14 @@ use crate::{
 
 pub const DEFAULT_SPEECH_MODEL: &str = "small";
 pub const DEFAULT_SPEECH_IDLE_MINUTES: u32 = 10;
+/// Carpetas autorizadas a la vez, como mucho.
+pub const MAX_FOLDERS: usize = 20;
+
+/// Ruta para mostrar y guardar: sin el prefijo `\\?\` que añade Windows al resolverla.
+pub fn display_path(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    text.strip_prefix(r"\\?\").unwrap_or(&text).to_owned()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
@@ -19,8 +27,9 @@ pub struct Settings {
     pub speech_model: String,
     pub speech_idle_minutes: u32,
     pub weather_city: String,
+    /// Carpetas donde Nexium puede buscar y leer. Solo se añaden con el selector del sistema o con el permiso
+    /// de la conversación (`add_folder`), nunca con una ruta escrita por la interfaz.
     pub authorized_folders: Vec<String>,
-    pub folders_confirmed: bool,
     /// Nombre del micrófono elegido. `None` es automático: el primer micrófono real.
     pub microphone: Option<String>,
 }
@@ -33,18 +42,13 @@ impl Default for Settings {
             speech_idle_minutes: DEFAULT_SPEECH_IDLE_MINUTES,
             weather_city: String::new(),
             authorized_folders: Vec::new(),
-            folders_confirmed: false,
             microphone: None,
         }
     }
 }
 
 impl Settings {
-    pub fn validate(
-        &self,
-        known_folders: &[String],
-        known_speech_models: &[&str],
-    ) -> AppResult<()> {
+    pub fn validate(&self, known_speech_models: &[&str]) -> AppResult<()> {
         if !(1..=10_000).contains(&self.daily_ai_limit) {
             return Err(AppError::Validation(
                 "El límite diario debe estar entre 1 y 10 000.".into(),
@@ -70,16 +74,6 @@ impl Settings {
         if self.weather_city.chars().count() > 100 {
             return Err(AppError::Validation(
                 "El nombre de la ciudad es demasiado largo.".into(),
-            ));
-        }
-        let known: HashSet<&String> = known_folders.iter().collect();
-        if self
-            .authorized_folders
-            .iter()
-            .any(|folder| !known.contains(folder))
-        {
-            return Err(AppError::Validation(
-                "Solo se pueden autorizar las carpetas que ofrece Nexium.".into(),
             ));
         }
         Ok(())
@@ -140,13 +134,43 @@ impl SettingsService {
         Ok(inserted == 1)
     }
 
-    pub fn authorized_paths(&self) -> AppResult<Vec<PathBuf>> {
-        Ok(self
-            .get()?
-            .authorized_folders
-            .into_iter()
-            .map(PathBuf::from)
-            .collect())
+    /// Guarda los ajustes que se editan en la pantalla. Las carpetas no se tocan: tienen sus propias acciones.
+    pub fn save_editable(&self, edited: &Settings) -> AppResult<()> {
+        let mut settings = edited.clone();
+        settings.authorized_folders = self.get()?.authorized_folders;
+        self.save(&settings)
+    }
+
+    /// Autoriza una carpeta que existe. Devuelve la lista resultante, sin duplicados.
+    pub fn add_folder(&self, path: &Path) -> AppResult<Vec<String>> {
+        let resolved = path.canonicalize().map_err(|_| {
+            AppError::Validation("Esa carpeta no existe o no se puede abrir.".into())
+        })?;
+        if !resolved.is_dir() {
+            return Err(AppError::Validation(
+                "Solo se pueden autorizar carpetas.".into(),
+            ));
+        }
+        let folder = display_path(&resolved);
+        let mut settings = self.get()?;
+        if !settings.authorized_folders.contains(&folder) {
+            if settings.authorized_folders.len() >= MAX_FOLDERS {
+                return Err(AppError::Validation(format!(
+                    "Puedes autorizar como mucho {MAX_FOLDERS} carpetas."
+                )));
+            }
+            settings.authorized_folders.push(folder);
+            self.save(&settings)?;
+        }
+        Ok(settings.authorized_folders)
+    }
+
+    /// Retira el permiso de una carpeta. No toca la carpeta ni su contenido.
+    pub fn remove_folder(&self, folder: &str) -> AppResult<Vec<String>> {
+        let mut settings = self.get()?;
+        settings.authorized_folders.retain(|item| item != folder);
+        self.save(&settings)?;
+        Ok(settings.authorized_folders)
     }
 }
 
@@ -181,11 +205,11 @@ mod tests {
     fn the_voice_idle_period_is_validated_and_defaults_for_old_settings() {
         let mut settings = Settings::default();
         let models = ["small"];
-        assert!(settings.validate(&[], &models).is_ok());
+        assert!(settings.validate(&models).is_ok());
         settings.speech_idle_minutes = 0;
-        assert!(settings.validate(&[], &models).is_err());
+        assert!(settings.validate(&models).is_err());
         settings.speech_idle_minutes = 241;
-        assert!(settings.validate(&[], &models).is_err());
+        assert!(settings.validate(&models).is_err());
         let stored: Settings = serde_json::from_str(r#"{"speechModel":"small"}"#).unwrap();
         assert_eq!(stored.speech_idle_minutes, DEFAULT_SPEECH_IDLE_MINUTES);
     }
@@ -210,13 +234,34 @@ mod tests {
     }
 
     #[test]
-    fn rejects_folders_nexium_did_not_offer() {
-        let settings = Settings {
-            authorized_folders: vec!["C:\\".into()],
+    fn folders_are_added_once_and_only_if_they_exist() {
+        let service = service();
+        let dir = tempfile::tempdir().unwrap();
+        let folders = service.add_folder(dir.path()).unwrap();
+        assert_eq!(folders.len(), 1);
+        assert!(!folders[0].starts_with(r"\\?\"));
+        assert_eq!(service.add_folder(dir.path()).unwrap().len(), 1);
+        assert!(service.add_folder(&dir.path().join("no-existe")).is_err());
+        let file = dir.path().join("archivo.txt");
+        std::fs::write(&file, "x").unwrap();
+        assert!(service.add_folder(&file).is_err());
+        assert!(service.remove_folder(&folders[0]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn saving_the_screen_never_changes_the_folders() {
+        let service = service();
+        let dir = tempfile::tempdir().unwrap();
+        service.add_folder(dir.path()).unwrap();
+        let edited = Settings {
+            authorized_folders: vec![r"C:\".into()],
+            weather_city: "Cali".into(),
             ..Settings::default()
         };
-        assert!(settings
-            .validate(&["C:\\Users\\a\\Documents".into()], &["small"])
-            .is_err());
+        service.save_editable(&edited).unwrap();
+        let saved = service.get().unwrap();
+        assert_eq!(saved.weather_city, "Cali");
+        assert_eq!(saved.authorized_folders.len(), 1);
+        assert_ne!(saved.authorized_folders[0], r"C:\");
     }
 }

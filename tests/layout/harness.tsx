@@ -55,8 +55,8 @@ const responses: Record<string, () => AssistantResponse> = {
       summary: "2 coincidencias en Documentos y Escritorio",
       note: "Hay más coincidencias o carpetas muy grandes. Prueba con términos más concretos.",
       files: [
-        { name: "Informe_final_bases_de_datos_version_definitiva_revisada", extension: ".docx", location: "Documentos", path: longPath, exists: true },
-        { name: "informe_bd", extension: ".pdf", location: "Escritorio", path: "C:\\Users\\usuario\\Desktop\\informe_bd.pdf", exists: false },
+        { name: "Informe_final_bases_de_datos_version_definitiva_revisada", extension: ".docx", location: "Documentos", path: longPath, exists: true, matchedInContent: false },
+        { name: "informe_bd", extension: ".pdf", location: "Escritorio", path: "C:\\Users\\usuario\\Desktop\\informe_bd.pdf", exists: false, matchedInContent: true },
       ],
     }),
   pantalla: () =>
@@ -107,6 +107,35 @@ const responses: Record<string, () => AssistantResponse> = {
       { kind: "folderConsent", folders: [longPath.replace(/\\[^\\]+$/, ""), "C:\\Users\\usuario\\Desktop"], pendingRequest: "Busca mi informe" },
       "pending",
     ),
+  documento: () =>
+    response(
+      "Resume mi documento de bases de datos",
+      {
+        kind: "documentConsent",
+        task: "summarize",
+        provider: "Google Gemini",
+        candidates: [
+          { token: "t-1", name: "Informe_final_bases_de_datos_version_definitiva_revisada", extension: ".docx", location: "Proyecto final" },
+          { token: "t-2", name: "Apuntes de bases de datos", extension: ".pdf", location: "Escritorio" },
+        ],
+        maxCharacters: 30000,
+        note: null,
+      },
+      "pending",
+    ),
+  resumen: () =>
+    response("Resumen de «Informe_final_bases_de_datos_version_definitiva_revisada.docx»", {
+      kind: "documentAnalysis",
+      fileName: "Informe_final_bases_de_datos_version_definitiva_revisada.docx",
+      task: "summarize",
+      summary: "El informe describe el diseño de la base de datos de una biblioteca universitaria y justifica cada decisión de normalización.",
+      points: [
+        "Parte de un modelo entidad-relación con nueve entidades.",
+        "Normaliza las tablas hasta la tercera forma normal.",
+        "Propone índices para las consultas más frecuentes de préstamo.",
+      ],
+      truncated: true,
+    }),
 };
 
 const history: HistoryEntry[] = Array.from({ length: 12 }, (_, index) => ({
@@ -125,7 +154,7 @@ const reminders: Reminder[] = [
 ];
 
 const settings: SettingsView = {
-  settings: { dailyAiLimit: 200, speechModel: "small", speechIdleMinutes: 10, weatherCity: "Medellín", authorizedFolders: [longPath.replace(/\\[^\\]+$/, "")], foldersConfirmed: true, microphone: null },
+  settings: { dailyAiLimit: 200, speechModel: "small", speechIdleMinutes: 10, weatherCity: "Medellín", authorizedFolders: [longPath.replace(/\\[^\\]+$/, "")], microphone: null },
   provider: {
     displayName: "Google Gemini",
     dataNotice:

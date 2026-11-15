@@ -7,17 +7,21 @@ import { Icon } from "@/components/Icon";
 import { Scale } from "@/components/Scale";
 import { StatusLabel } from "@/components/StatusLabel";
 import { api } from "@/services/api";
-import type { Attribution, AssistantResponse, ReminderOption, ResponseBody, Section, SuggestedRequest } from "@/types/api";
+import type { Attribution, AssistantResponse, DocumentCandidate, DocumentTask, ReminderOption, ResponseBody, Section, SuggestedRequest } from "@/types/api";
 
 import { isCompleteLocal, toLocalInput } from "@/utils/dates";
 
+import { DocumentAnalysisView, DocumentConsent, FolderConsent } from "./Consents";
 import { FileList } from "./FileList";
+import type { FolderChoice } from "./useAssistant";
 
 const sectionLabels: Record<Section, string> = { assistant: "Asistente", reminders: "Recordatorios", history: "Historial", settings: "Ajustes" };
 
 export interface ResponseActions {
   onSaveReminder: (content: string, dueAt: string) => void;
-  onAuthorizeFolders: (folders: string[], pendingRequest: string) => void;
+  onAuthorizeFolders: (choice: FolderChoice, pendingRequest: string) => void;
+  onAnalyzeDocument: (candidate: DocumentCandidate, task: DocumentTask) => void;
+  onDismiss: (message: string) => void;
   onChooseReminderOption: (option: ReminderOption) => void;
   onChooseSuggestion: (suggestion: SuggestedRequest) => void;
 }
@@ -194,23 +198,11 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
         />
       );
     case "folderConsent":
-      return (
-        <div className="flex max-w-reading flex-col gap-3">
-          <p className="m-0 text-lg">Para buscar archivos necesito tu permiso. Solo miraré nombres de archivo, sin abrirlos ni modificarlos, en estas carpetas:</p>
-          <ul className="m-0 list-none p-0 font-mono text-sm">
-            {body.folders.map((folder) => (
-              <li key={folder} className="break-all border-t border-hairline py-2">
-                {folder}
-              </li>
-            ))}
-          </ul>
-          <div>
-            <Button variant="primary" onClick={() => actions.onAuthorizeFolders(body.folders, body.pendingRequest)}>
-              Autorizar y buscar
-            </Button>
-          </div>
-        </div>
-      );
+      return <FolderConsent folders={body.folders} pendingRequest={body.pendingRequest} onAuthorize={actions.onAuthorizeFolders} onDismiss={actions.onDismiss} />;
+    case "documentConsent":
+      return <DocumentConsent {...body} onAnalyze={actions.onAnalyzeDocument} onDismiss={actions.onDismiss} />;
+    case "documentAnalysis":
+      return <DocumentAnalysisView task={body.task} summary={body.summary} points={body.points} truncated={body.truncated} />;
     case "navigate":
       return <p className="m-0 text-lg">Abrí {sectionLabels[body.section]}.</p>;
     case "captureRequest":
@@ -244,7 +236,7 @@ export function ResponseView({ response, actions }: { response: AssistantRespons
   return (
     <article className="flex animate-response flex-col gap-6">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <h1 className="m-0 min-w-0 break-words text-lg font-medium">{response.request}</h1>
+        <h1 className="m-0 min-w-0 text-lg font-medium wrap-anywhere">{response.request}</h1>
         <span className="font-mono text-sm text-muted">{time}</span>
       </div>
       <Body body={response.body} actions={actions} />

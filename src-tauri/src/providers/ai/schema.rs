@@ -9,13 +9,18 @@ use serde::Deserialize;
 
 use crate::{
     error::AiError,
-    models::{FileQuery, Intent, ReminderRequest, ScreenAnalysis, SystemMetric, WeatherWhen},
+    models::{
+        DocumentSummary, FileQuery, Intent, ReminderRequest, ScreenAnalysis, SystemMetric,
+        WeatherWhen,
+    },
 };
 
 const MAX_TERMS: usize = 8;
 const MAX_TEXT: usize = 300;
 const MAX_CAUSE: usize = 600;
 const MAX_STEPS: usize = 3;
+/// Puntos clave de un documento, como mucho.
+pub const MAX_POINTS: usize = 5;
 
 /// Marcas de bloque al inicio de una línea: títulos, citas, viñetas y numeración.
 static BLOCK_MARK: LazyLock<Regex> =
@@ -245,6 +250,29 @@ pub fn parse_screen_analysis(text: &str) -> Result<ScreenAnalysis, AiError> {
             .steps
             .into_iter()
             .filter_map(|step| prose(Some(step), MAX_TEXT))
+            .collect(),
+    })
+}
+
+#[derive(Deserialize)]
+struct RawDocumentSummary {
+    summary: String,
+    points: Vec<String>,
+}
+
+/// Resumen de una o dos frases y hasta cinco puntos clave. Cualquier otra forma se rechaza.
+pub fn parse_document_summary(text: &str) -> Result<DocumentSummary, AiError> {
+    let raw: RawDocumentSummary =
+        serde_json::from_str(text.trim()).map_err(|_| AiError::InvalidResponse)?;
+    if raw.points.len() > MAX_POINTS {
+        return Err(AiError::InvalidResponse);
+    }
+    Ok(DocumentSummary {
+        summary: prose(Some(raw.summary), MAX_CAUSE).ok_or(AiError::InvalidResponse)?,
+        points: raw
+            .points
+            .into_iter()
+            .filter_map(|point| prose(Some(point), MAX_TEXT))
             .collect(),
     })
 }

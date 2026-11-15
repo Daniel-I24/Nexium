@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(()
 
 function view(overrides: Partial<SettingsView> = {}, microphone: string | null = null): SettingsView {
   return {
-    settings: { dailyAiLimit: 200, speechModel: "small", speechIdleMinutes: 10, weatherCity: "", authorizedFolders: [], foldersConfirmed: false, microphone },
+    settings: { dailyAiLimit: 200, speechModel: "small", speechIdleMinutes: 10, weatherCity: "", authorizedFolders: [], microphone },
     provider: { displayName: "Google Gemini", dataNotice: "Aviso." },
     aiStatus: "working",
     aiRequestsToday: 0,
@@ -66,6 +66,16 @@ describe("Ajustes: micrófono", () => {
     expect(invoke).toHaveBeenCalledWith("settings_save", { settings: expect.objectContaining({ microphone: "Microphone Array" }) });
   });
 
+  it("el botón confirma lo guardado hasta el siguiente cambio", async () => {
+    invoke.mockResolvedValue(view());
+    render(<SettingsScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Guardar ajustes" }));
+    expect(await screen.findByRole("button", { name: "Ajustes guardados" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Ajustes guardados.");
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Micrófono" }), "Microphone Array");
+    expect(screen.getByRole("button", { name: "Guardar ajustes" })).toBeInTheDocument();
+  });
+
   it("avisa si el micrófono elegido no está conectado", async () => {
     invoke.mockResolvedValue(view({}, "Auriculares USB"));
     render(<SettingsScreen />);
@@ -84,5 +94,27 @@ describe("Ajustes: uso de IA", () => {
     invoke.mockResolvedValue(view({ aiRequestsToday: 1, tokensToday: 1 }));
     render(<SettingsScreen />);
     expect(await screen.findByText("Hoy: 1 solicitud · 1 token")).toBeInTheDocument();
+  });
+});
+
+describe("Ajustes: carpetas autorizadas", () => {
+  it("se añaden con el selector del sistema y se quitan al momento, sin Guardar", async () => {
+    invoke.mockImplementation((command: string) => {
+      if (command === "settings_get") return Promise.resolve(view({ knownFolders: ["C:\\Users\\a\\Documents"] }));
+      if (command === "folders_pick") return Promise.resolve(["D:\\Proyectos"]);
+      if (command === "folders_remove") return Promise.resolve([]);
+      return Promise.resolve(null);
+    });
+    render(<SettingsScreen />);
+    expect(await screen.findByText("Todavía no hay ninguna carpeta autorizada.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Añadir carpeta" }));
+    expect(invoke).toHaveBeenCalledWith("folders_pick");
+    expect(await screen.findByText("D:\\Proyectos")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Carpeta añadida.");
+    expect(screen.getByRole("button", { name: "Permitir Documentos y Escritorio" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Quitar la carpeta D:\\Proyectos" }));
+    expect(invoke).toHaveBeenCalledWith("folders_remove", { folder: "D:\\Proyectos" });
+    expect(await screen.findByText("Todavía no hay ninguna carpeta autorizada.")).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith("settings_save", expect.anything());
   });
 });

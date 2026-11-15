@@ -12,7 +12,7 @@ import fixtures from "./contracts/responses.json";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(() => undefined)) }));
 
-const actions = { onSaveReminder: vi.fn(), onAuthorizeFolders: vi.fn(), onChooseReminderOption: vi.fn(), onChooseSuggestion: vi.fn() };
+const actions = { onSaveReminder: vi.fn(), onAuthorizeFolders: vi.fn(), onChooseReminderOption: vi.fn(), onChooseSuggestion: vi.fn(), onAnalyzeDocument: vi.fn(), onDismiss: vi.fn() };
 const show = (key: keyof typeof fixtures) => render(<ResponseView response={fixtures[key] as AssistantResponse} actions={actions} />);
 
 describe("respuestas con el contrato que produce Rust", () => {
@@ -90,5 +90,21 @@ describe("abrir una sección", () => {
   it("confirma en la conversación qué sección se abrió", () => {
     show("navigate");
     expect(screen.getByText("Abrí Recordatorios.")).toBeInTheDocument();
+  });
+});
+
+describe("documentos", () => {
+  it("antes de enviar, nombra el archivo, el destino y el límite", () => {
+    show("documentConsent");
+    expect(screen.getByText("Encontré «Bases de datos.pdf» en Documentos.")).toBeInTheDocument();
+    expect(screen.getByText(/enviará su texto a Google Gemini, como mucho los primeros 30.000 caracteres/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resumir «Bases de datos.pdf»" })).toHaveFocus();
+  });
+
+  it("muestra el resumen con sus ideas clave y avisa si se recortó", () => {
+    show("documentAnalysis");
+    expect(screen.getByText("Ideas clave")).toBeInTheDocument();
+    expect(screen.getByText("Dos parciales y un proyecto.")).toBeInTheDocument();
+    expect(screen.getByText(/solo se envió su principio/)).toBeInTheDocument();
   });
 });

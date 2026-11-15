@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/Button";
+import { Icon } from "@/components/Icon";
 import { Notice } from "@/components/Notice";
 import { Loading } from "@/components/Progress";
 import { ScreenLayout } from "@/components/ScreenLayout";
@@ -62,6 +63,8 @@ export function SettingsScreen() {
   const [draft, setDraft] = useState<Settings | null>(null);
   const [message, setMessage] = useState<{ text: string; error: boolean; at: number } | null>(null);
   const [download, setDownload] = useState<DownloadProgress | null>(null);
+  /** Lo guardado coincide con lo que se ve: el botón lo confirma hasta el siguiente cambio. */
+  const [saved, setSaved] = useState(false);
 
   const apply = (next: SettingsView) => {
     setView(next);
@@ -77,6 +80,7 @@ export function SettingsScreen() {
   const run = async (action: () => Promise<SettingsView>, done: string) => {
     try {
       apply(await action());
+      setSaved(true);
       setMessage({ text: done, error: false, at: Date.now() });
     } catch (error) {
       setMessage({ text: errorMessage(error), error: true, at: Date.now() });
@@ -98,10 +102,24 @@ export function SettingsScreen() {
     );
   }
 
-  const update = <K extends keyof Settings>(key: K, value: Settings[K]) => setDraft({ ...draft, [key]: value });
+  const update = <K extends keyof Settings>(key: K, value: Settings[K]) => {
+    setSaved(false);
+    setDraft({ ...draft, [key]: value });
+  };
 
-  const toggleFolder = (folder: string, enabled: boolean) =>
-    update("authorizedFolders", enabled ? [...draft.authorizedFolders, folder] : draft.authorizedFolders.filter((item) => item !== folder));
+  /** Las carpetas se guardan al momento: no dependen de Guardar ajustes. */
+  const changeFolders = async (action: () => Promise<string[] | null>, done: string) => {
+    try {
+      const folders = await action();
+      if (!folders) return;
+      setView({ ...view, settings: { ...view.settings, authorizedFolders: folders } });
+      setDraft({ ...draft, authorizedFolders: folders });
+      setMessage({ text: done, error: false, at: Date.now() });
+    } catch (error) {
+      setMessage({ text: errorMessage(error), error: true, at: Date.now() });
+    }
+  };
+  const missingKnown = view.knownFolders.some((folder) => !draft.authorizedFolders.includes(folder));
 
   const startDownload = async (modelId: string) => {
     try {
@@ -115,16 +133,29 @@ export function SettingsScreen() {
     }
   };
 
-  // Guardar y su resultado van en el pie, fuera de la zona que se desplaza: se ven siempre.
+  // Guardar va en el pie, fuera de la zona que se desplaza, y confirma en el propio botón: así el pie cabe en
+  // una fila incluso en la ventana mínima con el texto ampliado. Los errores sí se muestran a su lado.
   const footer = (
     <>
-      <Button variant="primary" onClick={() => void run(() => api.saveSettings(draft), "Ajustes guardados.")}>
-        Guardar ajustes
+      <Button variant="primary" data-save onClick={() => void run(() => api.saveSettings(draft), "Ajustes guardados.")}>
+        {saved ? (
+          <span key="saved" className="inline-flex animate-bar items-center gap-2">
+            <Icon name="completed" />
+            Ajustes guardados
+          </span>
+        ) : (
+          "Guardar ajustes"
+        )}
       </Button>
-      {message && (
+      {message?.error && (
         <div key={message.at} className="min-w-0 flex-1 basis-48">
-          <Notice tone={message.error ? "error" : "ok"}>{message.text}</Notice>
+          <Notice tone="error">{message.text}</Notice>
         </div>
+      )}
+      {message && !message.error && (
+        <span key={message.at} role="status" className="sr-only">
+          {message.text}
+        </span>
       )}
     </>
   );
@@ -145,17 +176,35 @@ export function SettingsScreen() {
           </p>
         </Section>
 
-        <Section title="Carpetas autorizadas para buscar">
-          <p className="m-0 text-sm text-muted">Nexium solo mira nombres de archivo en estas carpetas. No abre, modifica, mueve ni elimina nada.</p>
-          {view.knownFolders.map((folder) => (
-            <label key={folder} className="flex min-h-11 items-center gap-3">
-              <input type="checkbox" className="size-4 shrink-0 accent-ink" checked={draft.authorizedFolders.includes(folder)} onChange={(event) => toggleFolder(folder, event.target.checked)} />
-              <span className="min-w-0 break-all font-mono text-sm">{folder}</span>
-            </label>
-          ))}
-        </Section>
+        <Section title="Carpetas autorizadas">
+        <p className="m-0 text-sm text-muted">
+          Nexium busca y lee archivos solo en estas carpetas: por nombre y, en los de texto, también por contenido. Nunca modifica, mueve ni elimina nada. Un documento
+          solo se envía a la IA si lo confirmas.
+        </p>
+        {draft.authorizedFolders.length === 0 ? (
+          <p className="m-0 text-sm">Todavía no hay ninguna carpeta autorizada.</p>
+        ) : (
+          <ul aria-label="Carpetas autorizadas" className="m-0 flex list-none flex-col p-0">
+            {draft.authorizedFolders.map((folder) => (
+              <li key={folder} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline py-2">
+                <span className="min-w-0 flex-1 basis-48 break-all font-mono text-sm">{folder}</span>
+                <Button aria-label={`Quitar la carpeta ${folder}`} onClick={() => void changeFolders(() => api.removeFolder(folder), "Carpeta quitada.")}>
+                  Quitar
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => void changeFolders(api.pickFolder, "Carpeta añadida.")}>
+            <Icon name="folder" />
+            Añadir carpeta
+          </Button>
+          {missingKnown && <Button onClick={() => void changeFolders(api.allowKnownFolders, "Documentos y Escritorio añadidos.")}>Permitir Documentos y Escritorio</Button>}
+        </div>
+      </Section>
 
-        <Section title="Voz">
+      <Section title="Voz">
           <p className="m-0 text-sm text-muted">La voz se transcribe en este equipo. El audio no sale de él ni se guarda.</p>
           <ul className="m-0 flex list-none flex-col p-0">
             {view.speechModels.map((model) => (

@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use super::{CommandHandler, HandlerContext, Outcome};
 use crate::{
     models::{Category, FileQuery, Intent, ResponseBody},
-    providers::files::{AuthorizedFolder, FileSearchProvider},
+    providers::files::{authorized_folders, AuthorizedFolder, FileSearchProvider},
     services::settings::SettingsService,
 };
 
@@ -18,11 +18,31 @@ pub struct FilesHandler {
 }
 
 impl FilesHandler {
-    fn folder_labels(&self) -> Vec<String> {
-        self.known_folders
-            .iter()
-            .map(|folder| folder.path.to_string_lossy().into_owned())
-            .collect()
+    /// Permiso pendiente: la solicitud se guarda para continuarla al aceptar.
+    pub fn consent(&self, request: &str) -> Outcome {
+        Outcome::pending(
+            Category::Files,
+            "Pendiente de autorización",
+            ResponseBody::FolderConsent {
+                folders: self
+                    .known_folders
+                    .iter()
+                    .map(|folder| folder.path.to_string_lossy().into_owned())
+                    .collect(),
+                pending_request: request.to_owned(),
+            },
+        )
+    }
+
+    /// Carpetas autorizadas, con su nombre para mostrar. Vacío si aún no hay ninguna.
+    pub fn allowed(&self) -> Result<Vec<AuthorizedFolder>, Box<Outcome>> {
+        let settings = self.settings.get().map_err(|error| {
+            Outcome::failed(Category::Files, "settings", error.to_string(), None)
+        })?;
+        Ok(authorized_folders(
+            &settings.authorized_folders,
+            &self.known_folders,
+        ))
     }
 }
 
@@ -35,41 +55,11 @@ fn describe_query(query: &FileQuery) -> String {
 
 impl FilesHandler {
     async fn answer(&self, query: &FileQuery, context: &HandlerContext) -> Outcome {
-        let settings = match self.settings.get() {
-            Ok(settings) => settings,
-            Err(error) => {
-                return Outcome::failed(Category::Files, "settings", error.to_string(), None)
-            }
+        let allowed = match self.allowed() {
+            Ok(allowed) if allowed.is_empty() => return self.consent(&context.request),
+            Ok(allowed) => allowed,
+            Err(outcome) => return *outcome,
         };
-        if !settings.folders_confirmed {
-            return Outcome::pending(
-                Category::Files,
-                "Pendiente de autorización",
-                ResponseBody::FolderConsent {
-                    folders: self.folder_labels(),
-                    pending_request: context.request.clone(),
-                },
-            );
-        }
-        let allowed: Vec<AuthorizedFolder> = self
-            .known_folders
-            .iter()
-            .filter(|folder| {
-                settings
-                    .authorized_folders
-                    .iter()
-                    .any(|path| *path == folder.path.to_string_lossy())
-            })
-            .cloned()
-            .collect();
-        if allowed.is_empty() {
-            return Outcome::failed(
-                Category::Files,
-                "noFolders",
-                "No hay carpetas autorizadas para buscar.",
-                Some("Autorízalas en Ajustes.".into()),
-            );
-        }
         let outcome = self
             .search
             .search(query.clone(), allowed.clone(), context.cancel.clone())
@@ -83,7 +73,7 @@ impl FilesHandler {
             return Outcome::failed(Category::Files, "cancelled", "Búsqueda cancelada.", None);
         }
         if outcome.files.is_empty() {
-            let text = format!("No encontré archivos con \u{201c}{}\u{201d} en {places}. Solo busco por nombre, sin abrir los archivos.", describe_query(query));
+            let text = format!("No encontré archivos con \u{201c}{}\u{201d} en {places}. Busco por nombre y, en los archivos de texto, también por contenido.", describe_query(query));
             return Outcome::done(
                 Category::Files,
                 "Sin coincidencias",

@@ -1,8 +1,8 @@
 //! Comprueba que Rust produce exactamente los JSON con los que se prueba la interfaz.
 
 use nexium_lib::models::{
-    AssistantResponse, Attribution, Category, DataRow, FileResult, InteractionStatus,
-    ReminderOption, ResponseBody, Section,
+    AssistantResponse, Attribution, Category, DataRow, DocumentCandidate, DocumentTask, FileResult,
+    InteractionStatus, ReminderOption, ResponseBody, Section,
 };
 use serde_json::Value;
 
@@ -96,6 +96,7 @@ fn files() {
         location: "Documentos".into(),
         path: "C:\\a\\Informe.pdf".into(),
         exists: true,
+        matched_in_content: false,
     };
     let body = ResponseBody::Files {
         summary: "1 coincidencia en Documentos".into(),
@@ -222,6 +223,55 @@ fn navigate() {
             "Abrí Recordatorios",
             ResponseBody::Navigate {
                 section: Section::Reminders,
+            },
+        ),
+    );
+}
+
+#[test]
+fn document_consent() {
+    assert_matches(
+        "documentConsent",
+        &response(
+            9,
+            "Resume mi documento de bases de datos",
+            Category::Files,
+            InteractionStatus::Pending,
+            LOCAL,
+            "Pendiente de confirmación",
+            ResponseBody::DocumentConsent {
+                task: DocumentTask::Summarize,
+                provider: "Google Gemini".into(),
+                candidates: vec![DocumentCandidate {
+                    token: "t-1".into(),
+                    name: "Bases de datos".into(),
+                    extension: ".pdf".into(),
+                    location: "Documentos".into(),
+                }],
+                max_characters: 30_000,
+                note: None,
+            },
+        ),
+    );
+}
+
+#[test]
+fn document_analysis() {
+    assert_matches(
+        "documentAnalysis",
+        &response(
+            10,
+            "Resumen de «Bases de datos.pdf»",
+            Category::Files,
+            InteractionStatus::Completed,
+            "documento leído en este equipo y resumido con IA (Google Gemini). Su contenido no se guarda",
+            "Guía de la asignatura.",
+            ResponseBody::DocumentAnalysis {
+                file_name: "Bases de datos.pdf".into(),
+                task: DocumentTask::Summarize,
+                summary: "Guía de la asignatura.".into(),
+                points: vec!["Tres unidades.".into(), "Dos parciales y un proyecto.".into()],
+                truncated: true,
             },
         ),
     );

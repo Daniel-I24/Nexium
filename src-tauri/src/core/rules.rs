@@ -7,7 +7,7 @@ use unicode_normalization::UnicodeNormalization;
 
 use super::format::MONTHS;
 use crate::{
-    models::{FileQuery, Intent, Section, SystemMetric, WeatherWhen},
+    models::{DocumentTask, FileQuery, Intent, Section, SystemMetric, WeatherWhen},
     providers::ai::schema::valid_file_name,
 };
 
@@ -15,6 +15,9 @@ const STOP_WORDS: &[&str] = &[
     "a",
     "al",
     "algo",
+    "analiza",
+    "analizame",
+    "analizar",
     "archivo",
     "archivos",
     "busca",
@@ -23,17 +26,26 @@ const STOP_WORDS: &[&str] = &[
     "clase",
     "como",
     "con",
+    "dame",
     "de",
     "del",
+    "dice",
     "documento",
     "documentos",
     "el",
     "en",
     "encontrar",
     "encuentra",
+    "esa",
+    "ese",
+    "esta",
+    "este",
     "existe",
+    "explicame",
     "fichero",
     "hay",
+    "haz",
+    "hazme",
     "hice",
     "la",
     "las",
@@ -47,10 +59,15 @@ const STOP_WORDS: &[&str] = &[
     "que",
     "quiero",
     "relacionados",
+    "resume",
+    "resumeme",
+    "resumen",
+    "resumir",
     "se",
     "sobre",
     "su",
     "tengo",
+    "trata",
     "un",
     "una",
     "y",
@@ -73,6 +90,17 @@ static WIFI: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(wifi|red inalambrica|
 /// "Recuérdame" y lo que suele salir al transcribirlo ("Recuerda mi").
 static REMINDER_START: LazyLock<Regex> = LazyLock::new(|| {
     regex(r"^(recuerdame|recuerda me|recuerda mi|recordame|recuerdeme|recordarme|acuerdame)\b")
+});
+/// "Resume mi documento de bases de datos", "Analiza este archivo".
+static DOCUMENT_VERB: LazyLock<Regex> = LazyLock::new(|| {
+    regex(
+        r"^(resume|resumeme|resumir|(haz|hazme|dame) un resumen|un resumen|analiza|analizame|analizar|que dice|de que trata|explicame)\b",
+    )
+});
+static DOCUMENT_NOUN: LazyLock<Regex> = LazyLock::new(|| {
+    regex(
+        r"\b(documento|documentos|archivo|archivos|informe|pdf|docx|trabajo|apuntes|notas|presentacion|texto)\b",
+    )
 });
 /// "Abre los recordatorios", "ve a Ajustes": cambiar de sección no necesita IA.
 static OPEN_SECTION: LazyLock<Regex> = LazyLock::new(|| {
@@ -149,6 +177,29 @@ pub fn prepare(text: &str) -> String {
         .map(correct_word)
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn document_intent(original: &str, text: &str) -> Intent {
+    let task = if text.starts_with("analiz") || text.starts_with("explicame") {
+        DocumentTask::Analyze
+    } else {
+        DocumentTask::Summarize
+    };
+    let query = match file_name_in(original) {
+        Some(name) => FileQuery {
+            exact_name: Some(name),
+            terms: Vec::new(),
+        },
+        // Sin términos útiles ("Analiza este archivo"), la interfaz ofrece el selector del sistema.
+        None => FileQuery {
+            exact_name: None,
+            terms: local_search_terms(original)
+                .into_iter()
+                .filter(|term| !DOCUMENT_NOUN.is_match(term))
+                .collect(),
+        },
+    };
+    Intent::Document { task, query }
 }
 
 fn section_in(text: &str) -> Option<Section> {
@@ -328,6 +379,9 @@ pub fn match_local(original: &str) -> Option<Intent> {
     if let Some(section) = section_in(&text) {
         return Some(Intent::OpenSection(section));
     }
+    if DOCUMENT_VERB.is_match(&text) && DOCUMENT_NOUN.is_match(&text) {
+        return Some(document_intent(original, &text));
+    }
     if LIST_REMINDERS.is_match(&text) {
         return Some(Intent::ListReminders);
     }
@@ -456,6 +510,46 @@ mod tests {
         for (phrase, expected) in cases {
             assert_eq!(match_local(phrase), expected, "{phrase}");
         }
+    }
+
+    #[test]
+    fn document_requests_are_recognized_without_ai() {
+        let doc = |task, terms: &[&str]| {
+            Some(Intent::Document {
+                task,
+                query: FileQuery {
+                    exact_name: None,
+                    terms: terms.iter().map(|term| (*term).to_owned()).collect(),
+                },
+            })
+        };
+        assert_eq!(
+            match_local("Resume mi documento de bases de datos"),
+            doc(DocumentTask::Summarize, &["bases", "datos"])
+        );
+        assert_eq!(
+            match_local("Analiza este archivo"),
+            doc(DocumentTask::Analyze, &[])
+        );
+        assert_eq!(
+            match_local("Hazme un resumen del informe de programación"),
+            doc(DocumentTask::Summarize, &["programacion"])
+        );
+        assert_eq!(
+            match_local("¿Qué dice el archivo acta.docx?"),
+            Some(Intent::Document {
+                task: DocumentTask::Summarize,
+                query: FileQuery {
+                    exact_name: Some("acta.docx".into()),
+                    terms: vec![]
+                }
+            })
+        );
+        // Sin un documento de por medio no es esta operación.
+        assert!(!matches!(
+            match_local("Explícame este error"),
+            Some(Intent::Document { .. })
+        ));
     }
 
     #[test]

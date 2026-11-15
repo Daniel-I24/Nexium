@@ -22,8 +22,8 @@ use crate::{
     core::{
         assistant::Assistant,
         handlers::{
-            ClarifyHandler, CommandHandler, FilesHandler, NavigationHandler, ReminderIntentHandler,
-            ScreenHandler, SystemHandler, TimeHandler, WeatherHandler,
+            ClarifyHandler, CommandHandler, DocumentsHandler, FilesHandler, NavigationHandler,
+            ReminderIntentHandler, ScreenHandler, SystemHandler, TimeHandler, WeatherHandler,
         },
     },
     database::Database,
@@ -31,6 +31,7 @@ use crate::{
     platform::WindowAwareCapture,
     providers::{
         ai::{server::NexiumServer, AiProvider, AiStatusTracker},
+        documents::DocumentOffers,
         files::{AuthorizedFolder, LocalFileSearch},
         notification::{NotificationProvider, TauriNotifications},
         speech::{SpeechProvider, WhisperSpeech},
@@ -90,6 +91,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
     let usage = UsageService::new(db);
     let ai = build_ai(settings.install_id()?);
     let folders = known_folders(app);
+    let offers = Arc::new(DocumentOffers::default());
 
     let theme_app = app.clone();
     let system = Arc::new(NativeSystemProvider::new(Arc::new(move || match theme_app
@@ -108,6 +110,15 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
             search: Arc::new(LocalFileSearch),
             settings: settings.clone(),
             known_folders: folders.clone(),
+        }),
+        Box::new(DocumentsHandler {
+            files: FilesHandler {
+                search: Arc::new(LocalFileSearch),
+                settings: settings.clone(),
+                known_folders: folders.clone(),
+            },
+            offers: offers.clone(),
+            provider: ai.display_name().to_owned(),
         }),
         Box::new(WeatherHandler {
             weather: Arc::new(OpenMeteo::default()),
@@ -139,6 +150,7 @@ fn build_state<R: Runtime>(app: &AppHandle<R>) -> Result<AppState, Box<dyn std::
         reminders,
         usage,
         known_folders: folders,
+        offers,
         models_dir: data_dir.join("models"),
         cancel: Mutex::new(CancellationToken::new()),
         recording: Mutex::new(None),
@@ -223,6 +235,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let handle = app.handle().clone();
             let state = build_state(&handle)?;
@@ -254,7 +267,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::assistant_submit,
             commands::assistant_cancel,
-            commands::folders_authorize,
+            commands::folders::folders_allow_known,
+            commands::folders::folders_pick,
+            commands::folders::folders_remove,
+            commands::documents::document_analyze,
+            commands::documents::document_pick,
             commands::open_attribution,
             commands::voice_start,
             commands::voice_stop,

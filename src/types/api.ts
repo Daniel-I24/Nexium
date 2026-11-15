@@ -26,6 +26,18 @@ export interface FileResult {
   location: string;
   path: string;
   exists: boolean;
+  /** Se encontró por lo que contiene, no por su nombre. */
+  matchedInContent: boolean;
+}
+
+export type DocumentTask = "summarize" | "analyze";
+
+/** Un archivo ofrecido para resumir: la interfaz solo conoce su identificador, nunca envía la ruta. */
+export interface DocumentCandidate {
+  token: string;
+  name: string;
+  extension: string;
+  location: string;
 }
 
 export interface ReminderOption {
@@ -57,6 +69,8 @@ export type ResponseBody =
   | { kind: "clarification"; question: string; suggestions: SuggestedRequest[] }
   | { kind: "folderConsent"; folders: string[]; pendingRequest: string }
   | { kind: "captureRequest"; question: string }
+  | { kind: "documentConsent"; task: DocumentTask; provider: string; candidates: DocumentCandidate[]; maxCharacters: number; note: string | null }
+  | { kind: "documentAnalysis"; fileName: string; task: DocumentTask; summary: string; points: string[]; truncated: boolean }
   | { kind: "navigate"; section: Section }
   | { kind: "error"; code: string; message: string; hint: string | null };
 
@@ -79,6 +93,8 @@ export type Stage =
   | "executing"
   | "capturing"
   | "analyzing"
+  | "reading"
+  | "summarizing"
   | "responding";
 
 export interface StageEvent {
@@ -123,8 +139,8 @@ export interface Settings {
   speechModel: string;
   speechIdleMinutes: number;
   weatherCity: string;
+  /** Solo lectura: las carpetas se añaden y se quitan con sus propias acciones, no al guardar. */
   authorizedFolders: string[];
-  foldersConfirmed: boolean;
   microphone: string | null;
 }
 

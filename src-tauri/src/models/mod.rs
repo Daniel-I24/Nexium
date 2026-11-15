@@ -116,6 +116,8 @@ pub struct FileResult {
     pub location: String,
     pub path: String,
     pub exists: bool,
+    /// Se encontró por lo que contiene, no por su nombre.
+    pub matched_in_content: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -201,6 +203,25 @@ pub enum ResponseBody {
     CaptureRequest {
         question: String,
     },
+    /// Pide confirmación antes de enviar el contenido de un documento a la IA. Sin candidatos, ofrece elegir uno.
+    DocumentConsent {
+        task: DocumentTask,
+        provider: String,
+        candidates: Vec<DocumentCandidate>,
+        /// Caracteres que se envían como máximo.
+        max_characters: usize,
+        /// Por qué no hay candidatos, si no los hay.
+        note: Option<String>,
+    },
+    /// Resumen o análisis de un documento, ya validado y en texto plano.
+    DocumentAnalysis {
+        file_name: String,
+        task: DocumentTask,
+        summary: String,
+        points: Vec<String>,
+        /// Solo se envió el principio del documento.
+        truncated: bool,
+    },
     /// Abre una sección de la app. La interfaz cambia de pantalla al recibirla.
     Navigate {
         section: Section,
@@ -254,6 +275,10 @@ pub enum Stage {
     Executing,
     Capturing,
     Analyzing,
+    /// Leyendo un documento en el equipo.
+    Reading,
+    /// La IA resume o analiza un documento.
+    Summarizing,
     Responding,
 }
 
@@ -292,6 +317,40 @@ pub enum SystemMetric {
     Wifi,
     DarkMode,
     Overview,
+}
+
+/// Qué se pide de un documento.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentTask {
+    Summarize,
+    Analyze,
+}
+
+impl DocumentTask {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Summarize => "summarize",
+            Self::Analyze => "analyze",
+        }
+    }
+}
+
+/// Un archivo que se ofrece para resumir. La interfaz solo recibe un identificador, nunca la ruta para leerlo.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentCandidate {
+    pub token: String,
+    pub name: String,
+    pub extension: String,
+    pub location: String,
+}
+
+/// Resumen de un documento devuelto por la IA.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DocumentSummary {
+    pub summary: String,
+    pub points: Vec<String>,
 }
 
 /// Secciones de la app que se pueden abrir con una orden.
@@ -349,6 +408,11 @@ pub enum Intent {
     CreateReminder(ReminderRequest),
     ListReminders,
     OpenSection(Section),
+    /// Resumir o analizar un documento. Sin nombre ni términos, se ofrece elegirlo en el selector del sistema.
+    Document {
+        task: DocumentTask,
+        query: FileQuery,
+    },
     AnalyzeScreen {
         question: String,
     },

@@ -8,10 +8,10 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use super::{schema, AiAnswer, AiProvider, InterpretRequest, VisionRequest};
+use super::{schema, AiAnswer, AiProvider, DocumentRequest, InterpretRequest, VisionRequest};
 use crate::{
     error::AiError,
-    models::{Intent, ScreenAnalysis},
+    models::{DocumentSummary, Intent, ScreenAnalysis},
 };
 
 pub const DEV_KEY_VARIABLE: &str = "GEMINI_API_KEY";
@@ -240,6 +240,29 @@ impl AiProvider for GeminiProvider {
         let response = self.send(body, timeout_of(contract)).await?;
         Ok(AiAnswer {
             value: schema::parse_screen_analysis(&Self::output_text(&response)?)?,
+            tokens: response.usage.total_tokens,
+        })
+    }
+
+    async fn analyze_document(
+        &self,
+        request: DocumentRequest,
+    ) -> Result<AiAnswer<DocumentSummary>, AiError> {
+        let contract = &CONTRACT["document"];
+        let instruction = contract["systemInstruction"][request.task.as_str()]
+            .as_str()
+            .unwrap_or_default();
+        let body = json!({
+            "model": contract["model"],
+            "store": false,
+            "system_instruction": instruction,
+            "input": format!("Formato: {}\n\n{}", request.format, request.text),
+            "generation_config": { "max_output_tokens": contract["maxOutputTokens"], "thinking_level": contract["thinkingLevel"] },
+            "response_format": { "type": "text", "mime_type": "application/json", "schema": contract["responseSchema"] }
+        });
+        let response = self.send(body, timeout_of(contract)).await?;
+        Ok(AiAnswer {
+            value: schema::parse_document_summary(&Self::output_text(&response)?)?,
             tokens: response.usage.total_tokens,
         })
     }

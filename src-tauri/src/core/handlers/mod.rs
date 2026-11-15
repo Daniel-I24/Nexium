@@ -1,6 +1,7 @@
 //! Un `CommandHandler` por operación. El enrutador solo conoce esta interfaz.
 
 mod conversation;
+mod documents;
 mod files;
 mod reminders;
 mod system;
@@ -12,6 +13,7 @@ use chrono::{DateTime, Local};
 use tokio_util::sync::CancellationToken;
 
 pub use conversation::{ClarifyHandler, NavigationHandler, ScreenHandler};
+pub use documents::{candidate, DocumentsHandler};
 pub use files::FilesHandler;
 pub use reminders::{draft_reminder, ReminderIntentHandler};
 pub use system::SystemHandler;

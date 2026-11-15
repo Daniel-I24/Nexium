@@ -42,6 +42,30 @@ describe("useAssistant", () => {
     expect(result.current.bar).toEqual({ kind: "idle" });
   });
 
+  it("al dar permiso para Documentos y Escritorio, la solicitud pendiente sigue sola", async () => {
+    invoke.mockResolvedValueOnce(["C:\\Users\\a\\Documents"]).mockResolvedValueOnce(reply({ kind: "text", text: "hecho" }));
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.authorizeFolders("known", "Busca mi informe"));
+    expect(invoke).toHaveBeenNthCalledWith(1, "folders_allow_known");
+    expect(invoke).toHaveBeenNthCalledWith(2, "assistant_submit", { text: "Busca mi informe" });
+  });
+
+  it("si se cierra el selector de carpetas sin elegir, no se repite la solicitud", async () => {
+    invoke.mockResolvedValueOnce(null);
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.authorizeFolders("pick", "Busca mi informe"));
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith("folders_pick");
+  });
+
+  it("confirmar un documento lo envía por su identificador, nunca por su ruta", async () => {
+    invoke.mockResolvedValueOnce(reply({ kind: "documentAnalysis", fileName: "a.pdf", task: "summarize", summary: "s", points: [], truncated: false }));
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.analyzeDocument({ token: "t-1", name: "a", extension: ".pdf", location: "Documentos" }, "summarize"));
+    expect(invoke).toHaveBeenCalledWith("document_analyze", { token: "t-1", task: "summarize" });
+    expect(result.current.current?.body.kind).toBe("documentAnalysis");
+  });
+
   it("la cinta no duplica entradas ni pasa de cinco, también en modo estricto", async () => {
     const { result } = renderHook(() => useAssistant(), { wrapper: StrictMode });
     for (const id of [1, 2, 3, 4, 5, 6, 7]) {
