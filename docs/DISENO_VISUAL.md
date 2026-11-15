@@ -138,6 +138,10 @@ La línea de progreso es el único movimiento continuo: un ciclo de 1,2 s que no
 | **Resultado de archivo** | Nombre, extensión, ubicación, ruta absoluta y estado de existencia |
 | **Aclaración** | En la conversación: la pregunta en `query` y sus opciones como botones; la primera recibe el foco |
 | **Línea de cinta** | Hora, solicitud y resultado resumido |
+| **Permiso de carpetas** | En la conversación: qué se pide (solo leer), las carpetas propuestas y tres botones: Permitir Documentos y Escritorio (primario, con el foco), Elegir otra carpeta y Cancelar. Una sola respuesta: después quedan inactivos |
+| **Confirmación de documento** | Pregunta qué archivo (botones de opción si hay varios), aviso con borde `query` que nombra el archivo, el destino y el límite de caracteres, y Resumir «archivo» (primario), Elegir otro archivo y Cancelar |
+| **Resumen de documento** | Como el análisis de pantalla: una frase en negrita, «Ideas clave» u «Observaciones» numeradas y, si se recortó, una nota |
+| **Ciudad para el clima** | Pregunta en `query`, campo Ciudad, casilla «Guardarla como ciudad para el clima» marcada y Consultar el clima |
 | **Fila de recordatorio e historial** | Misma estructura de fila, con estado escrito y acciones |
 | **Botones** | Primario (tinta), secundario (línea), destructivo (error), señal |
 
@@ -218,7 +222,7 @@ Cada pantalla tiene una finalidad:
 | **Asistente** | Pedir algo y leer la respuesta. Es la pantalla principal |
 | **Recordatorios** | Ver, editar y eliminar recordatorios pendientes |
 | **Historial** | Consultar, filtrar y eliminar interacciones |
-| **Ajustes** | Estado y límite de la IA, carpetas autorizadas, modelo de voz y micrófono, ciudad del clima. Guardar va en un pie fijo, siempre visible, con su resultado al lado |
+| **Ajustes** | Estado y límite de la IA, carpetas autorizadas (añadir con el selector del sistema y quitar, al momento), modelo de voz y micrófono, ciudad para el clima. Guardar va en un pie fijo, siempre visible, y confirma en el propio botón («Ajustes guardados» con icono) hasta el siguiente cambio; los errores aparecen a su lado. Así el pie cabe en una fila incluso en la ventana mínima con el texto al 200 % |
 
 **Atribución.** Toda respuesta de clima muestra "Datos meteorológicos de Open-Meteo (CC BY 4.0)" con enlace a su sitio, y Ajustes incluye la misma atribución.
 

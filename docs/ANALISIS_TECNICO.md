@@ -89,6 +89,10 @@ HistoryService → SQLite
 | **Gemini como proveedor inicial** | Decisión del propietario: capa gratuita, texto y visión en una sola API, salidas estructuradas | Cualquier otro se puede añadir tras `AiProvider` |
 | **Open-Meteo** | Sin clave, con geocodificación y pronóstico | OpenWeather: exige clave |
 | **Sin SDK de IA en Rust** | Google no ofrece SDK para Rust, así que se usa HTTP directo con `reqwest` | |
+| **`pdf-extract`, `zip` y `quick-xml` para documentos** | El texto de un PDF o un `.docx` se extrae en el equipo, sin enviar el archivo: solo su texto, recortado y tras confirmar. `quick-xml` en la misma versión que ya usa Tauri | Enviar el archivo entero a la IA: más datos fuera del equipo y más cupo |
+| **`panic = "unwind"` en distribución** | Un PDF malformado puede hacer fallar el lector con un pánico; con `unwind` se contiene (`catch_unwind`) y se informa como archivo ilegible, en lugar de cerrar Nexium. Cuesta algo de tamaño del ejecutable | `abort`: cualquier PDF dañado cerraría la app |
+| **`tauri-plugin-dialog`** | Selector de carpetas y archivos del sistema en Windows, macOS y Linux. Se llama desde Rust: la interfaz nunca envía una ruta | Rutas escritas en la interfaz: permitirían pedir cualquier carpeta |
+| **`tauri-winrt-notification` en Windows** | La misma biblioteca de Tauri, con el escenario de recordatorio: el aviso se queda en pantalla hasta descartarlo | El plugin de notificaciones: no expone el escenario |
 
 ### Por qué no se usa la Web Speech API
 
@@ -121,10 +125,10 @@ C:\Nexium\Nexium
 │   └── styles/theme.css  Tokens de Tailwind
 ├── src-tauri/
 │   ├── src/
-│   │   ├── commands/     Fina capa IPC: valida y delega
-│   │   ├── core/         CommandRouter, reglas, Intent, handlers
-│   │   ├── providers/    ai/  speech/  weather/  capture/  files/  notification/
-│   │   ├── services/     reminders, history, settings, secrets, usage
+│   │   ├── commands/     Fina capa IPC por área: voz, documentos, carpetas, clima, registros, ajustes
+│   │   ├── core/         assistant/, rules/ (texto, fechas, lugares), handlers/ (uno por operación), documentos
+│   │   ├── providers/    ai/  speech/ (catálogo, Whisper, micrófono)  weather  capture  files  documents  notification
+│   │   ├── services/     reminders, history, settings, usage, performance (tiempos de cada etapa)
 │   │   ├── database/     Conexión y migraciones
 │   │   ├── models/
 │   │   └── platform/     windows/  macos/  linux/  (SystemProvider)

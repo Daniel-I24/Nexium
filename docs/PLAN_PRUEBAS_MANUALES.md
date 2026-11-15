@@ -27,6 +27,105 @@ Instalador: descárgalo de la última ejecución de [CI](https://github.com/Dani
 | 17 | Analizar pantalla con una ventana sin datos personales | Aviso nombrando a Google Gemini antes de capturar; responde sobre esa ventana |
 | 18 | Revisar el Historial | Aparecen las solicitudes con su estado escrito y con icono, y se pueden filtrar y eliminar |
 
+## Prueba manual de lo corregido (15 de noviembre de 2026, app instalada)
+
+Instala con el `.exe` de `src-tauri\target\release\bundle\nsis` que genera `compilar-distribucion.cmd`. Para cada caso anota **Correcto**, **Falla** (con lo que viste) o **No probado**.
+
+**Equipo:** resolución ____ · escala ____ % · tamaño de texto ____ % · tema ____
+
+### G1. Marco de la app al reducir la ventana
+
+Reduce la ventana al mínimo y ve agrandándola, en Asistente, Recordatorios, Historial y Ajustes. Repite con el tamaño de texto de Windows al 150 %.
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| La ventana | Nunca aparece una barra de desplazamiento de la ventana entera: solo se desplaza el contenido de cada pantalla | |
+| Barra inferior | Hablar, el campo de texto y Analizar pantalla se ven enteros en cualquier tamaño. En ventanas estrechas, Hablar y Analizar pantalla muestran solo su icono (al pasar el ratón dicen su nombre) | |
+| Navegación | Las cuatro secciones siempre visibles a la izquierda; en estrecho, solo los iconos | |
+| Guardar ajustes | Siempre visible al pie de Ajustes, fuera de lo que se desplaza. Al guardar, el botón dice «Ajustes guardados» hasta el siguiente cambio | |
+
+### G2. Animaciones
+
+Con los efectos de animación de Windows activados (Accesibilidad > Efectos visuales):
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Cambio de sección | La sección anterior se desvanece y la nueva entra subiendo un poco, sin un instante en blanco | |
+| Respuesta nueva | La anterior pasa a la cinta (línea que sube desde abajo) y la nueva aparece justo después | |
+| Barra | Al pulsar Hablar, el amarillo se enciende con un fundido; el contenido de cada estado aparece sin saltos | |
+| Voz | Mientras hablas, barras simétricas sobre una línea central que se mueven de forma fluida con tu voz | |
+| Diálogos | Borrar todo: el fondo se oscurece mientras el panel entra; al cancelar, los dos salen antes de cerrarse | |
+| Listas | Al eliminar un recordatorio o una entrada del historial, la fila se aparta y se desvanece | |
+
+Desactiva los efectos de animación, reinicia Nexium y repite: todo debe cambiar al instante, sin movimiento.
+
+### G3. Voz y tiempos
+
+1. Pulsa Hablar y di «¿Cuánta batería tengo?». Repite con «¿Cuánta RAM estoy usando?», «¿A qué red wifi estoy conectado?» y «Abre los recordatorios».
+2. Abre `%APPDATA%\io.github.daniel-i24.nexium\rendimiento.log` y anota la última línea de cada orden.
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Micrófono | En Ajustes, con Automático, «Nexium usará …» nombra tu micrófono real, nunca Stereo Mix ni Mezcla estéreo | |
+| Transcripción | «RAM» y «Wi-Fi» se escriben bien | |
+| Origen | «lectura directa del equipo, sin IA» en las tres primeras; la cuarta abre Recordatorios | |
+| Tiempo total tras soltar Terminar | Menos de 3 s (la línea de `rendimiento.log` dice el total y cada etapa) | ____ s |
+| Primera orden tras abrir Nexium | «carga del modelo» cerca de 0 ms si hablaste más de un segundo | ____ ms |
+
+### G4. Permisos de carpetas y resumen de un documento
+
+Copia `C:\Nexium\bench-audio\documento-prueba.pdf` a tu carpeta Documentos con el nombre `Guía de bases de datos.pdf`. En Ajustes, quita todas las carpetas autorizadas.
+
+1. Escribe «Resume mi documento de bases de datos».
+2. Pulsa **Permitir Documentos y Escritorio**.
+3. Pulsa **Resumir «Guía de bases de datos.pdf»**.
+4. Escribe «Analiza este archivo», pulsa **Elegir archivo** y elige el mismo PDF.
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Permiso | Aparece en la conversación con «Permitir Documentos y Escritorio», «Elegir otra carpeta» y «Cancelar» | |
+| Continuación | Al permitir, la búsqueda sigue sola, sin repetir la solicitud | |
+| Confirmación | Nombra el archivo y dice que su texto irá a Google Gemini, como mucho 30.000 caracteres | |
+| Resumen | Una frase de resumen e «Ideas clave» numeradas, de tú y sin Markdown | |
+| Historial | La entrada se llama «Resumen de «Guía de bases de datos.pdf»» y no contiene el texto del documento | |
+| Selector | «Elegir archivo» abre el selector de Windows, que solo muestra .txt, .md, .csv, .pdf y .docx | |
+| Ajustes | Añadir carpeta abre el selector de carpetas; Quitar la retira al momento | |
+| Un PDF escaneado, si tienes uno | Nexium dice que el PDF parece escaneado y no envía nada | |
+
+### G5. Clima sin ciudad y con ciudad
+
+1. En Ajustes, borra la ciudad para el clima y guarda.
+2. Escribe «Dame el clima en la ciudad en la que me encuentro».
+3. Escribe una ciudad en minúsculas y sin tildes (por ejemplo, «medellin»), deja marcado «Guardarla como ciudad para el clima» y pulsa Consultar el clima.
+4. Vuelve a escribir la solicitud del paso 2.
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Paso 2 | Nexium pregunta «¿De qué ciudad quieres el clima?»; no busca una ciudad llamada «la ciudad en la que me encuentro» | |
+| Paso 3 | Muestra el clima con el nombre oficial («Medellín, Colombia») | |
+| Ajustes | La ciudad para el clima es «Medellín» | |
+| Paso 4 | Responde con Medellín sin preguntar | |
+| Ciudad inexistente | Escribir «Nolugarx» en Ajustes y guardar da «No encontré la ciudad…» | |
+
+### G6. Borrar todo
+
+Con varias respuestas en la conversación del Asistente, ve a Historial y pulsa Borrar todo.
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Diálogo | Dice que también se vacía la conversación del Asistente | |
+| Resultado | Al volver a Asistente, no queda ninguna respuesta ni línea en la cinta | |
+
+### G7. Notificaciones
+
+Crea un recordatorio para dentro de dos minutos y deja Nexium en la bandeja.
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Aviso | Aparece en pantalla, desplegado, firmado por Nexium, con el botón «Abrir Nexium», y no desaparece solo | |
+| Botón | «Abrir Nexium» muestra la ventana | |
+| Si solo va al centro de notificaciones | Revisa lo que indica la pantalla de Recordatorios (banners de Nexium y No molestar) y anota qué ajuste estaba activo | |
+
 ## Prueba manual final (Windows, app instalada)
 
 Instala con el `.exe` de `src-tauri\target\release\bundle\nsis` generado por `compilar-distribucion.cmd`. Anota para cada caso **Correcto**, **Falla** (con lo que viste) o **No probado**, y el equipo: resolución, escala de pantalla y tamaño de texto de Windows.

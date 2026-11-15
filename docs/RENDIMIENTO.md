@@ -90,6 +90,22 @@ Objetivos: una orden local por voz en menos de 3 s en total, una orden escrita l
 
 **IA.** La mediana ya estaba en 1,2 s (de 1,0 a 2,7 s, las 25 frases correctas), por debajo de los 3 s. Mientras la IA trabaja, la barra dice qué hace: «Interpretando tu solicitud…» o «Analizando la imagen…».
 
+## Al terminar las correcciones: 15 de noviembre de 2026
+
+Commit `805b042`, ejecutable de distribución sin instalar, mismo método que la línea base (cinco arranques, memoria tras 20 s en reposo, CPU durante 60 s). **El equipo estaba con batería**, no conectado a la corriente como en la línea base: los tiempos pueden ser algo peores por eso.
+
+| Medida | Línea base (11 nov.) | Fase B (13 nov.) | Ahora | Conclusión |
+|---|---|---|---|---|
+| Instalador NSIS | 3,48 MiB | 3,40 MiB | 4,55 MiB | Crece: lectura de PDF y `.docx`, selector del sistema y `panic = "unwind"` |
+| Instalador MSI | 4,67 MiB | 4,60 MiB | 6,28 MiB | Ídem |
+| Ejecutable `nexium.exe` | 11,1 MiB | | 16,9 MiB | Ídem |
+| Frontend (`dist/`) | 537 KB | 450 KB | 505 KB | Crece algo: componentes de documentos, clima y movimiento |
+| Arranque (cinco arranques seguidos) | 527 a 573 ms | 585 a 768 ms | 579 a 895 ms | Sin cambio claro: variación de una serie con batería |
+| Memoria privada en reposo, total | 178 MB | 179 a 182 MB | 198 MB | Unos 16 MB más, casi todo en WebView2; `nexium.exe` pasa de 6 a 12 MB por el lector de CPU que se prepara al abrir |
+| CPU en reposo | 0,44 % de un núcleo | 0,44 a 0,68 % | 0,49 a 0,65 % | Sin cambio apreciable |
+
+El aumento de tamaño es el precio de leer documentos en el equipo en lugar de enviarlos enteros. La velocidad de cada solicitud, que era el objetivo, está en «Velocidad de las solicitudes», arriba.
+
 ## Comprobaciones del ejecutable de distribución
 
 Búsqueda de texto en `nexium.exe`:

@@ -1,8 +1,48 @@
 # Nexium: estado del proyecto
 
-Última actualización: 13 de noviembre de 2026.
+Última actualización: 15 de noviembre de 2026.
 
-**Etapa actual:** plan de cierre para la presentación. **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas, y revisión final de interfaz y funcionamiento hecha el 13 de noviembre** (abajo). No queda nada pendiente de código para una fase posterior. Falta la prueba manual final del propietario con la app instalada: `docs/PLAN_PRUEBAS_MANUALES.md`.
+**Etapa actual:** plan de cierre para la presentación. **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas, revisión final del 13 de noviembre y correcciones de la prueba manual del 15 de noviembre** (abajo). No queda nada pendiente de código para una fase posterior. Falta la prueba manual final del propietario con la app instalada: `docs/PLAN_PRUEBAS_MANUALES.md`.
+
+## Correcciones tras la prueba manual final (15 de noviembre de 2026)
+
+La prueba manual del 14 de noviembre dio por correctos F1, F3, F6 y la parte B de F4. Lo demás se corrigió así; la prueba corta de lo corregido está en `docs/PLAN_PRUEBAS_MANUALES.md` (G1 a G7).
+
+| Punto | Qué fallaba | Corrección |
+|---|---|---|
+| Marco | Al reducir la ventana, «Guardar ajustes» quedaba en medio del contenido o desaparecía, la barra inferior se cortaba y la ventana entera se desplazaba | Marco fijo: navegación en columna a la izquierda, cada pantalla con su zona de desplazamiento (`ScreenLayout`) y Ajustes con un pie fijo fuera de ella. La barra separa el mensaje (que se desplaza por dentro) de la fila de controles (que nunca se corta) y, con poco ancho, muestra los botones solo con icono |
+| Pruebas de diseño | No detectaron esos fallos: aceptaban que la ventana se desplazara | `tests/layout/frame.ts` comprueba, sin desplazar nada, que la ventana no se desplaza y que la barra, la navegación y Guardar ajustes están enteros y visibles. 23 vistas en 6 tamaños, 3 tamaños de texto, 5 escalas y 2 temas |
+| Animaciones | No se percibían: la interfaz desaparecía y volvía | Sistema nuevo con tokens de Tailwind (150, 200 y 250 ms; curvas estándar, de entrada y de salida): sección con View Transitions, respuesta y cinta, barra, diálogos con salida, avisos, listas (entrada escalonada y salida), carga y un trazo de voz simétrico e interpolado. `tests/motion.test.ts` |
+| Velocidad | «¿Cuánta batería tengo?» tardó unos 12 s | Precarga del modelo al pulsar Hablar, Whisper sin reintentos y con el vocabulario de Nexium, lector de CPU persistente, sin espera fija tras cada solicitud e intérprete local más tolerante. Tiempos de cada etapa en `rendimiento.log`. Mediciones en `docs/RENDIMIENTO.md` |
+| Transcripción | «Cuánta RAM» salía como «Cuentarrán» | Contexto previo de Whisper con el vocabulario de Nexium y corrección de errores leves en las reglas |
+| Micrófono | En automático podía usar Stereo Mix si era el predeterminado | Nunca una entrada que grabe el sonido del equipo, aunque sea la predeterminada |
+| Archivos y documentos | Solo búsqueda por nombre en Documentos y Escritorio | Permiso en la conversación, carpetas con el selector del sistema, búsqueda por contenido en texto, lectura local de PDF y `.docx`, y resumen o análisis con confirmación por archivo. Operación nueva del servidor, desplegada |
+| Clima | «La ciudad en la que me encuentro» se tomaba como ciudad, y las ciudades se escribían con mayúscula en cada palabra | «Sin ciudad» cuando no se nombra un lugar, ciudad de Ajustes comprobada con Open-Meteo, pregunta en la conversación con opción de guardarla y nombre oficial en la respuesta |
+| Historial | Borrar todo no vaciaba la conversación | Ahora sí, y el diálogo lo dice |
+| Notificaciones | En Windows solo aparecían en el centro de notificaciones | Escenario de recordatorio de Windows: el aviso se queda en pantalla hasta descartarlo, con «Abrir Nexium». Lo que depende de Windows se explica en Recordatorios y en el README |
+| Textos | «Estado del servicio: Incluido. Sin usar todavía en esta sesión» sin punto, entre otros | Repaso de puntuación y concordancia; el texto de la IA se limpia de entidades HTML |
+
+**Otros fallos encontrados en la revisión:**
+
+- La primera pregunta de CPU tras abrir Nexium tardaba 2,4 s.
+- Cada solicitud esperaba 150 ms fijos antes de mostrar la respuesta.
+- La IA devolvió una vez «qu&#xe9;» y un carácter de control en una pregunta.
+- Nombres de archivo largos sin espacios y rutas se salían de su caja (en Linux, también en Historial por los espacios de `pre-wrap`).
+- Una prueba del servidor podía superar el tiempo de su gancho al esperar el cambio de minuto.
+
+**Limpieza.** Archivos largos divididos por responsabilidad: `core/handlers.rs` (920 líneas, ahora una carpeta con un archivo por operación), `providers/speech.rs` (1171, ahora catálogo, Whisper y micrófono), `core/assistant.rs` (1043, pruebas aparte), `core/rules.rs` (780, texto, fechas y lugares) y `commands/mod.rs` (494, por áreas). Eliminados: `models::now_local` y el tipo `Origin`, sin uso; los iconos `info` y `document`, sin uso; nueve iconos de Microsoft Store (`Square*Logo.png`, `StoreLogo.png`, `64x64.png`), que Nexium no usa; y el CSS propio que Tailwind sustituye (tipografía, márgenes y fondo de `html` y `body`, y el cursor de los botones). Todas las dependencias de Rust y de npm se usan.
+
+**Pruebas.**
+
+| Conjunto | Resultado |
+|---|---|
+| Rust | 190 correctas (179 de la biblioteca, 10 de contrato y 1 de configuración de ventana), 1 ignorada que necesita un modelo real |
+| Interfaz | 117 correctas |
+| Diseño (Edge) | 138 combinaciones correctas; en la CI también con Chromium en Linux |
+| Servidor | 115 correctas y tipado sin errores. Desplegado con Wrangler y comprobado en vivo |
+| Lint, tipado, Clippy con advertencias como errores, `cargo fmt` | Sin errores |
+
+**Depende de la prueba manual:** la voz con un micrófono y una voz reales (los tiempos medidos son con voz sintética), el aviso de recordatorio en pantalla según la configuración de Windows, los selectores de carpetas y archivos del sistema, y las animaciones en WebView2.
 
 ## Revisión final de interfaz y funcionamiento (13 de noviembre de 2026)
 
