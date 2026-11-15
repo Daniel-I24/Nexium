@@ -13,6 +13,11 @@ import type { Reminder } from "@/types/api";
 import { isCompleteLocal, toLocalInput } from "@/utils/dates";
 import { exitThen, stagger } from "@/utils/motion";
 
+/** Las indicaciones de las notificaciones dependen del sistema. */
+function isWindows() {
+  return /Windows/i.test(navigator.userAgent);
+}
+
 const EXAMPLE = "Recuérdame entregar el proyecto el viernes a las nueve";
 const inputStyle = "h-11 w-full min-w-0 rounded-sm border border-line bg-panel px-3 text-md text-ink";
 
@@ -159,6 +164,12 @@ export function RemindersScreen({ onPickExample }: { onPickExample: (text: strin
         <p className="m-0 max-w-reading text-sm text-muted">
           Los avisos solo se emiten mientras Nexium está abierto o en la bandeja del sistema. Si lo cierras con Salir, verás los vencidos al volver a abrirlo.
         </p>
+        {isWindows() && (
+          <p className="m-0 max-w-reading text-sm text-muted">
+            En Windows, el aviso se queda en pantalla hasta que lo descartes. Si solo aparece en el centro de notificaciones, revisa en Configuración &gt; Sistema &gt;
+            Notificaciones que Nexium tenga activados los banners y que «No molestar» esté desactivado o permita los recordatorios.
+          </p>
+        )}
         {error && <Notice tone="error">{error}</Notice>}
         {reminders === null && !error && <Loading>Cargando recordatorios…</Loading>}
         {reminders?.length === 0 && <EmptyReminders onPickExample={onPickExample} />}

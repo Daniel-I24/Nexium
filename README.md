@@ -16,13 +16,14 @@ Según los [términos de Google](https://aistudio.google.com/docs/terms), en los
 - Personas pueden leer esos datos, tras desvincularlos de tu cuenta.
 - Google pide **no enviar información sensible, confidencial o personal**.
 
-Esto importa sobre todo en el **análisis de pantalla**: antes de cada captura, Nexium avisa de todo esto y nombra a Google Gemini. Sin pulsar Capturar, no se toma ninguna imagen. No analices una pantalla que muestre datos personales.
+Esto importa sobre todo en el **análisis de pantalla** y en el **resumen de documentos**: antes de cada captura y de cada documento, Nexium avisa de todo esto y nombra a Google Gemini. Sin pulsar Capturar, no se toma ninguna imagen; sin confirmar el archivo concreto, no se lee ni se envía ningún documento. No envíes pantallas ni documentos con datos personales.
 
 | Dato | ¿Sale del equipo? | Destino |
 |---|---|---|
 | Hora, CPU, RAM, batería, red, modo oscuro | No | |
 | Voz | No: Whisper la transcribe localmente | |
-| Nombres y rutas de archivos | No | |
+| Nombres y rutas de archivos, y la búsqueda por contenido | No | |
+| Texto de un documento, solo tras confirmar ese archivo y como mucho 30 000 caracteres | Sí | Servidor de Nexium, y de ahí Google Gemini. El historial guarda el nombre y el resumen, no el contenido |
 | Texto de una solicitud no resuelta por reglas locales | Sí | Servidor de Nexium, y de ahí Google Gemini |
 | Captura de pantalla, solo tras confirmar | Sí | Servidor de Nexium, y de ahí Google Gemini |
 | Ciudad del clima | Sí | Open-Meteo |
@@ -33,10 +34,11 @@ Otras condiciones de esos términos: hay que tener 18 años o más, el servicio 
 
 - **Voz:** botón visible, micrófono solo mientras la barra está en amarillo, transcripción local con Whisper.
 - **Sistema:** CPU, RAM, batería, Internet, Wi-Fi, nombre de la red y modo oscuro. Lo que un sistema no permite consultar aparece como "No disponible", nunca con un valor inventado.
-- **Archivos:** búsqueda por nombre en Documentos y Escritorio, tras tu autorización. No abre, modifica, mueve ni elimina nada.
+- **Archivos:** búsqueda en las carpetas que autorices (Documentos y Escritorio, o las que elijas con el selector del sistema): por nombre y, en `.txt`, `.md` y `.csv`, también por contenido. Nunca modifica, mueve ni elimina nada.
+- **Documentos:** «Resume mi documento de bases de datos» o «Analiza este archivo». Lee en el equipo `.txt`, `.md`, `.csv`, PDF con texto y `.docx`, y pide tu confirmación antes de enviar su texto a la IA. Un PDF escaneado o un formato no compatible se explican.
 - **Pantalla:** una sola captura en memoria, comprimida y enviada al servicio de IA, y después descartada.
-- **Clima y hora:** condiciones actuales y pronóstico de Open-Meteo; hora del equipo.
-- **Recordatorios:** en lenguaje natural, con aclaración si la fecha es ambigua. Se guardan en SQLite.
+- **Clima y hora:** condiciones actuales y pronóstico de Open-Meteo; hora del equipo. Sin ciudad en la solicitud se usa la de Ajustes, y si no hay ninguna, Nexium la pregunta y ofrece guardarla.
+- **Recordatorios:** en lenguaje natural, con aclaración si la fecha es ambigua. Se guardan en SQLite. En Windows, el aviso se queda en pantalla hasta que lo descartes.
 - **Historial:** solicitudes, categoría, estado y respuesta, sin audio ni imágenes.
 
 ## Tecnologías
@@ -109,7 +111,17 @@ Quien usa Nexium no configura nada. **Ajustes** muestra el estado del servicio y
 
 Las operaciones locales no consumen cuota. Si la cuota se agota, Nexium lo explica y no reintenta ni cambia de plan.
 
-Modelos e instrucciones están en el servidor (`server/src/ai-contract.json`): `gemini-3.5-flash-lite` para interpretar y `gemini-3.6-flash` para analizar la pantalla.
+Modelos e instrucciones están en el servidor (`server/src/ai-contract.json`): `gemini-3.5-flash-lite` para interpretar y resumir documentos, y `gemini-3.6-flash` para analizar la pantalla.
+
+Las órdenes simples (hora, fecha, batería, CPU, RAM, red, Wi-Fi, modo oscuro y abrir secciones) se resuelven en el equipo, sin IA. Los tiempos de cada solicitud quedan en `rendimiento.log`, en la carpeta de datos de Nexium, sin el texto pedido: ver [`docs/RENDIMIENTO.md`](docs/RENDIMIENTO.md).
+
+### Notificaciones
+
+Los recordatorios avisan con una notificación del sistema mientras Nexium está abierto o en la bandeja. En Windows usan el escenario de recordatorio: el aviso aparece desplegado, con el botón **Abrir Nexium**, y se queda en pantalla hasta que lo descartes. Que aparezca en pantalla depende de la configuración de Windows:
+
+- En **Configuración > Sistema > Notificaciones**, las notificaciones deben estar activadas y, en la lista de aplicaciones, Nexium debe tener activado **Mostrar banners de notificación**.
+- Con **No molestar** activado, Windows solo muestra los avisos de las aplicaciones y recordatorios que permitas en **Establecer notificaciones prioritarias**. Si no, el aviso va directamente al centro de notificaciones.
+- Al ejecutar Nexium sin instalar (en desarrollo), Windows atribuye el aviso a PowerShell; el instalado lo firma como Nexium.
 
 ### Variables de entorno
 
@@ -120,7 +132,7 @@ Modelos e instrucciones están en el servidor (`server/src/ai-contract.json`): `
 
 ### Voz
 
-El modelo se descarga una sola vez desde **Ajustes**, con tu confirmación, y se verifica su hash. Se guarda en la carpeta de datos de la aplicación, dentro de `models/`. Se carga en memoria la primera vez que hablas y se libera tras un periodo sin uso, configurable en **Ajustes** (10 minutos por defecto). Detalles y mediciones: [`docs/PRUEBA_VOZ.md`](docs/PRUEBA_VOZ.md).
+El modelo se descarga una sola vez desde **Ajustes**, con tu confirmación, y se verifica su hash. Se guarda en la carpeta de datos de la aplicación, dentro de `models/`. Se carga en memoria mientras hablas, la primera vez que pulsas Hablar, y se libera tras un periodo sin uso, configurable en **Ajustes** (10 minutos por defecto). En automático, Nexium usa el primer micrófono real y nunca una entrada que grabe el sonido del equipo, como Stereo Mix, aunque sea la predeterminada. Detalles y mediciones: [`docs/PRUEBA_VOZ.md`](docs/PRUEBA_VOZ.md).
 
 ## Pruebas
 
@@ -157,7 +169,8 @@ Nexium es un proyecto universitario distribuido solo en GitHub, y sus instalador
 ## Limitaciones conocidas
 
 - Los recordatorios solo avisan mientras Nexium está abierto o en la bandeja. Al salir del todo no hay avisos, y los vencidos aparecen al volver a abrirlo.
-- La búsqueda de archivos es por nombre: no lee su contenido.
+- La búsqueda por contenido solo mira archivos de texto (`.txt`, `.md`, `.csv`) de hasta 1 MB, con un límite de 4 s por búsqueda.
+- Un PDF escaneado no tiene texto que leer: Nexium no reconoce texto en imágenes.
 - El nombre de la red Wi-Fi depende de permisos de ubicación en Windows 11 24H2 y en macOS.
 - Open-Meteo es gratuito solo para uso no comercial. **Un uso comercial requiere un plan de pago.**
 - Las respuestas se muestran en texto. No hay voz sintetizada en esta versión.

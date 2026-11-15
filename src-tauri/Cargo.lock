@@ -3031,6 +3031,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "tauri-winrt-notification",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",

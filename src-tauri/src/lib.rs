@@ -167,7 +167,8 @@ fn start_reminder_scheduler<R: Runtime>(app: AppHandle<R>, reminders: ReminderSe
         loop {
             if let Ok(due) = reminders.take_due(Utc::now()) {
                 for reminder in &due {
-                    let _ = notifications.notify("Recordatorio de Nexium", &reminder.content);
+                    let _ =
+                        notifications.notify_reminder("Recordatorio de Nexium", &reminder.content);
                 }
                 if !due.is_empty() {
                     let _ = app.emit("reminders://changed", ());
