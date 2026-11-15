@@ -115,11 +115,11 @@ function ReminderDraft({
 function ScreenAnalysisView({ summary, cause, steps }: { summary: string; cause: string | null; steps: string[] }) {
   return (
     <div className="flex max-w-reading flex-col gap-5">
-      <p className="m-0 break-words text-lg font-semibold">{summary}</p>
+      <p className="m-0 wrap-anywhere text-lg font-semibold">{summary}</p>
       {cause && (
         <section className="flex flex-col gap-1">
           <h2 className="m-0 text-sm font-medium text-muted">Causa probable</h2>
-          <p className="m-0 break-words text-md">{cause}</p>
+          <p className="m-0 wrap-anywhere text-md">{cause}</p>
         </section>
       )}
       {steps.length > 0 && (
@@ -131,7 +131,7 @@ function ScreenAnalysisView({ summary, cause, steps }: { summary: string; cause:
                 <span aria-hidden="true" className="font-mono text-muted">
                   {index + 1}
                 </span>
-                <span className="min-w-0 break-words">{step}</span>
+                <span className="min-w-0 wrap-anywhere">{step}</span>
               </li>
             ))}
           </ol>
@@ -147,7 +147,7 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
       return (
         <>
           <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2">
-            <span className="break-words font-mono text-reading tracking-tightest">
+            <span className="wrap-anywhere font-mono text-reading tracking-tightest">
               <ReadingValue value={body.value} />
               {body.unit && <span className="ml-2 text-unit tracking-normal">{body.unit}</span>}
             </span>
@@ -167,7 +167,7 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
         </>
       );
     case "text":
-      return <p className="m-0 max-w-reading whitespace-pre-wrap break-words text-lg">{body.text}</p>;
+      return <p className="m-0 max-w-reading whitespace-pre-wrap wrap-anywhere text-lg">{body.text}</p>;
     case "screenAnalysis":
       return <ScreenAnalysisView summary={body.summary} cause={body.cause} steps={body.steps} />;
     case "files":
@@ -184,7 +184,7 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
       return (
         <div className="flex max-w-reading flex-col gap-1">
           <p className="m-0 text-lg">
-            <StatusLabel status="completed">Guardado</StatusLabel> <span className="break-words">{body.reminder.content}</span>
+            <StatusLabel status="completed">Guardado</StatusLabel> <span className="wrap-anywhere">{body.reminder.content}</span>
           </p>
           <p className="m-0 font-mono text-sm text-muted">
             {new Date(body.reminder.dueAt).toLocaleString("es", { dateStyle: "full", timeStyle: "short" })}
@@ -217,7 +217,7 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
             <span className="flex h-lh items-center">
               <Icon name="failed" size="md" />
             </span>
-            <span className="min-w-0 break-words">
+            <span className="min-w-0 wrap-anywhere">
               <span className="sr-only">No se pudo completar: </span>
               {body.message}
             </span>

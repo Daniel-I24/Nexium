@@ -97,7 +97,7 @@ function ReminderRow({ reminder, index, onChanged, onError }: RowProps) {
       className={`flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline py-3 ${overdue ? "border-l-2 border-l-error pl-3" : ""} ${leaving ? "animate-leave" : "animate-enter"}`}
     >
       <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
-        <span className="break-words">{reminder.content}</span>
+        <span className="wrap-anywhere">{reminder.content}</span>
         <span className="font-mono text-sm text-muted">{longDate(reminder.dueAt)}</span>
         <span className="text-sm">{overdue ? <StatusLabel status="overdue">Vencido</StatusLabel> : <StatusLabel status="pending">Pendiente</StatusLabel>}</span>
       </div>

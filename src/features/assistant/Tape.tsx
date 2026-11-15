@@ -16,8 +16,8 @@ export function Tape({ entries }: { entries: AssistantResponse[] }) {
             <span className="w-12 shrink-0 font-mono">
               {new Date(entry.createdAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
             </span>
-            <span className="min-w-0 flex-1 basis-48 break-words">{entry.request}</span>
-            <span className={`flex min-w-0 flex-1 basis-48 items-start gap-1 break-words ${failed ? "text-error" : "text-ink"}`}>
+            <span className="min-w-0 flex-1 basis-48 wrap-anywhere">{entry.request}</span>
+            <span className={`flex min-w-0 flex-1 basis-48 items-start gap-1 wrap-anywhere ${failed ? "text-error" : "text-ink"}`}>
               {failed && (
                 <span className="flex h-lh items-center">
                   <Icon name="failed" label="Fallida" />

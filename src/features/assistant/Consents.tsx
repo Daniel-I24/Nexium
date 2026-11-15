@@ -162,7 +162,7 @@ export function DocumentConsent({ task, provider, candidates: found, maxCharacte
 export function DocumentAnalysisView({ task, summary, points, truncated }: { task: DocumentTask; summary: string; points: string[]; truncated: boolean }) {
   return (
     <div className="flex max-w-reading flex-col gap-5">
-      <p className="m-0 break-words text-lg font-semibold">{summary}</p>
+      <p className="m-0 wrap-anywhere text-lg font-semibold">{summary}</p>
       {points.length > 0 && (
         <section className="flex flex-col gap-1">
           <h2 className="m-0 text-sm font-medium text-muted">{task === "summarize" ? "Ideas clave" : "Observaciones"}</h2>
@@ -172,7 +172,7 @@ export function DocumentAnalysisView({ task, summary, points, truncated }: { tas
                 <span aria-hidden="true" className="font-mono text-muted">
                   {index + 1}
                 </span>
-                <span className="min-w-0 break-words">{point}</span>
+                <span className="min-w-0 wrap-anywhere">{point}</span>
               </li>
             ))}
           </ul>

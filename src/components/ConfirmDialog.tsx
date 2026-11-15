@@ -65,7 +65,7 @@ export function ConfirmDialog({ open, title, description, confirmLabel, onConfir
         <h2 id={titleId} className="m-0 text-lg font-semibold">
           {title}
         </h2>
-        <p id={descriptionId} className="m-0 break-words">
+        <p id={descriptionId} className="m-0 wrap-anywhere">
           {description}
         </p>
         <div className="flex flex-wrap justify-end gap-3">

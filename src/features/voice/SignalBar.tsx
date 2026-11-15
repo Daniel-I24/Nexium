@@ -95,7 +95,7 @@ function ProgressControls({ step, filled, status, onCancel }: { step: string; fi
   return (
     <>
       <div className="flex min-w-24 flex-1 basis-24 flex-col gap-1.5">
-        <span className="break-words">{step}</span>
+        <span className="wrap-anywhere">{step}</span>
         <ProgressLine filled={filled} />
       </div>
       <Button className="shrink-0" onClick={onCancel} {...{ [AUTOFOCUS]: "" }}>
@@ -193,7 +193,7 @@ function useContent(props: SignalBarProps): Content {
             <span className="flex h-lh items-center">
               <Icon name="failed" />
             </span>
-            <span className="min-w-0 break-words">{state.message}</span>
+            <span className="min-w-0 wrap-anywhere">{state.message}</span>
           </p>
         ) : undefined,
         controls: (

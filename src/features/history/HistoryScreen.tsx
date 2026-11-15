@@ -115,8 +115,8 @@ export function HistoryScreen({ onCleared }: { onCleared: () => void }) {
                   className={`flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-hairline py-3 ${isLeaving(entry.id) ? "animate-leave" : "animate-enter"}`}
                 >
                   <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
-                    <strong className="break-words font-medium">{entry.request}</strong>
-                    <span className="whitespace-pre-wrap break-words text-sm">{entry.response}</span>
+                    <strong className="wrap-anywhere font-medium">{entry.request}</strong>
+                    <span className="whitespace-pre-wrap wrap-anywhere text-sm">{entry.response}</span>
                     <span className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
                       <span className="font-mono">{new Date(entry.createdAt).toLocaleString("es", { dateStyle: "short", timeStyle: "short" })}</span>
                       <span aria-hidden="true">·</span>

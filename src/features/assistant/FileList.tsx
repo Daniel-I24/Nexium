@@ -7,7 +7,7 @@ export function FileList({ files }: { files: FileResult[] }) {
       {files.map((file) => (
         <li key={file.path} className="flex flex-col gap-0.5 border-t border-hairline py-3">
           <div className="flex flex-wrap justify-between gap-x-4">
-            <strong className="min-w-0 break-words font-semibold">{file.name}</strong>
+            <strong className="min-w-0 wrap-anywhere font-semibold">{file.name}</strong>
             <span className="font-mono text-sm">{file.extension}</span>
           </div>
           <span className="break-all font-mono text-xs text-muted">{file.path}</span>

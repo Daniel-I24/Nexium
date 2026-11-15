@@ -159,14 +159,6 @@ describe("documentos", () => {
     expect(tooLong.status).toBe(413);
   });
 
-  it("tiene su propio cupo por instalación", async () => {
-    const limits = testEnv({ install: { perMinute: 1, perDay: 10 } });
-    geminiReplies(success('{"summary":"s","points":[]}'), success());
-    expect((await handleRequest(document(), limits)).status).toBe(200);
-    expect(await errorOf(await handleRequest(document(), limits))).toBe("rate_limited");
-    expect((await handleRequest(interpret(), limits)).status).toBe(200);
-  });
-
   it("no registra el contenido del documento", async () => {
     geminiReplies(success('{"summary":"s","points":[]}'));
     const log = vi.spyOn(console, "log");
@@ -348,7 +340,8 @@ describe("límites de uso", () => {
   beforeEach(async () => {
     const intoMinute = Date.now() % 60_000;
     if (intoMinute > 50_000) await new Promise((resolve) => setTimeout(resolve, 60_100 - intoMinute));
-  });
+    // La espera puede durar hasta 10 s: más que el límite por defecto de un gancho.
+  }, 20_000);
 
   const otherInstall = (n: number) => ({ "X-Nexium-Install": `3f2b8a10-5c4e-4d7a-9b1c-0a1b2c3d4e${String(n).padStart(2, "0")}` });
 
@@ -362,6 +355,14 @@ describe("límites de uso", () => {
     expect(Number(response.headers.get("Retry-After"))).toBeGreaterThan(0);
     expect(await errorOf(response)).toBe("rate_limited");
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("resumir documentos tiene su propio cupo por instalación", async () => {
+    const limits = testEnv({ install: { perMinute: 1, perDay: 10 } });
+    geminiReplies(success('{"summary":"s","points":[]}'), success());
+    expect((await handleRequest(document(), limits)).status).toBe(200);
+    expect(await errorOf(await handleRequest(document(), limits))).toBe("rate_limited");
+    expect((await handleRequest(interpret(), limits)).status).toBe(200);
   });
 
   it("por día e instalación", async () => {
