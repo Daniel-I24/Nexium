@@ -66,6 +66,16 @@ describe("useAssistant", () => {
     expect(result.current.current?.body.kind).toBe("documentAnalysis");
   });
 
+  it("vaciar la conversación quita la respuesta actual y la cinta", async () => {
+    invoke.mockResolvedValue(reply({ kind: "text", text: "hola" }));
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("uno"));
+    await act(() => result.current.submit("dos"));
+    act(() => result.current.clearConversation());
+    expect(result.current.current).toBeNull();
+    expect(result.current.tape).toEqual([]);
+  });
+
   it("la cinta no duplica entradas ni pasa de cinco, también en modo estricto", async () => {
     const { result } = renderHook(() => useAssistant(), { wrapper: StrictMode });
     for (const id of [1, 2, 3, 4, 5, 6, 7]) {

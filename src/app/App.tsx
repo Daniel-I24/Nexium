@@ -60,7 +60,7 @@ export function App() {
         />
       )}
       {screen === "reminders" && <RemindersScreen onPickExample={(text) => goToAssistant(() => void assistant.submit(text))} />}
-      {screen === "history" && <HistoryScreen />}
+      {screen === "history" && <HistoryScreen onCleared={assistant.clearConversation} />}
       {screen === "settings" && <SettingsScreen />}
     </Shell>
   );

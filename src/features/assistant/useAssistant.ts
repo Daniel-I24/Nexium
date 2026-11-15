@@ -237,6 +237,12 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     [fail, present],
   );
 
+  /** Borrar todo el historial vacía también la conversación visible. */
+  const clearConversation = useCallback(() => {
+    setSession({ current: null, tape: [] });
+    lastRequest.current = null;
+  }, []);
+
   /** "Cancelar" en un permiso de la conversación: no se hizo ni se envió nada. */
   const dismissCurrent = useCallback((message: string) => {
     setSession((session) =>
@@ -263,5 +269,6 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     authorizeFolders,
     analyzeDocument,
     dismissCurrent,
+    clearConversation,
   };
 }

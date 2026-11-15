@@ -42,10 +42,11 @@ export function clearDescription(filter: InteractionStatus | null, visible: numb
     filter === null || !option
       ? `Se borrarán ${visible === 1 ? "la única entrada" : `las ${count(visible, "entrada", "entradas")}`} del historial de este equipo.`
       : `Se borrarán todas las entradas del historial de este equipo, también las que no muestra el filtro «${option.label}».`;
-  return `${what} Los recordatorios guardados no se tocan. No se puede deshacer.`;
+  return `${what} También se vacía la conversación del Asistente. Los recordatorios guardados no se tocan. No se puede deshacer.`;
 }
 
-export function HistoryScreen() {
+/** `onCleared`: tras Borrar todo, la conversación del Asistente también se vacía. */
+export function HistoryScreen({ onCleared }: { onCleared: () => void }) {
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
   const [filter, setFilter] = useState<InteractionStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +143,7 @@ export function HistoryScreen() {
             setConfirmClear(false);
             exitThen(
               () => setLeaving("all"),
-              () => void act(api.clearHistory()),
+              () => void act(api.clearHistory().then(onCleared)),
             );
           }}
         />
