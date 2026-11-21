@@ -35,11 +35,11 @@ Otras condiciones de esos términos: hay que tener 18 años o más, el servicio 
 - **Voz:** botón visible, micrófono solo mientras la barra está en amarillo, transcripción local con Whisper.
 - **Sistema:** CPU, RAM, batería, Internet, Wi-Fi, nombre de la red y modo oscuro. Lo que un sistema no permite consultar aparece como "No disponible", nunca con un valor inventado.
 - **Archivos:** búsqueda en las carpetas que autorices (Documentos y Escritorio, o las que elijas con el selector del sistema): por nombre y, en `.txt`, `.md` y `.csv`, también por contenido. Nunca modifica, mueve ni elimina nada.
-- **Documentos:** «Resume mi documento de bases de datos» o «Analiza este archivo». Lee en el equipo `.txt`, `.md`, `.csv`, PDF con texto y `.docx`, y pide tu confirmación antes de enviar su texto a la IA. Un PDF escaneado o un formato no compatible se explican.
+- **Documentos:** «Resume mi documento de bases de datos» o «Analiza este archivo». Lee en el equipo `.txt`, `.md`, `.csv`, PDF con texto y `.docx`, ofrece los archivos por relevancia (primero los que coinciden por nombre) y pide tu confirmación antes de enviar su texto a la IA. El resumen tiene dos o tres frases, de cinco a ocho ideas clave explicadas y los datos importantes (fechas, cifras, definiciones). Un PDF escaneado o un formato no compatible se explican.
 - **Pantalla:** una sola captura en memoria, comprimida y enviada al servicio de IA, y después descartada.
 - **Clima y hora:** condiciones actuales y pronóstico de Open-Meteo; hora del equipo. Sin ciudad en la solicitud se usa la de Ajustes, y si no hay ninguna, Nexium la pregunta y ofrece guardarla.
 - **Recordatorios:** en lenguaje natural, con aclaración si la fecha es ambigua. Se guardan en SQLite. En Windows, el aviso se queda en pantalla hasta que lo descartes.
-- **Historial:** solicitudes, categoría, estado y respuesta, sin audio ni imágenes.
+- **Historial:** solicitudes, categoría, estado y respuesta, sin audio ni imágenes. Cada solicitud tiene una sola entrada, que se actualiza hasta su estado final aunque pase por un permiso o una pregunta.
 
 ## Tecnologías
 
@@ -117,7 +117,7 @@ Las órdenes simples (hora, fecha, batería, CPU, RAM, red, Wi-Fi, modo oscuro y
 
 ### Notificaciones
 
-Los recordatorios avisan con una notificación del sistema mientras Nexium está abierto o en la bandeja. En Windows usan el escenario de recordatorio: el aviso aparece desplegado, con el botón **Abrir Nexium**, y se queda en pantalla hasta que lo descartes. Que aparezca en pantalla depende de la configuración de Windows:
+Los recordatorios avisan con una notificación del sistema mientras Nexium está abierto o en la bandeja. El título lleva un emoji según el contenido (💊 medicina, 💧 agua, 🗓️ reunión o cita, 📚 estudio o entrega, 🛒 compras, 🏃 ejercicio y 🔔 en el resto), elegido en el equipo sin IA. En Windows usan el escenario de recordatorio: el aviso aparece desplegado, con el botón **Abrir Nexium**, que abre Recordatorios con ese recordatorio resaltado, y se queda en pantalla hasta que lo descartes. Que aparezca en pantalla depende de la configuración de Windows:
 
 - En **Configuración > Sistema > Notificaciones**, las notificaciones deben estar activadas y, en la lista de aplicaciones, Nexium debe tener activado **Mostrar banners de notificación**.
 - Con **No molestar** activado, Windows solo muestra los avisos de las aplicaciones y recordatorios que permitas en **Establecer notificaciones prioritarias**. Si no, el aviso va directamente al centro de notificaciones.
@@ -155,6 +155,8 @@ cargo run --example ai_live -- frases
 ```bash
 npm run tauri build
 ```
+
+whisper.cpp se compila optimizado también en distribución gracias a la característica `force-debug` de `whisper-rs-sys` (sin ella, con MSVC quedaba sin optimizar y cada transcripción tardaba unos 13 s; ver `docs/RENDIMIENTO.md`). La CI lo comprueba en Windows.
 
 Cada envío a `main` compila instaladores en GitHub Actions (`.msi`, `.exe`, `.dmg`, `.deb`, `.AppImage`) y los deja en "Artifacts".
 

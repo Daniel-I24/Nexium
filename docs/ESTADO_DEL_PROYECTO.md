@@ -1,8 +1,23 @@
 # Nexium: estado del proyecto
 
-Última actualización: 15 de noviembre de 2026.
+Última actualización: 21 de noviembre de 2026.
 
 **Etapa actual:** plan de cierre para la presentación. **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas, revisión final del 13 de noviembre y correcciones de la prueba manual del 15 de noviembre** (abajo). No queda nada pendiente de código para una fase posterior. Falta la prueba manual final del propietario con la app instalada: `docs/PLAN_PRUEBAS_MANUALES.md`.
+
+## Correcciones tras la prueba G1 a G7 (21 de noviembre de 2026)
+
+La prueba del 15 de noviembre dio por correctos G1, G2, G5 y G6. Lo demás se corrigió así; la prueba corta de lo corregido es H1 a H4 en `docs/PLAN_PRUEBAS_MANUALES.md`.
+
+| Punto | Qué fallaba | Corrección |
+|---|---|---|
+| Voz | Unos 13 s de transcripción por orden en la app instalada; 17 s más al interpretar con IA | whisper.cpp se compilaba sin optimizar en distribución (`/Od` con MSVC). Corregido con la característica `force-debug` de `whisper-rs-sys` y comprobado en la CI. Además: filtro antes de pasar a 16 kHz, recorte del silencio, normalización del volumen, un hilo por núcleo físico y límite de 10 s para interpretar con IA. Detalle en `docs/RENDIMIENTO.md` |
+| Documentos | Resumen demasiado breve; «mi documento de prueba» ofrecía archivos que solo mencionaban la palabra | Resumen de 2 o 3 frases, de 5 a 8 ideas explicadas y datos importantes. Si algún nombre coincide, se descarta lo encontrado solo por contenido; se ordena por relevancia y solo se preselecciona una coincidencia clara |
+| Historial | Una solicitud creaba varias entradas (pendiente de autorización, de confirmación, completada; «Falta la ciudad») | Lo que continúa una solicitud actualiza su misma entrada hasta el estado final, también en la conversación. Cancelar la cierra como cancelada |
+| Notificaciones | «Abrir Nexium» solo mostraba la ventana | Abre Recordatorios con ese recordatorio a la vista, con el foco y un destello breve. El título lleva un emoji según el contenido, elegido sin IA |
+
+**Limpieza.** Eliminado `examples/voice_check.rs` (lo cubren `voice_record`, `voice_pipeline_bench` y la prueba con audio real). Las pruebas largas pasan a archivos propios junto a su módulo y `models` se divide por temas: ningún archivo de código pasa de unas 370 líneas. No quedan funciones, tipos ni exportaciones sin uso, y todas las dependencias se usan.
+
+**Pruebas nuevas.** Grabación real a 48 kHz y en estéreo por la cadena de cpal hasta Whisper (`a_48k_stereo_recording_reaches_whisper_as_16k_mono_voice`) y transcripción con modelo en menos de 2 s (`tests/voice_real_audio.rs`, ignorada sin modelo); recorte, normalización y filtro del audio; hilos de Whisper; límites de tiempo de la IA en la app y en el servidor; relevancia y preselección de documentos; resumen con datos importantes; una entrada por solicitud (núcleo e interfaz); emoji del aviso y apertura del recordatorio.
 
 ## Correcciones tras la prueba manual final (15 de noviembre de 2026)
 

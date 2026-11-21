@@ -27,6 +27,58 @@ Instalador: descárgalo de la última ejecución de [CI](https://github.com/Dani
 | 17 | Analizar pantalla con una ventana sin datos personales | Aviso nombrando a Google Gemini antes de capturar; responde sobre esa ventana |
 | 18 | Revisar el Historial | Aparecen las solicitudes con su estado escrito y con icono, y se pueden filtrar y eliminar |
 
+## Prueba manual de lo corregido (21 de noviembre de 2026, app instalada)
+
+Desinstala la versión anterior e instala la nueva con el `.exe` de `src-tauri\target\release\bundle\nsis` que genera `compilar-distribucion.cmd`. Anota **Correcto**, **Falla** (con lo que viste) o **No probado**.
+
+### H1. Voz: cuatro frases y sus tiempos
+
+Pulsa Hablar, di cada frase y pulsa Terminar. Después abre `%APPDATA%\io.github.daniel-i24.nexium\rendimiento.log` y copia la última línea de cada una.
+
+| Frase | Transcripción que muestra Nexium | Transcripción (ms) | Total (ms) | Resultado |
+|---|---|---|---|---|
+| «¿Cuánta batería tengo?» | | | | |
+| «¿Cuánta RAM estoy usando?» | | | | |
+| «¿Qué hora es?» | | | | |
+| «¿A qué red wifi estoy conectado?» | | | | |
+
+Esperado: cada transcripción por debajo de 2 000 ms y cada total por debajo de 3 000 ms; las cuatro resueltas «sin IA».
+
+### H2. Resumen de un documento
+
+Escribe «Resume mi documento de prueba» (con `documento-prueba.pdf` en una carpeta autorizada).
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Candidatos | Solo documentos cuyo nombre coincide; ningún `.txt` que solo mencione «prueba» por dentro | |
+| Preselección | Si hay uno claro, viene marcado | |
+| Resumen | De 2 a 3 frases | |
+| Ideas clave | De 5 a 8, cada una con su nombre en negrita y una explicación breve | |
+| Datos importantes | Fechas, cifras o definiciones del documento, si las tiene | |
+
+### H3. Historial con una sola entrada por solicitud
+
+1. En Ajustes, quita las carpetas autorizadas. Escribe «Resume mi documento de prueba», permite Documentos y Escritorio y confirma el resumen.
+2. Borra la ciudad para el clima, escribe «Dame el clima en la ciudad en la que me encuentro» y da una ciudad.
+3. Escribe otra solicitud que pida permiso y pulsa Cancelar.
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Historial, paso 1 | Una sola entrada, «Resume mi documento de prueba», Completada | |
+| Historial, paso 2 | Una sola entrada, la solicitud original, Completada; ninguna «Falta la ciudad» pendiente | |
+| Historial, paso 3 | Una sola entrada, Cancelada | |
+| Conversación | La respuesta final sustituye a la pregunta pendiente: la cinta no repite la solicitud | |
+
+### H4. La notificación abre su recordatorio
+
+Crea «Recuérdame tomar agua dentro de dos minutos» y deja Nexium en la bandeja.
+
+| Comprobación | Esperado | Resultado |
+|---|---|---|
+| Título | «💧 Recordatorio de Nexium» | |
+| Abrir Nexium | La ventana se abre en Recordatorios, con ese recordatorio a la vista, con el foco y un destello amarillo breve | |
+| Otro emoji | Repite con «Recuérdame estudiar para el parcial…»: «📚 Recordatorio de Nexium» | |
+
 ## Prueba manual de lo corregido (15 de noviembre de 2026, app instalada)
 
 Instala con el `.exe` de `src-tauri\target\release\bundle\nsis` que genera `compilar-distribucion.cmd`. Para cada caso anota **Correcto**, **Falla** (con lo que viste) o **No probado**.

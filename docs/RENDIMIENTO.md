@@ -90,6 +90,48 @@ Objetivos: una orden local por voz en menos de 3 s en total, una orden escrita l
 
 **IA.** La mediana ya estaba en 1,2 s (de 1,0 a 2,7 s, las 25 frases correctas), por debajo de los 3 s. Mientras la IA trabaja, la barra dice qué hace: «Interpretando tu solicitud…» o «Analizando la imagen…».
 
+## La voz en la app instalada: 21 de noviembre de 2026
+
+La prueba manual dio unos 13 s de transcripción por orden en la app instalada (`rendimiento.log`: «transcripción 13186 ms»), frente a 1 s en las mediciones del 14 de noviembre.
+
+**Causa.** Las mediciones anteriores usaban la compilación de desarrollo; la app instalada es la de distribución. `whisper-rs-sys` compila whisper.cpp con CMake y fija la configuración Release. En el perfil `release`, el crate `cmake` sustituye con MSVC las banderas de esa configuración por las de `cc` y descarta a propósito las de optimización: whisper.cpp quedaba en `/Od`, sin optimizar (en el proyecto de Visual Studio, `Optimization` vacío en Release). En desarrollo la configuración elegida es otra y conservaba `/O2`. El micrófono, la conversión a 16 kHz y la mezcla a un canal eran correctos.
+
+**Corrección.** La característica `force-debug` de `whisper-rs-sys` hace que la distribución se compile como el desarrollo: `/O2` en Windows y `-O2` en Linux y macOS. La CI comprueba en Windows, tras compilar los instaladores, que whisper.cpp lleva `/O2`. Además:
+
+- El paso a 16 kHz promedia las muestras que cubre (filtro paso bajo), en lugar de interpolar entre dos.
+- Antes de transcribir se recorta el silencio del principio y del final, con 0,3 s de margen, y se sube una grabación baja hasta un pico útil (ganancia máxima 8, sin saturar).
+- Whisper usa un hilo por núcleo físico, hasta 8 (en este equipo, 6, igual que antes).
+- Se mantienen el español forzado, la decodificación voraz (sin búsqueda en haz), sin reintentos de temperatura, `audio_ctx` proporcional a la duración y el contexto de vocabulario.
+- Interpretar con IA nunca espera más de 10 s: el servidor corta a los 9 s con reintento incluido (antes, hasta 22 s; en la prueba manual, 17 s) y la app a los 10 s, con un error claro.
+
+**Mediciones con el ejecutable de distribución**, mismos 30 clips de órdenes, este equipo con batería:
+
+| Medida | Antes (whisper.cpp en `/Od`) | Después |
+|---|---|---|
+| Orden local por voz: mediana | 12 920 ms | 1 164 ms |
+| Orden local por voz: máximo | 16 177 ms | 1 747 ms |
+| Órdenes resueltas sin IA (de 30) | 26 | 26 |
+
+`tests/voice_real_audio.rs` transcribe una grabación real a 48 kHz y en estéreo por la misma cadena y exige, en release, menos de 2 s; `cargo test --release --test voice_real_audio -- --ignored` con `NEXIUM_WHISPER_MODEL`.
+
+**Modo de energía.** Todas las mediciones de este equipo se hicieron con batería. La diferencia de 13 s a 1 s es la optimización del compilador, no el modo de energía: los mismos clips, con la misma batería, pasan de un tiempo a otro solo al cambiar de compilación.
+
+## Medición final: 21 de noviembre de 2026
+
+Ejecutable de distribución sin instalar, mismo método que la línea base, con batería.
+
+| Medida | Línea base (11 nov.) | 15 nov. | 21 nov. |
+|---|---|---|---|
+| Instalador NSIS | 3,48 MiB | 4,55 MiB | 4,54 MiB |
+| Instalador MSI | 4,67 MiB | 6,28 MiB | 6,20 MiB |
+| Ejecutable `nexium.exe` | 11,1 MiB | 16,9 MiB | 15,5 MiB |
+| Arranque | 527 a 573 ms | 579 a 895 ms | 688 a 806 ms (2 326 ms el primero, en frío) |
+| Memoria privada en reposo | 178 MB | 198 MB | 176 MB |
+| CPU en reposo | 0,44 % de un núcleo | 0,49 a 0,65 % | 0,70 % |
+| Orden local por voz, mediana (30 clips) | | 12 920 ms en la app instalada | 1 164 ms |
+
+El tamaño y el arranque siguen en lo esperado; la memoria vuelve a la línea base. La medida que cambia es la voz: ver la sección anterior.
+
 ## Al terminar las correcciones: 15 de noviembre de 2026
 
 Commit `805b042`, ejecutable de distribución sin instalar, mismo método que la línea base (cinco arranques, memoria tras 20 s en reposo, CPU durante 60 s). **El equipo estaba con batería**, no conectado a la corriente como en la línea base: los tiempos pueden ser algo peores por eso.
