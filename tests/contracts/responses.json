@@ -148,6 +148,7 @@
       "task": "summarize",
       "summary": "Guía de la asignatura.",
       "points": ["Tres unidades.", "Dos parciales y un proyecto."],
+      "details": ["Parcial 1: 30 %."],
       "truncated": true
     }
   }

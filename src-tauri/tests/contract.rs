@@ -272,6 +272,7 @@ fn document_analysis() {
                 task: DocumentTask::Summarize,
                 summary: "Guía de la asignatura.".into(),
                 points: vec!["Tres unidades.".into(), "Dos parciales y un proyecto.".into()],
+                details: vec!["Parcial 1: 30 %.".into()],
                 truncated: true,
             },
         ),

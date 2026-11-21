@@ -132,10 +132,13 @@ const responses: Record<string, () => AssistantResponse> = {
       task: "summarize",
       summary: "El informe describe el diseño de la base de datos de una biblioteca universitaria y justifica cada decisión de normalización.",
       points: [
-        "Parte de un modelo entidad-relación con nueve entidades.",
-        "Normaliza las tablas hasta la tercera forma normal.",
-        "Propone índices para las consultas más frecuentes de préstamo.",
+        "Modelo entidad-relación: parte de nueve entidades, entre ellas Libro, Ejemplar, Socio y Préstamo.",
+        "Normalización: lleva las tablas hasta la tercera forma normal para evitar datos repetidos.",
+        "Índices: propone índices para las consultas más frecuentes de préstamo y devolución.",
+        "Restricciones: un socio no puede tener más de cinco préstamos activos a la vez.",
+        "Una idea sin nombre propio también se muestra completa, aunque sea larga y no tenga dos puntos.",
       ],
+      details: ["Entrega final: 28 de noviembre de 2026.", "Peso en la nota: 40 %.", "Tercera forma normal: ninguna columna depende de otra que no sea la clave."],
       truncated: true,
     }),
 };

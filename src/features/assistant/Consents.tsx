@@ -159,28 +159,3 @@ export function DocumentConsent({ task, provider, candidates: found, maxCharacte
     </div>
   );
 }
-
-/** Resumen o análisis de un documento, con el formato estructurado de Nexium. */
-export function DocumentAnalysisView({ task, summary, points, truncated }: { task: DocumentTask; summary: string; points: string[]; truncated: boolean }) {
-  return (
-    <div className="flex max-w-reading flex-col gap-5">
-      <p className="m-0 wrap-anywhere text-lg font-semibold">{summary}</p>
-      {points.length > 0 && (
-        <section className="flex flex-col gap-1">
-          <h2 className="m-0 text-sm font-medium text-muted">{task === "summarize" ? "Ideas clave" : "Observaciones"}</h2>
-          <ul className="m-0 list-none p-0">
-            {points.map((point, index) => (
-              <li key={index} className="flex gap-3 border-t border-hairline py-2 text-md">
-                <span aria-hidden="true" className="font-mono text-muted">
-                  {index + 1}
-                </span>
-                <span className="min-w-0 wrap-anywhere">{point}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {truncated && <p className="m-0 text-sm text-muted">El documento es largo: solo se envió su principio, y el resumen se basa en esa parte.</p>}
-    </div>
-  );
-}

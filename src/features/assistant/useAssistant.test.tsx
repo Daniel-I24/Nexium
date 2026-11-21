@@ -59,7 +59,7 @@ describe("useAssistant", () => {
   });
 
   it("confirmar un documento lo envía por su identificador, nunca por su ruta", async () => {
-    invoke.mockResolvedValueOnce(reply({ kind: "documentAnalysis", fileName: "a.pdf", task: "summarize", summary: "s", points: [], truncated: false }));
+    invoke.mockResolvedValueOnce(reply({ kind: "documentAnalysis", fileName: "a.pdf", task: "summarize", summary: "s", points: [], details: [], truncated: false }));
     const { result } = renderHook(() => useAssistant());
     await act(() => result.current.analyzeDocument({ token: "t-1", name: "a", extension: ".pdf", location: "Documentos" }, "summarize"));
     expect(invoke).toHaveBeenCalledWith("document_analyze", { token: "t-1", task: "summarize" });

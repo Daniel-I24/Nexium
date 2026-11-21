@@ -125,6 +125,7 @@ impl Assistant {
                     task,
                     summary: answer.value.summary,
                     points: answer.value.points,
+                    details: answer.value.details,
                     truncated: extracted.truncated,
                 },
             ),

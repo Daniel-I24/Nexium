@@ -93,6 +93,7 @@ impl AiProvider for FakeAi {
             value: crate::models::DocumentSummary {
                 summary: "Trata de bases de datos.".into(),
                 points: vec!["Explica la normalización.".into()],
+                details: vec![],
             },
             tokens: 11,
         })

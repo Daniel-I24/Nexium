@@ -19,8 +19,8 @@ const MAX_TERMS: usize = 8;
 const MAX_TEXT: usize = 300;
 const MAX_CAUSE: usize = 600;
 const MAX_STEPS: usize = 3;
-/// Puntos clave de un documento, como mucho.
-pub const MAX_POINTS: usize = 5;
+/// Ideas clave y datos importantes de un documento, como mucho.
+pub const MAX_POINTS: usize = 8;
 
 /// Marcas de bloque al inicio de una línea: títulos, citas, viñetas y numeración.
 static BLOCK_MARK: LazyLock<Regex> =
@@ -292,13 +292,16 @@ pub fn parse_screen_analysis(text: &str) -> Result<ScreenAnalysis, AiError> {
 struct RawDocumentSummary {
     summary: String,
     points: Vec<String>,
+    #[serde(default)]
+    details: Vec<String>,
 }
 
-/// Resumen de una o dos frases y hasta cinco puntos clave. Cualquier otra forma se rechaza.
+/// Resumen de dos o tres frases, hasta ocho ideas clave y hasta ocho datos importantes.
+/// Cualquier otra forma se rechaza.
 pub fn parse_document_summary(text: &str) -> Result<DocumentSummary, AiError> {
     let raw: RawDocumentSummary =
         serde_json::from_str(text.trim()).map_err(|_| AiError::InvalidResponse)?;
-    if raw.points.len() > MAX_POINTS {
+    if raw.points.len() > MAX_POINTS || raw.details.len() > MAX_POINTS {
         return Err(AiError::InvalidResponse);
     }
     Ok(DocumentSummary {
@@ -307,6 +310,11 @@ pub fn parse_document_summary(text: &str) -> Result<DocumentSummary, AiError> {
             .points
             .into_iter()
             .filter_map(|point| prose(Some(point), MAX_TEXT))
+            .collect(),
+        details: raw
+            .details
+            .into_iter()
+            .filter_map(|detail| prose(Some(detail), MAX_TEXT))
             .collect(),
     })
 }
@@ -327,6 +335,24 @@ mod tests {
             "Tom & Jerry ¿sí?"
         );
         assert_eq!(decode_entities("dos\nlíneas"), "dos\nlíneas");
+    }
+
+    #[test]
+    fn a_document_summary_keeps_its_ideas_and_data_and_rejects_too_many() {
+        let summary = parse_document_summary(
+            r#"{"summary":"Guía de **Bases de datos**. Tiene tres unidades.","points":["Normalización: evita datos repetidos."],"details":["Parcial 1: 30 %."]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            summary.summary,
+            "Guía de Bases de datos. Tiene tres unidades."
+        );
+        assert_eq!(summary.points, ["Normalización: evita datos repetidos."]);
+        assert_eq!(summary.details, ["Parcial 1: 30 %."]);
+        let nine = serde_json::json!({ "summary": "s", "points": vec!["p"; 9], "details": [] });
+        assert!(parse_document_summary(&nine.to_string()).is_err());
+        // Una respuesta anterior, sin datos importantes, sigue siendo válida.
+        assert!(parse_document_summary(r#"{"summary":"s","points":[]}"#).is_ok());
     }
 
     fn parse(text: &str) -> Result<Intent, AiError> {

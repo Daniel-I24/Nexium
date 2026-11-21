@@ -71,7 +71,7 @@ export type ResponseBody =
   | { kind: "folderConsent"; folders: string[]; pendingRequest: string }
   | { kind: "captureRequest"; question: string }
   | { kind: "documentConsent"; task: DocumentTask; provider: string; candidates: DocumentCandidate[]; maxCharacters: number; note: string | null; preselected: string | null }
-  | { kind: "documentAnalysis"; fileName: string; task: DocumentTask; summary: string; points: string[]; truncated: boolean }
+  | { kind: "documentAnalysis"; fileName: string; task: DocumentTask; summary: string; points: string[]; details: string[]; truncated: boolean }
   | { kind: "weatherCityQuestion"; when: WeatherWhen }
   | { kind: "navigate"; section: Section }
   | { kind: "error"; code: string; message: string; hint: string | null };

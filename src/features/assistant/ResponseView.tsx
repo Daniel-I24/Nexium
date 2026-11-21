@@ -11,7 +11,8 @@ import type { Attribution, AssistantResponse, DocumentCandidate, DocumentTask, R
 
 import { isCompleteLocal, toLocalInput } from "@/utils/dates";
 
-import { DocumentAnalysisView, DocumentConsent, FolderConsent } from "./Consents";
+import { DocumentConsent, FolderConsent } from "./Consents";
+import { DocumentAnalysisView } from "./DocumentAnalysis";
 import { FileList } from "./FileList";
 import { WeatherCityQuestion } from "./WeatherCityQuestion";
 import type { FolderChoice } from "./useAssistant";
@@ -203,7 +204,7 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
     case "documentConsent":
       return <DocumentConsent {...body} onAnalyze={actions.onAnalyzeDocument} onDismiss={actions.onDismiss} />;
     case "documentAnalysis":
-      return <DocumentAnalysisView task={body.task} summary={body.summary} points={body.points} truncated={body.truncated} />;
+      return <DocumentAnalysisView task={body.task} summary={body.summary} points={body.points} details={body.details} truncated={body.truncated} />;
     case "weatherCityQuestion":
       return <WeatherCityQuestion when={body.when} onAsk={(request) => actions.onChooseSuggestion({ label: request, request })} />;
     case "navigate":

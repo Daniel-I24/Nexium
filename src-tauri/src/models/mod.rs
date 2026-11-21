@@ -221,6 +221,7 @@ pub enum ResponseBody {
         task: DocumentTask,
         summary: String,
         points: Vec<String>,
+        details: Vec<String>,
         /// Solo se envió el principio del documento.
         truncated: bool,
     },
@@ -357,6 +358,8 @@ pub struct DocumentCandidate {
 pub struct DocumentSummary {
     pub summary: String,
     pub points: Vec<String>,
+    /// Fechas, cifras, plazos o definiciones que aparecen en el documento.
+    pub details: Vec<String>,
 }
 
 /// Secciones de la app que se pueden abrir con una orden.
