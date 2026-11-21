@@ -162,6 +162,20 @@ pub struct Transcript {
     pub transcription: Duration,
 }
 
+/// Un hilo por núcleo físico, hasta 8: los hilos lógicos de un mismo núcleo no aceleran Whisper y le restan
+/// CPU al resto del equipo. Si el sistema no lo dice, la mitad de los lógicos.
+pub fn whisper_threads() -> i32 {
+    let physical = sysinfo::System::physical_core_count().ok().or_else(|| {
+        std::thread::available_parallelism()
+            .ok()
+            .map(|n| (n.get() / 2).max(1))
+    });
+    physical
+        .and_then(|cores| i32::try_from(cores).ok())
+        .unwrap_or(4)
+        .clamp(1, 8)
+}
+
 fn run_whisper(
     samples: &[f32],
     context: &WhisperContext,
@@ -173,10 +187,7 @@ fn run_whisper(
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     params.set_language(Some("es"));
     params.set_audio_ctx(audio_context(samples.len()));
-    params.set_n_threads(
-        std::thread::available_parallelism()
-            .map_or(4, |n| i32::try_from(n.get() / 2).unwrap_or(4).clamp(1, 8)),
-    );
+    params.set_n_threads(whisper_threads());
     params.set_print_progress(false);
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
@@ -322,6 +333,14 @@ mod tests {
         assert!(!is_prompt_echo(
             "Recuérdame revisar el clima de la pantalla del documento"
         ));
+    }
+
+    #[test]
+    fn whisper_uses_one_thread_per_physical_core_up_to_eight() {
+        assert!((1..=8).contains(&whisper_threads()));
+        if let Ok(cores) = sysinfo::System::physical_core_count() {
+            assert_eq!(whisper_threads(), i32::try_from(cores.min(8)).unwrap());
+        }
     }
 
     #[test]

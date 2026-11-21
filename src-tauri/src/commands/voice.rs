@@ -90,6 +90,8 @@ pub async fn voice_stop<R: Runtime>(
     speech::check_audible(&samples, &device)
         .and_then(|()| state.ready_model(model))
         .map_err(|error| AppError::Operation(error.to_string()))?;
+    // Sin el silencio de los extremos y a volumen útil: menos que transcribir y menos texto inventado.
+    let samples = speech::prepare(&samples);
     let cancel = state.fresh_cancel();
     let text = state
         .speech

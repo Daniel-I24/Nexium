@@ -16,7 +16,9 @@ use crate::{
 };
 
 /// Mayores que los del servidor, que puede reintentar una vez: quien corta primero es él.
-const INTERPRET_TIMEOUT: Duration = Duration::from_secs(45);
+/// Interpretar una orden no puede hacer esperar más: el servidor corta a los 9 s (con un segundo intento
+/// solo si el primero falló pronto) y la app, a los 10 s, con un error claro.
+pub const INTERPRET_TIMEOUT: Duration = Duration::from_secs(10);
 const VISION_TIMEOUT: Duration = Duration::from_secs(130);
 const DOCUMENT_TIMEOUT: Duration = Duration::from_secs(90);
 const INSTALL_HEADER: &str = "X-Nexium-Install";
@@ -198,6 +200,11 @@ mod tests {
     };
 
     const INSTALL: &str = "3f2b8a10-5c4e-4d7a-9b1c-0a1b2c3d4e5f";
+
+    #[test]
+    fn interpreting_never_waits_more_than_ten_seconds() {
+        assert!(INTERPRET_TIMEOUT <= Duration::from_secs(10));
+    }
 
     fn provider(server: &MockServer) -> NexiumServer {
         NexiumServer::new(Some(&server.uri()), INSTALL.into())

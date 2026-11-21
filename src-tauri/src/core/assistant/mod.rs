@@ -83,7 +83,7 @@ impl Assistant {
                 Some(format!("El fallo está en el servicio (Google o el servidor de Nexium), no en tu equipo ni en tu conexión. Vuelve a intentarlo en unos minutos. {local_hint}")),
             ),
             AiError::Network => ("Sin conexión con el servidor de IA de Nexium.".into(), Some(format!("Comprueba tu conexión a Internet. {local_hint}"))),
-            AiError::Timeout => ("El servidor de IA tardó demasiado en responder.".into(), Some(format!("Suele ser una saturación pasajera del servicio. Vuelve a intentarlo. {local_hint}"))),
+            AiError::Timeout => ("La IA tardó demasiado en responder y Nexium dejó de esperar.".into(), Some(format!("Suele ser una saturación pasajera del servicio. Vuelve a intentarlo en un momento. {local_hint}"))),
             AiError::InvalidResponse => ("No pude interpretar la respuesta del modelo.".into(), Some("Prueba a escribir la solicitud de otra forma.".into())),
             AiError::Rejected(reason) => (format!("El servicio de IA rechazó la solicitud. {reason}"), None),
             AiError::Cancelled => ("Operación cancelada.".into(), None),

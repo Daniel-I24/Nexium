@@ -9,33 +9,7 @@ use std::{
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::Serialize;
 
-use super::{SpeechError, MAX_RECORDING_SECONDS, SAMPLE_RATE};
-
-/// Convierte a 16 kHz, el formato que exige Whisper.
-pub fn resample(samples: &[f32], from_rate: u32) -> Vec<f32> {
-    if from_rate == SAMPLE_RATE || samples.is_empty() {
-        return samples.to_vec();
-    }
-    let ratio = f64::from(from_rate) / f64::from(SAMPLE_RATE);
-    let length = (samples.len() as f64 / ratio) as usize;
-    (0..length)
-        .map(|index| {
-            let position = index as f64 * ratio;
-            let base = position as usize;
-            let next = samples.get(base + 1).copied().unwrap_or(samples[base]);
-            let fraction = (position - base as f64) as f32;
-            samples[base] + (next - samples[base]) * fraction
-        })
-        .collect()
-}
-
-pub fn level_of(samples: &[f32]) -> f32 {
-    if samples.is_empty() {
-        return 0.0;
-    }
-    let energy = samples.iter().map(|sample| sample * sample).sum::<f32>() / samples.len() as f32;
-    (energy.sqrt() * 6.0).min(1.0)
-}
+use super::{level_of, resample, SpeechError, MAX_RECORDING_SECONDS};
 
 struct CaptureBuffer {
     samples: Vec<f32>,
@@ -501,26 +475,6 @@ mod tests {
     }
 
     #[test]
-    fn resampling_keeps_duration() {
-        let one_second = vec![0.5; 48_000];
-        let result = resample(&one_second, 48_000);
-        assert_eq!(result.len(), 16_000);
-        assert!((result[100] - 0.5).abs() < 1e-5);
-    }
-
-    #[test]
-    fn resampling_at_the_same_rate_changes_nothing() {
-        assert_eq!(resample(&[0.1, 0.2], SAMPLE_RATE), vec![0.1, 0.2]);
-    }
-
-    #[test]
-    fn level_is_bounded() {
-        assert_eq!(level_of(&[]), 0.0);
-        assert!((0.0..=1.0).contains(&level_of(&[1.0; 100])));
-        assert!(level_of(&[0.0; 100]) < 0.01);
-    }
-
-    #[test]
     fn a_full_buffer_stops_accepting_audio() {
         let buffer = Mutex::new(CaptureBuffer {
             samples: vec![],
@@ -546,5 +500,69 @@ mod tests {
         push_samples(&buffer, &[0.5f32, 0.5], |s| s, &level, &limit, 100);
         assert_eq!(buffer.lock().unwrap().samples.len(), 2);
         assert_eq!(*limit_hits.lock().unwrap(), 1);
+    }
+
+    /// Lee un WAV PCM de 16 bits: frecuencia, canales y muestras intercaladas.
+    pub(crate) fn read_wav(bytes: &[u8]) -> (u32, usize, Vec<i16>) {
+        let format = bytes
+            .windows(4)
+            .position(|w| w == b"fmt ")
+            .expect("chunk fmt")
+            + 8;
+        let channels = usize::from(u16::from_le_bytes([bytes[format + 2], bytes[format + 3]]));
+        let rate = u32::from_le_bytes(bytes[format + 4..format + 8].try_into().unwrap());
+        let data = bytes
+            .windows(4)
+            .position(|w| w == b"data")
+            .expect("chunk data")
+            + 8;
+        let samples = bytes[data..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| i16::from_le_bytes(*pair))
+            .collect();
+        (rate, channels, samples)
+    }
+
+    #[test]
+    fn a_48k_stereo_recording_reaches_whisper_as_16k_mono_voice() {
+        let (rate, channels, data) = read_wav(include_bytes!(
+            "../../../tests/audio/bateria-48k-estereo.wav"
+        ));
+        assert_eq!((rate, channels), (48_000, 2));
+        let buffer = Mutex::new(CaptureBuffer {
+            samples: vec![],
+            pending_level: vec![],
+            channels,
+            limit: rate as usize * MAX_RECORDING_SECONDS,
+            limit_reached: false,
+        });
+        let readings = Arc::new(Mutex::new(0));
+        let counter = readings.clone();
+        let (level, limit): (LevelCallback, LimitCallback) = (
+            Arc::new(move |_| *counter.lock().unwrap() += 1),
+            Arc::new(|| {}),
+        );
+        // Como cpal: bloques de 10 ms con los dos canales intercalados.
+        for block in data.chunks(480 * channels) {
+            push_samples(
+                &buffer,
+                block,
+                |s| f32::from(s) / 32768.0,
+                &level,
+                &limit,
+                rate as usize / 20,
+            );
+        }
+        let mono = std::mem::take(&mut buffer.lock().unwrap().samples);
+        assert_eq!(mono.len(), data.len() / channels);
+        let audio = super::super::prepare(&resample(&mono, rate));
+        let seconds = audio.len() as f32 / super::super::SAMPLE_RATE as f32;
+        assert!((1.0..=2.2).contains(&seconds), "{seconds} s");
+        let peak = audio.iter().fold(0.0f32, |p, s| p.max(s.abs()));
+        assert!((0.85..=0.95).contains(&peak), "{peak}");
+        // Una lectura de nivel cada 50 ms de grabación.
+        assert!((40..=44).contains(&*readings.lock().unwrap()));
     }
 }

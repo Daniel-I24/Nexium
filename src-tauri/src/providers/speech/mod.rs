@@ -1,5 +1,6 @@
 //! Voz local: micrófono con cpal y transcripción con Whisper. El audio nunca sale del equipo ni se guarda.
 
+mod audio;
 mod catalog;
 mod microphone;
 mod whisper;
@@ -12,6 +13,7 @@ use std::{
 use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
 
+pub use audio::*;
 pub use catalog::*;
 pub use microphone::*;
 pub use whisper::*;

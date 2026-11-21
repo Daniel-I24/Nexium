@@ -2,6 +2,7 @@ import { env, exports } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Env, OperationLimits } from "../src/env";
+import contract from "../src/ai-contract.json";
 import { callGemini } from "../src/gemini";
 import { handleRequest } from "../src/index";
 import { REAL_JPEG, REAL_PNG } from "./captures";
@@ -109,6 +110,13 @@ describe("operaciones", () => {
       { type: "text", text: 'Dime "qué" es \\ esto' },
       { type: "image", data: JPEG, mime_type: "image/jpeg" },
     ]);
+  });
+});
+
+describe("tiempos", () => {
+  it("interpretar una orden nunca hace esperar más de 9 s, con reintento incluido", () => {
+    expect(contract.interpret.totalTimeoutMs).toBeLessThanOrEqual(9_000);
+    expect(contract.interpret.timeoutMs).toBeLessThanOrEqual(6_000);
   });
 });
 
