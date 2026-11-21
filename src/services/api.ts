@@ -64,6 +64,8 @@ export const events = {
   onDownload: (handler: (progress: DownloadProgress) => void): Promise<UnlistenFn> =>
     listen<DownloadProgress>("speech://download", (event) => handler(event.payload)),
   onRemindersChanged: (handler: () => void): Promise<UnlistenFn> => listen("reminders://changed", () => handler()),
+  /** «Abrir Nexium» en el aviso de un recordatorio. */
+  onOpenReminder: (handler: (id: number) => void): Promise<UnlistenFn> => listen<number>("reminders://open", (event) => handler(event.payload)),
 };
 
 /** Los errores de un comando llegan como texto en español ya listo para mostrar. */

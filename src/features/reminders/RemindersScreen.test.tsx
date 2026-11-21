@@ -73,3 +73,18 @@ describe("Recordatorios", () => {
     await act(async () => finish([]));
   });
 });
+
+describe("Recordatorios: abierto desde el aviso", () => {
+  it("el recordatorio del aviso recibe el foco y se resalta; los demás no", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    backend([reminder(1, "Llamar al banco", future), reminder(2, "Tomar agua", past, "notified")]);
+    render(<RemindersScreen onPickExample={vi.fn()} highlight={2} />);
+    const row = (await screen.findByText("Tomar agua")).closest("li") as HTMLElement;
+    expect(row).toHaveAttribute("aria-current", "true");
+    expect(row).toHaveFocus();
+    expect(row.querySelector("[data-highlight]")).toHaveClass("animate-highlight");
+    const other = screen.getByText("Llamar al banco").closest("li") as HTMLElement;
+    expect(other.querySelector("[data-highlight]")).toBeNull();
+  });
+});
+

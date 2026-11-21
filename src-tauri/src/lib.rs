@@ -33,7 +33,7 @@ use crate::{
         ai::{server::NexiumServer, AiProvider, AiStatusTracker},
         documents::DocumentOffers,
         files::{AuthorizedFolder, LocalFileSearch},
-        notification::{NotificationProvider, TauriNotifications},
+        notification::{reminder_title, NotificationProvider, TauriNotifications},
         speech::{SpeechProvider, WhisperSpeech},
         system::NativeSystemProvider,
         weather::{OpenMeteo, WeatherProvider},
@@ -167,8 +167,11 @@ fn start_reminder_scheduler<R: Runtime>(app: AppHandle<R>, reminders: ReminderSe
         loop {
             if let Ok(due) = reminders.take_due(Utc::now()) {
                 for reminder in &due {
-                    let _ =
-                        notifications.notify_reminder("Recordatorio de Nexium", &reminder.content);
+                    let _ = notifications.notify_reminder(
+                        &reminder_title(&reminder.content),
+                        &reminder.content,
+                        reminder.id,
+                    );
                 }
                 if !due.is_empty() {
                     let _ = app.emit("reminders://changed", ());

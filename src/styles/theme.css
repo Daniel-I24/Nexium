@@ -85,6 +85,8 @@
      un instante después. Nunca queda la zona vacía: el fondo es el mismo y las dos se cruzan. */
   --animate-section-out: section-out var(--transition-duration-fast) var(--ease-instrument) both;
   --animate-section-in: section-in var(--transition-duration-slow) var(--ease-enter) 50ms both;
+  /* Recordatorio abierto desde su aviso: la señal destella dos veces detrás de la fila (250 ms cada una). */
+  --animate-highlight: highlight var(--transition-duration-slow) var(--ease-instrument) 2 both;
   /* Progreso indeterminado mientras algo carga o procesa: el único movimiento continuo, y nunca sin texto al lado. */
   --animate-sweep: sweep 1.2s var(--ease-instrument) infinite;
 
@@ -135,6 +137,11 @@
   }
   @keyframes dialog-out {
     to { opacity: 0; transform: scale(0.98); }
+  }
+  @keyframes highlight {
+    0% { opacity: 0; }
+    50% { opacity: 0.5; }
+    100% { opacity: 0; }
   }
   @keyframes section-out {
     to { opacity: 0; transform: translateY(-0.25rem); }
