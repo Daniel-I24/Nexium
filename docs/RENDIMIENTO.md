@@ -116,6 +116,35 @@ La prueba manual dio unos 13 s de transcripción por orden en la app instalada (
 
 **Modo de energía.** Todas las mediciones de este equipo se hicieron con batería. La diferencia de 13 s a 1 s es la optimización del compilador, no el modo de energía: los mismos clips, con la misma batería, pasan de un tiempo a otro solo al cambiar de compilación.
 
+## La voz con grabaciones reales: 21 de noviembre de 2026
+
+Cuatro órdenes dichas por el propietario con su micrófono (Microphone Array, Realtek; 48 kHz, 2 canales, F32), grabadas con el mismo flujo de la app (`examples/voice_record.rs`) y borradas después de medir. Llegaban limpias: de 52 a 55 dB entre voz y ruido, picos de 0,23 a 0,66 y la voz entre 0,8 y 2,3 s dentro de los 5 s grabados. Equipo conectado a la corriente (plan «Turbo»).
+
+**`force-debug`, comprobado.** En `whisper-rs-sys` 0.15.0 (la que usa `whisper-rs` 0.16.0), `build.rs` solo hace dos cosas con esa característica: define `CMAKE_BUILD_TYPE=RelWithDebInfo` y añade `-DWHISPER_DEBUG`. Con Visual Studio, `CMAKE_BUILD_TYPE` no decide la configuración: se compila `--config Release`, y lo que cambia es que el crate `cmake` ya no pisa las banderas de Release. El registro de MSBuild muestra `/O2 /Ob2 /D NDEBUG` en cada archivo. No es una compilación de depuración. `WHISPER_DEBUG` solo añade mensajes de registro (unas 35 líneas en cuatro órdenes), que Nexium descarta con `install_logging_hooks`. En Linux y macOS, `RelWithDebInfo` es `-O2 -g`. La CI recompila whisper.cpp y `scripts/check-whisper-build.mjs` comprueba esas banderas reales.
+
+| Ejecutable de distribución | Transcripción por orden, mediana | Máximo | Órdenes sin IA |
+|---|---|---|---|
+| Sin `force-debug` (whisper.cpp en `/Od`, sin recorte) | 18 752 ms | 19 604 ms | 4 de 4 |
+| Con `force-debug` y la cadena actual | 1 074 ms | 1 166 ms | 4 de 4 |
+
+**Cada parámetro, con las mismas grabaciones** (`examples/voice_params_bench.rs`, mejor de dos repeticiones; la configuración de la app es la primera fila):
+
+| Variante | Mediana | Conclusión |
+|---|---|---|
+| Configuración de la app: español, voraz, sin reintentos, `audio_ctx`, 6 hilos, recorte y contexto de vocabulario | 986 ms | La elegida |
+| Sin recortar el silencio (5 s de audio) | 1 420 ms | El recorte ahorra unos 0,4 s |
+| Sin contexto de vocabulario | 869 ms | 0,1 s más rápido; con tu voz acierta igual, pero en los clips sintéticos resolvía 3 órdenes menos sin IA. Se mantiene |
+| Ventana completa de 30 s (sin `audio_ctx`) | 6 567 ms | `audio_ctx` es imprescindible |
+| Reintentos de temperatura (0,2) | 1 077 ms | Sin ventaja: siguen desactivados |
+| 4 hilos | 1 277 ms | |
+| 8 hilos | 1 003 ms | Igual que 6 |
+| 12 hilos (todos los lógicos) | 1 349 ms | Peor: los hilos lógicos compiten |
+| Idioma automático | 6 940 ms | Detectar el idioma cuesta 6 s: español forzado |
+
+**Una corrección más.** «¿A qué red wifi estoy conectado?» se transcribió como «Aquí RedWiFi estoy conectado» y la regla lo tomaba como Internet. Wi-Fi pegado a la palabra anterior ahora se separa antes de aplicar las reglas.
+
+**Objetivos en este equipo, con esta voz:** transcripción de una orden corta por debajo de 2 s (1,07 s de mediana y 1,17 s como máximo) y orden local completa por debajo de 3 s (transcripción más respuesta, como mucho 1,19 s).
+
 ## Medición final: 21 de noviembre de 2026
 
 Ejecutable de distribución sin instalar, mismo método que la línea base, con batería.
