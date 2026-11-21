@@ -22,7 +22,7 @@ function* walk(dir) {
 const sources = [];
 for (const name of readdirSync(buildRoot)) {
   if (!name.startsWith("whisper-rs-sys-")) continue;
-  const out = join(buildRoot, name, "out", "build");
+  const out = join(buildRoot, name, "out");
   try {
     statSync(out);
   } catch {
@@ -34,12 +34,25 @@ for (const name of readdirSync(buildRoot)) {
       sources.push({ file, text: readFileSync(file, "utf16le"), kind: "msvc" });
     } else if (normalized.endsWith("/flags.make") && /CMakeFiles\/(ggml|whisper)/.test(normalized)) {
       sources.push({ file, text: readFileSync(file, "utf8"), kind: "make" });
+    } else if (normalized.endsWith("/build.ninja")) {
+      // Con Ninja, las banderas de cada objetivo van en líneas "FLAGS = ...".
+      const flags = readFileSync(file, "utf8")
+        .split("\n")
+        .filter((line) => /^\s*FLAGS\s*=/.test(line))
+        .map((line) => line.replace(/^\s*FLAGS\s*=/, "C_FLAGS ="));
+      if (flags.length > 0) sources.push({ file, text: flags.join("\n"), kind: "make" });
     }
   }
 }
 
 if (sources.length === 0) {
   console.error(`No se encontraron las órdenes de compilación de whisper.cpp en ${buildRoot}. ¿Se recompiló whisper-rs-sys?`);
+  // Lo que sí hay, para poder diagnosticarlo desde el registro de la CI.
+  for (const name of readdirSync(buildRoot).filter((entry) => entry.startsWith("whisper-rs-sys-"))) {
+    const dir = join(buildRoot, name);
+    const files = [...walk(dir)].map((file) => file.slice(dir.length + 1).replaceAll("\\", "/"));
+    console.error(`${name}: ${files.length} archivos; ejemplos: ${files.filter((file) => /tlog|flags\.make|build\.ninja|CMakeCache/.test(file)).slice(0, 8).join(", ") || files.slice(0, 8).join(", ")}`);
+  }
   process.exit(1);
 }
 
