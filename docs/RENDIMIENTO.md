@@ -120,7 +120,12 @@ La prueba manual dio unos 13 s de transcripción por orden en la app instalada (
 
 Cuatro órdenes dichas por el propietario con su micrófono (Microphone Array, Realtek; 48 kHz, 2 canales, F32), grabadas con el mismo flujo de la app (`examples/voice_record.rs`) y borradas después de medir. Llegaban limpias: de 52 a 55 dB entre voz y ruido, picos de 0,23 a 0,66 y la voz entre 0,8 y 2,3 s dentro de los 5 s grabados. Equipo conectado a la corriente (plan «Turbo»).
 
-**`force-debug`, comprobado.** En `whisper-rs-sys` 0.15.0 (la que usa `whisper-rs` 0.16.0), `build.rs` solo hace dos cosas con esa característica: define `CMAKE_BUILD_TYPE=RelWithDebInfo` y añade `-DWHISPER_DEBUG`. Con Visual Studio, `CMAKE_BUILD_TYPE` no decide la configuración: se compila `--config Release`, y lo que cambia es que el crate `cmake` ya no pisa las banderas de Release. El registro de MSBuild muestra `/O2 /Ob2 /D NDEBUG` en cada archivo. No es una compilación de depuración. `WHISPER_DEBUG` solo añade mensajes de registro (unas 35 líneas en cuatro órdenes), que Nexium descarta con `install_logging_hooks`. En Linux y macOS, `RelWithDebInfo` es `-O2 -g`. La CI recompila whisper.cpp y `scripts/check-whisper-build.mjs` comprueba esas banderas reales.
+**`force-debug`, comprobado.** En `whisper-rs-sys` 0.15.0 (la que usa `whisper-rs` 0.16.0), `build.rs` solo hace dos cosas con esa característica: define `CMAKE_BUILD_TYPE=RelWithDebInfo` y añade `-DWHISPER_DEBUG`. Con Visual Studio, `CMAKE_BUILD_TYPE` no decide la configuración: se compila `--config Release`, y lo que cambia es que el crate `cmake` ya no pisa las banderas de Release. El registro de MSBuild muestra `/O2 /Ob2 /D NDEBUG` en cada archivo. No es una compilación de depuración. `WHISPER_DEBUG` solo añade mensajes de registro (unas 35 líneas en cuatro órdenes), que Nexium descarta con `install_logging_hooks`. En Linux y macOS, `RelWithDebInfo` es `-O2 -g`.
+
+**Verificación.** La CI comprueba con `cargo tree` que `whisper-rs-sys` se compila con `force-debug`; no lee el sistema de archivos, que depende de la caché y de la organización de carpetas de Cargo. La optimización real se verifica a mano, antes de cada versión, con el ejecutable de distribución:
+
+- `NEXIUM_WHISPER_MODEL=<modelo> cargo test --release --test voice_real_audio -- --ignored`: transcribe una grabación real a 48 kHz y en estéreo y falla si tarda 2 s o más (sin optimizar, tarda más de 10 s).
+- O `cargo run --release --example voice_params_bench -- <modelo> <carpeta de clips>`: debe dar alrededor de 1 s por orden corta.
 
 | Ejecutable de distribución | Transcripción por orden, mediana | Máximo | Órdenes sin IA |
 |---|---|---|---|
