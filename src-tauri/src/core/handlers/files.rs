@@ -74,7 +74,7 @@ impl FilesHandler {
             return Outcome::failed(Category::Files, "cancelled", "Búsqueda cancelada.", None);
         }
         if outcome.files.is_empty() {
-            let text = format!("No encontré archivos con \u{201c}{}\u{201d} en {places}. Busco por nombre y, en los archivos de texto, también por contenido.", describe_query(query));
+            let text = format!("No encontré archivos con «{}» en {places}. Busco por nombre y, en los archivos de texto, también por contenido.", describe_query(query));
             return Outcome::done(
                 Category::Files,
                 "Sin coincidencias",

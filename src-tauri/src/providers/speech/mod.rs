@@ -48,7 +48,7 @@ impl std::fmt::Display for SpeechError {
             Self::ModelDamaged => f.write_str("El modelo de voz está incompleto o dañado. Vuelve a descargarlo en Ajustes, sección Voz."),
             Self::ModelUnloadable => f.write_str("No se pudo cargar el modelo de voz. Suele deberse a falta de memoria: cierra otras aplicaciones y vuelve a intentarlo."),
             Self::NoAudio => f.write_str("La grabación quedó vacía. Pulsa Hablar, di tu solicitud y después pulsa Terminar."),
-            Self::Silent { device } => write!(f, "El micrófono \u{201c}{device}\u{201d} no captó ningún sonido. Comprueba que no esté silenciado y que sea el que usas."),
+            Self::Silent { device } => write!(f, "El micrófono «{device}» no captó ningún sonido. Comprueba que no esté silenciado y que sea el que usas."),
             Self::NoMicrophone(reason) | Self::Failed(reason) => f.write_str(reason),
             Self::Cancelled => f.write_str("Operación cancelada."),
         }

@@ -13,7 +13,7 @@ use windows::Win32::{
 
 use crate::models::{Reading, WifiInfo};
 
-const SSID_HIDDEN_NOTE: &str = "Windows oculta el nombre si no activas \u{201c}Permitir que las aplicaciones de escritorio accedan a tu ubicación\u{201d}.";
+const SSID_HIDDEN_NOTE: &str = "Windows oculta el nombre si no activas «Permitir que las aplicaciones de escritorio accedan a tu ubicación».";
 
 struct WlanHandle(HANDLE);
 

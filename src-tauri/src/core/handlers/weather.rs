@@ -47,7 +47,7 @@ impl WeatherHandler {
                 return Outcome::failed(
                     Category::Weather,
                     "cityNotFound",
-                    format!("No encontré la ciudad \u{201c}{city}\u{201d}."),
+                    format!("No encontré la ciudad «{city}»."),
                     None,
                 )
             }
