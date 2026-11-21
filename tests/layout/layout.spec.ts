@@ -125,7 +125,8 @@ for (const [name, open] of Object.entries(views)) {
   test(name, async ({ page }, info) => {
     await page.setViewportSize({ width: 1100, height: 720 });
     await page.goto("/tests/layout/harness.html");
-    await expect(page.getByRole("navigation", { name: "Secciones" })).toBeVisible();
+    // La primera carga compila la app en el servidor de desarrollo: en la CI puede pasar de 5 s.
+    await expect(page.getByRole("navigation", { name: "Secciones" })).toBeVisible({ timeout: 30_000 });
     await open(page);
 
     const problems: string[] = [];

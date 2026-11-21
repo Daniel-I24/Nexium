@@ -2,7 +2,29 @@
 
 Última actualización: 21 de noviembre de 2026.
 
-**Etapa actual:** plan de cierre para la presentación. **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas, revisión final del 13 de noviembre y correcciones de la prueba manual del 15 de noviembre** (abajo). No queda nada pendiente de código para una fase posterior. Falta la prueba manual final del propietario con la app instalada: `docs/PLAN_PRUEBAS_MANUALES.md`.
+**Etapa actual:** camino a la versión 1.0.0 (lista de verificación abajo). **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas, revisión final del 13 de noviembre y correcciones de la prueba manual del 15 de noviembre** (abajo). No queda nada pendiente de código para una fase posterior. Falta la prueba manual final del propietario con la app instalada: `docs/PLAN_PRUEBAS_MANUALES.md`.
+
+## Camino a la versión 1.0.0: lista de verificación
+
+Se marca cada etapa solo cuando está comprobada.
+
+- [ ] **Etapa 1. Voz**
+  - [x] Qué hace `force-debug` y con qué compilación queda whisper.cpp (ver `docs/RENDIMIENTO.md`)
+  - [x] Corrección de la causa de los 13 s (whisper.cpp sin optimizar en distribución)
+  - [x] Límite de 10 s para interpretar con IA, con error claro
+  - [x] Pruebas de regresión con audio real a 48 kHz en estéreo
+  - [ ] Medición con las cuatro grabaciones del propietario y el binario de distribución (objetivos: menos de 2 s de transcripción y menos de 3 s en total)
+  - [ ] Revisión de la cadena completa con esas grabaciones y borrado de las grabaciones
+- [ ] **Etapa 2. Pendientes de la última prueba**
+  - [ ] Resumen de documentos detallado y ajustado a la longitud
+  - [ ] Documentos por relevancia y preselección de una coincidencia clara
+  - [ ] Una sola entrada por solicitud, en Historial y en la conversación
+  - [ ] «Abrir Nexium» abre Recordatorios y resalta el recordatorio
+  - [ ] Emoji en el título del aviso, con 🔔 por defecto
+- [ ] **Etapa 3. Revisión completa de calidad** (recorrido de la app, textos y seguridad)
+- [ ] **Etapa 4. Limpieza y optimización** (código sin uso, archivos largos, auditorías, pruebas y rendimiento final)
+- [ ] **Etapa 5. Verificación en la app instalada** (prueba manual final del propietario)
+- [ ] **Etapa 6. Publicación de la versión 1.0.0** (versión, instaladores en español, actualizador, publicación automática, README final y Release)
 
 ## Correcciones tras la prueba G1 a G7 (21 de noviembre de 2026)
 
