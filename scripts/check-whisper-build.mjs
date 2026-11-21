@@ -34,17 +34,12 @@ function* walk(dir) {
 const sources = [];
 const whisperDirs = buildRoots.flatMap((root) =>
   readdirSync(root)
-    .filter((name) => name.startsWith("whisper-rs-sys-"))
+    // whisper-rs-sys-<hash> o, con la organización nueva de Cargo, whisper-rs-sys/<hash>.
+    .filter((name) => name === "whisper-rs-sys" || name.startsWith("whisper-rs-sys-"))
     .map((name) => ({ root, name })),
 );
 for (const { root: buildRoot, name } of whisperDirs) {
-  const out = join(buildRoot, name, "out");
-  try {
-    statSync(out);
-  } catch {
-    continue;
-  }
-  for (const file of walk(out)) {
+  for (const file of walk(join(buildRoot, name))) {
     const normalized = file.replaceAll("\\", "/");
     if (/\/Release\/[^/]+\.tlog\/CL\.command\.\d+\.tlog$/.test(normalized)) {
       sources.push({ file, text: readFileSync(file, "utf16le"), kind: "msvc" });

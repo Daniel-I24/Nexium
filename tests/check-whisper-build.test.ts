@@ -6,9 +6,11 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /** Una carpeta target falsa con las órdenes que dejó MSBuild o Make al compilar whisper.cpp. */
-function target(kind: "msvc" | "make", flags: string) {
+function target(kind: "msvc" | "make", flags: string, layout: "antigua" | "nueva" = "antigua") {
   const root = mkdtempSync(join(tmpdir(), "nexium-whisper-"));
-  const build = join(root, "release", "build", "whisper-rs-sys-abc", "out", "build");
+  // Cargo organiza las carpetas como whisper-rs-sys-<hash> o, en versiones recientes, whisper-rs-sys/<hash>.
+  const package_ = layout === "antigua" ? ["whisper-rs-sys-abc"] : ["whisper-rs-sys", "abc"];
+  const build = join(root, "release", "build", ...package_, "out", "build");
   if (kind === "msvc") {
     const dir = join(build, "ggml", "src", "ggml-cpu.dir", "Release", "ggml-cpu.tlog");
     mkdirSync(dir, { recursive: true });
@@ -27,6 +29,8 @@ describe("comprobación de la compilación de whisper.cpp", () => {
   it("acepta whisper.cpp optimizado con MSVC y con Make", () => {
     expect(check(target("msvc", "/O2 /Ob2")).status).toBe(0);
     expect(check(target("make", "-O2")).status).toBe(0);
+    expect(check(target("make", "-O3", "nueva")).status).toBe(0);
+    expect(check(target("msvc", "/O2", "nueva")).status).toBe(0);
   });
 
   it("rechaza whisper.cpp sin optimizar, que tardaba 13 s por orden", () => {
