@@ -32,6 +32,11 @@ xcap = "0.9"
 cpal = "0.18"
 # Versión exacta: ver `watch_cancellation` en src/providers/speech.rs antes de actualizarla.
 whisper-rs = "=0.16.0"
+# whisper.cpp optimizado también en distribución. Sin esta característica, el crate `cmake` sustituye en
+# release las banderas de la configuración Release de MSVC por unas sin optimización: whisper.cpp quedaba
+# en /Od y cada transcripción tardaba unos 13 s en lugar de 1 s (docs/RENDIMIENTO.md). Con ella se compila
+# como en desarrollo, optimizado (/O2 en Windows, -O2 en Linux y macOS).
+whisper-rs-sys = { version = "=0.15.0", features = ["force-debug"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 base64 = "0.22"
 sha2 = "0.10"

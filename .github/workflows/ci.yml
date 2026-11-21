@@ -110,6 +110,15 @@ jobs:
       - name: Compilar instaladores
         run: npx tauri build
 
+      # Regresión: en distribución, whisper.cpp llegó a compilarse sin optimizar (13 s por orden en lugar de 1 s).
+      - name: whisper.cpp compilado con optimización
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cache=$(ls src-tauri/target/release/build/whisper-rs-sys-*/out/build/CMakeCache.txt | head -1)
+          grep -E "^CMAKE_C_FLAGS_RELEASE:STRING=.*/O2" "$cache"
+          grep -E "^CMAKE_CXX_FLAGS_RELEASE:STRING=.*/O2" "$cache"
+
       - uses: actions/upload-artifact@v4
         with:
           name: nexium-${{ runner.os }}

@@ -3041,6 +3041,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "whisper-rs",
+ "whisper-rs-sys",
  "windows",
  "wiremock",
  "xcap",
