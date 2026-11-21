@@ -62,6 +62,12 @@ fn tolerates_frequent_variants_and_slight_transcription_errors() {
         ),
         ("estado del wi fi", system(SystemMetric::Wifi)),
         ("¿Tengo el guifi encendido?", system(SystemMetric::Wifi)),
+        // Transcripción real: Wi-Fi pegado a la palabra anterior.
+        ("Aquí RedWiFi estoy conectado.", system(SystemMetric::Wifi)),
+        (
+            "¿A qué redwifi estoy conectado?",
+            system(SystemMetric::Wifi),
+        ),
         (
             "¿Está activado el modo obscuro?",
             system(SystemMetric::DarkMode),

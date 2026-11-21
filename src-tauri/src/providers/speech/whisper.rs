@@ -93,6 +93,9 @@ pub struct WhisperSpeech {
 }
 
 fn load_whisper(model_path: &Path) -> Result<WhisperContext, SpeechError> {
+    // Los mensajes de whisper.cpp (y los de depuración que activa `force-debug`) no se escriben en la salida
+    // de errores: se descartan. Solo actúa la primera vez.
+    whisper_rs::install_logging_hooks();
     let path = model_path
         .to_str()
         .ok_or_else(|| SpeechError::Failed("La ruta del modelo no es válida.".into()))?;

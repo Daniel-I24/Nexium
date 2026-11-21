@@ -107,15 +107,18 @@ jobs:
           fi
           exit $code
 
+      # whisper.cpp se recompila siempre: así se puede comprobar con qué banderas se compiló de verdad.
+      - name: Recompilar whisper.cpp
+        working-directory: src-tauri
+        run: cargo clean -p whisper-rs-sys --release
+
       - name: Compilar instaladores
         run: npx tauri build
 
       # Regresión: en distribución, whisper.cpp llegó a compilarse sin optimizar (13 s por orden en lugar de 1 s).
-      # La característica force-debug de whisper-rs-sys es lo que lo evita (ver Cargo.toml).
-      - name: whisper.cpp se compila optimizado
-        working-directory: src-tauri
-        shell: bash
-        run: cargo tree -p whisper-rs-sys -e features -f "{p} [{f}]" --depth 0 | grep -F "[force-debug]"
+      # Lee las órdenes reales del compilador (registro de MSBuild o flags.make) y falla si no optimizan.
+      - name: whisper.cpp compilado con optimización
+        run: node scripts/check-whisper-build.mjs
 
       - uses: actions/upload-artifact@v4
         with:

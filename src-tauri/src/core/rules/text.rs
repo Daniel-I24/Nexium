@@ -26,7 +26,7 @@ pub fn normalize(text: &str) -> String {
 
 /// Formas de escribir Wi-Fi que deja la transcripción. Se unifican antes de aplicar las reglas.
 static WIFI_VARIANTS: LazyLock<Regex> =
-    LazyLock::new(|| regex(r"\b(wi ?-?fi|guifi|uifi|wai ?fai|waifai)\b"));
+    LazyLock::new(|| regex(r"(wi ?-?fi|guifi|\buifi|wai ?fai|waifai)\b"));
 
 /// Palabras de las órdenes que una transcripción puede escribir con un error leve ("vateria", "procesadr").
 /// Solo palabras largas: en las cortas, una letra cambia el sentido ("hora" y "ahora").
@@ -86,9 +86,12 @@ fn correct_word(word: &str) -> &str {
 
 /// Texto listo para las reglas: normalizado, con las variantes unificadas y los errores leves corregidos.
 pub fn prepare(text: &str) -> String {
+    // "RedWiFi" o "redwifi": la transcripción a veces pega Wi-Fi a la palabra anterior.
     let text = WIFI_VARIANTS
-        .replace_all(&normalize(text), "wifi")
-        .into_owned();
+        .replace_all(&normalize(text), " wifi")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     text.split(' ')
         .map(correct_word)
         .collect::<Vec<_>>()
