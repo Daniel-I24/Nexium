@@ -5,11 +5,23 @@
 //
 // Lee las órdenes reales del compilador: el registro de MSBuild (CL.command.*.tlog) con MSVC, o flags.make con
 // Makefiles. Falla si no encuentra ninguna, si alguna no optimiza o si ninguna lleva /O2 o -O2/-O3.
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const target = process.argv[2] ?? "src-tauri/target";
-const buildRoot = join(target, "release", "build");
+
+/** Carpetas build de los perfiles release: target/release/build y, con --target, target/<triple>/release/build. */
+function releaseBuildRoots(dir) {
+  const roots = [];
+  const direct = join(dir, "release", "build");
+  if (existsSync(direct)) roots.push(direct);
+  for (const name of existsSync(dir) ? readdirSync(dir) : []) {
+    const nested = join(dir, name, "release", "build");
+    if (existsSync(nested)) roots.push(nested);
+  }
+  return roots;
+}
+const buildRoots = releaseBuildRoots(target);
 
 function* walk(dir) {
   for (const name of readdirSync(dir)) {
@@ -20,8 +32,12 @@ function* walk(dir) {
 }
 
 const sources = [];
-for (const name of readdirSync(buildRoot)) {
-  if (!name.startsWith("whisper-rs-sys-")) continue;
+const whisperDirs = buildRoots.flatMap((root) =>
+  readdirSync(root)
+    .filter((name) => name.startsWith("whisper-rs-sys-"))
+    .map((name) => ({ root, name })),
+);
+for (const { root: buildRoot, name } of whisperDirs) {
   const out = join(buildRoot, name, "out");
   try {
     statSync(out);
@@ -46,12 +62,14 @@ for (const name of readdirSync(buildRoot)) {
 }
 
 if (sources.length === 0) {
-  console.error(`No se encontraron las órdenes de compilación de whisper.cpp en ${buildRoot}. ¿Se recompiló whisper-rs-sys?`);
+  console.error(`No se encontraron las órdenes de compilación de whisper.cpp en ${target}. ¿Se recompiló whisper-rs-sys?`);
   // Lo que sí hay, para poder diagnosticarlo desde el registro de la CI.
-  for (const name of readdirSync(buildRoot).filter((entry) => entry.startsWith("whisper-rs-sys-"))) {
-    const dir = join(buildRoot, name);
+  console.error(`Carpetas en ${target}: ${existsSync(target) ? readdirSync(target).join(", ") : "(no existe)"}`);
+  console.error(`Carpetas build de release: ${buildRoots.join(", ") || "ninguna"}`);
+  for (const { root, name } of whisperDirs) {
+    const dir = join(root, name);
     const files = [...walk(dir)].map((file) => file.slice(dir.length + 1).replaceAll("\\", "/"));
-    console.error(`${name}: ${files.length} archivos; ejemplos: ${files.filter((file) => /tlog|flags\.make|build\.ninja|CMakeCache/.test(file)).slice(0, 8).join(", ") || files.slice(0, 8).join(", ")}`);
+    console.error(`${dir}: ${files.length} archivos; ejemplos: ${files.filter((file) => /tlog|flags\.make|build\.ninja|CMakeCache/.test(file)).slice(0, 8).join(", ") || files.slice(0, 8).join(", ")}`);
   }
   process.exit(1);
 }
