@@ -19,13 +19,20 @@ pub async fn document_analyze<R: Runtime>(
     state: State<'_, AppState>,
     token: String,
     task: DocumentTask,
+    continues: Option<i64>,
 ) -> AppResult<AssistantResponse> {
     let path = state.offers.path(&token).ok_or_else(|| {
         AppError::Validation("Ese archivo ya no está disponible. Vuelve a pedirlo.".into())
     })?;
     let response = state
         .assistant
-        .analyze_document(&path, task, state.fresh_cancel(), stage_sink(&app))
+        .analyze_document(
+            &path,
+            task,
+            continues,
+            state.fresh_cancel(),
+            stage_sink(&app),
+        )
         .await;
     present_stage(&app).await;
     Ok(response)

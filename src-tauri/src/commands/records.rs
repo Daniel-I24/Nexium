@@ -88,6 +88,19 @@ pub fn history_record_failure(
     Ok(RecordedFailure { id, created_at })
 }
 
+/// «Cancelar» en un permiso o una aclaración de la conversación: la solicitud termina como cancelada,
+/// en su misma entrada.
+#[tauri::command]
+pub fn history_cancel(state: State<'_, AppState>, id: i64) -> AppResult<()> {
+    state.history.update(
+        id,
+        crate::models::Category::General,
+        InteractionStatus::Cancelled,
+        "Cancelada",
+    )?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn history_clear(state: State<'_, AppState>) -> AppResult<()> {
     state.history.clear()

@@ -28,7 +28,7 @@ describe("useAssistant", () => {
     invoke.mockResolvedValueOnce(reply({ kind: "text", text: "hola" }));
     const { result } = renderHook(() => useAssistant());
     await act(() => result.current.submit("hola"));
-    expect(invoke).toHaveBeenCalledWith("assistant_submit", { text: "hola" });
+    expect(invoke).toHaveBeenCalledWith("assistant_submit", { text: "hola", continues: null });
     expect(result.current.current?.summary).toBe("s");
     expect(result.current.bar).toEqual({ kind: "idle" });
   });
@@ -47,7 +47,7 @@ describe("useAssistant", () => {
     const { result } = renderHook(() => useAssistant());
     await act(() => result.current.authorizeFolders("known", "Busca mi informe"));
     expect(invoke).toHaveBeenNthCalledWith(1, "folders_allow_known");
-    expect(invoke).toHaveBeenNthCalledWith(2, "assistant_submit", { text: "Busca mi informe" });
+    expect(invoke).toHaveBeenNthCalledWith(2, "assistant_submit", { text: "Busca mi informe", continues: null });
   });
 
   it("si se cierra el selector de carpetas sin elegir, no se repite la solicitud", async () => {
@@ -62,7 +62,7 @@ describe("useAssistant", () => {
     invoke.mockResolvedValueOnce(reply({ kind: "documentAnalysis", fileName: "a.pdf", task: "summarize", summary: "s", points: [], details: [], truncated: false }));
     const { result } = renderHook(() => useAssistant());
     await act(() => result.current.analyzeDocument({ token: "t-1", name: "a", extension: ".pdf", location: "Documentos" }, "summarize"));
-    expect(invoke).toHaveBeenCalledWith("document_analyze", { token: "t-1", task: "summarize" });
+    expect(invoke).toHaveBeenCalledWith("document_analyze", { token: "t-1", task: "summarize", continues: null });
     expect(result.current.current?.body.kind).toBe("documentAnalysis");
   });
 
@@ -74,6 +74,37 @@ describe("useAssistant", () => {
     act(() => result.current.clearConversation());
     expect(result.current.current).toBeNull();
     expect(result.current.tape).toEqual([]);
+  });
+
+  it("completar una solicitud pendiente la sustituye: no queda una respuesta más en la cinta", async () => {
+    invoke
+      .mockResolvedValueOnce({ ...reply({ kind: "clarification", question: "¿Qué ciudad?", suggestions: [{ label: "Cali", request: "clima en Cali" }] }, "pending"), id: 5 })
+      .mockResolvedValueOnce({ ...reply({ kind: "text", text: "22 °C" }), id: 5 });
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("Dame el clima"));
+    await act(async () => result.current.chooseSuggestion({ label: "Cali", request: "clima en Cali" }));
+    await waitFor(() => expect(result.current.current?.status).toBe("completed"));
+    expect(invoke).toHaveBeenLastCalledWith("assistant_submit", { text: "clima en Cali", continues: 5 });
+    expect(result.current.tape).toEqual([]);
+  });
+
+  it("cancelar una solicitud pendiente la cierra como cancelada en su entrada", async () => {
+    invoke.mockResolvedValueOnce({ ...reply({ kind: "folderConsent", folders: [], pendingRequest: "Busca x" }, "pending"), id: 8 }).mockResolvedValue(undefined);
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("Busca x"));
+    act(() => result.current.dismissCurrent("Cancelado. No se buscó nada."));
+    expect(invoke).toHaveBeenCalledWith("history_cancel", { id: 8 });
+    expect(result.current.current?.status).toBe("cancelled");
+  });
+
+  it("el botón Analizar pantalla no continúa ninguna solicitud", async () => {
+    const settings = { provider: { displayName: "Google Gemini", dataNotice: "Aviso." } };
+    invoke.mockImplementation((command: string) => Promise.resolve(command === "settings_get" ? settings : reply({ kind: "text", text: "x" })));
+    const { result } = renderHook(() => useAssistant());
+    act(() => result.current.analyzeScreenButton());
+    await waitFor(() => expect(result.current.bar.kind).toBe("captureConsent"));
+    await act(() => result.current.confirmCapture());
+    expect(invoke).toHaveBeenCalledWith("screen_analyze", { question: "Analiza lo que aparece en mi pantalla", continues: null });
   });
 
   it("la cinta no duplica entradas ni pasa de cinco, también en modo estricto", async () => {
@@ -111,7 +142,7 @@ describe("useAssistant", () => {
     expect(result.current.bar).toEqual({ kind: "captureConsent", provider: "Google Gemini", notice: "Aviso." });
     expect(invoke).not.toHaveBeenCalledWith("screen_analyze", expect.anything());
     await act(() => result.current.confirmCapture());
-    expect(invoke).toHaveBeenCalledWith("screen_analyze", { question: "¿Qué es?" });
+    expect(invoke).toHaveBeenCalledWith("screen_analyze", { question: "¿Qué es?", continues: 1 });
   });
 
   it("una solicitud cancelada no se presenta", async () => {

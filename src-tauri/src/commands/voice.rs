@@ -139,7 +139,7 @@ pub async fn voice_stop<R: Runtime>(
     // Lo transcrito cumple el mismo límite que lo escrito.
     let response = state
         .assistant
-        .process_timed(validate_text(&text)?, cancel, stage, timings)
+        .process_timed(validate_text(&text)?, None, cancel, stage, timings)
         .await;
     present_stage(&app).await;
     Ok(Some(response))

@@ -289,6 +289,7 @@ pub fn run() {
             commands::records::history_list,
             commands::records::history_delete,
             commands::records::history_clear,
+            commands::records::history_cancel,
             commands::records::history_record_failure,
             commands::settings::settings_get,
             commands::settings::settings_save,

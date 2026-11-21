@@ -145,20 +145,34 @@ impl Assistant {
         }
     }
 
-    pub(crate) fn finish(
+    /// Guarda el resultado en el historial y lo devuelve. Si continúa una solicitud anterior (`continues`),
+    /// actualiza su entrada: una solicitud tiene una sola entrada, que llega a su estado final, y la respuesta
+    /// conserva su texto original y su identificador.
+    pub(crate) fn finish_in(
         &self,
+        continues: Option<i64>,
         request: &str,
         outcome: Outcome,
         origin: &str,
     ) -> AssistantResponse {
-        let (id, created_at) = self
-            .history
-            .record(request, outcome.category, outcome.status, &outcome.summary)
-            .unwrap_or_else(|_| (0, Local::now().to_rfc3339()));
+        let continued = continues.filter(|id| *id > 0).and_then(|id| {
+            self.history
+                .update(id, outcome.category, outcome.status, &outcome.summary)
+                .ok()
+                .flatten()
+                .map(|(request, created_at)| (id, request, created_at))
+        });
+        let (id, request, created_at) = continued.unwrap_or_else(|| {
+            let (id, created_at) = self
+                .history
+                .record(request, outcome.category, outcome.status, &outcome.summary)
+                .unwrap_or_else(|_| (0, Local::now().to_rfc3339()));
+            (id, request.to_owned(), created_at)
+        });
         let origin_label = origin_label(outcome.source.as_deref(), origin);
         AssistantResponse {
             id,
-            request: request.to_owned(),
+            request,
             created_at,
             category: outcome.category,
             status: outcome.status,
@@ -174,14 +188,17 @@ impl Assistant {
         cancel: CancellationToken,
         stage: StageSink,
     ) -> AssistantResponse {
-        self.process_timed(text, cancel, stage, Timings::new("texto"))
+        self.process_timed(text, None, cancel, stage, Timings::new("texto"))
             .await
     }
 
     /// Como `process`, continuando la medición de una solicitud que empezó antes (por ejemplo, por voz).
+    /// `continues`: la entrada del historial de la solicitud que esta completa (un permiso, una aclaración).
+    /// Se actualiza esa entrada en lugar de crear otra.
     pub async fn process_timed(
         &self,
         text: &str,
+        continues: Option<i64>,
         cancel: CancellationToken,
         stage: StageSink,
         mut timings: Timings,
@@ -193,7 +210,9 @@ impl Assistant {
             Resolved::Failed(_) => "sin resolver",
             _ => "local",
         };
-        let response = self.execute(text.trim(), resolved, cancel, stage).await;
+        let response = self
+            .execute(text.trim(), continues, resolved, cancel, stage)
+            .await;
         timings.mark("respuesta");
         self.performance
             .record(&timings, resolved_by, response.category.as_str());
@@ -203,6 +222,7 @@ impl Assistant {
     async fn execute(
         &self,
         text: &str,
+        continues: Option<i64>,
         resolved: Resolved,
         cancel: CancellationToken,
         stage: StageSink,
@@ -221,7 +241,9 @@ impl Assistant {
             Resolved::Degraded(intent, note) => {
                 (intent, "reglas locales, sin IA".to_owned(), Some(note))
             }
-            Resolved::Failed(outcome) => return self.finish(text, outcome, "sin datos"),
+            Resolved::Failed(outcome) => {
+                return self.finish_in(continues, text, outcome, "sin datos")
+            }
         };
         stage(Stage::Executing);
         let context = HandlerContext {
@@ -237,7 +259,8 @@ impl Assistant {
             }
         }
         let Some(mut outcome) = handled else {
-            return self.finish(
+            return self.finish_in(
+                continues,
                 text,
                 Outcome::failed(
                     Category::General,
@@ -264,20 +287,22 @@ impl Assistant {
             *file_note = Some(extra);
         }
         stage(Stage::Responding);
-        self.finish(text, outcome, &origin)
+        self.finish_in(continues, text, outcome, &origin)
     }
 
     /// Una captura por confirmación expresa del usuario. La imagen solo vive en esta función.
     pub async fn analyze_screen(
         &self,
         question: &str,
+        continues: Option<i64>,
         cancel: CancellationToken,
         stage: StageSink,
     ) -> AssistantResponse {
         let question = question.trim();
         let provider = self.ai.display_name().to_owned();
         if let Err(error) = self.check_ai_available() {
-            return self.finish(
+            return self.finish_in(
+                continues,
                 question,
                 self.ai_failure(Category::Screen, &error),
                 "sin datos",
@@ -287,7 +312,8 @@ impl Assistant {
         let image = match self.capture.capture_once().await {
             Ok(image) => image,
             Err(CaptureError::PermissionDenied(message) | CaptureError::Failed(message)) => {
-                return self.finish(
+                return self.finish_in(
+                    continues,
                     question,
                     Outcome::failed(Category::Screen, "capture", message, None),
                     "sin datos",
@@ -295,7 +321,8 @@ impl Assistant {
             }
         };
         if cancel.is_cancelled() {
-            return self.finish(
+            return self.finish_in(
+                continues,
                 question,
                 Outcome {
                     status: InteractionStatus::Cancelled,
@@ -324,7 +351,8 @@ impl Assistant {
                     cause: analysis.cause,
                     steps: analysis.steps,
                 };
-                self.finish(
+                self.finish_in(
+                    continues,
                     question,
                     Outcome::done(Category::Screen, analysis.summary, body),
                     &format!(
@@ -339,9 +367,10 @@ impl Assistant {
                     "La IA devolvió un análisis con un formato que Nexium no puede mostrar.",
                     Some("Vuelve a intentarlo. La captura ya se descartó.".into()),
                 );
-                self.finish(question, outcome, "sin datos")
+                self.finish_in(continues, question, outcome, "sin datos")
             }
-            Err(AiError::Cancelled) => self.finish(
+            Err(AiError::Cancelled) => self.finish_in(
+                continues,
                 question,
                 Outcome {
                     status: InteractionStatus::Cancelled,
@@ -349,7 +378,8 @@ impl Assistant {
                 },
                 "sin datos",
             ),
-            Err(error) => self.finish(
+            Err(error) => self.finish_in(
+                continues,
                 question,
                 self.ai_failure(Category::Screen, &error),
                 "sin datos",

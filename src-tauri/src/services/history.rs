@@ -53,6 +53,30 @@ impl HistoryService {
         Ok(())
     }
 
+    /// Lleva una entrada a su nuevo estado. Devuelve su solicitud original y su fecha, o `None` si ya no existe
+    /// (por ejemplo, si se borró el historial mientras tanto).
+    pub fn update(
+        &self,
+        id: i64,
+        category: Category,
+        status: InteractionStatus,
+        response: &str,
+    ) -> AppResult<Option<(String, String)>> {
+        let connection = self.db.lock()?;
+        let changed = connection.execute(
+            "UPDATE history SET category = ?1, status = ?2, response = ?3 WHERE id = ?4",
+            params![category.as_str(), status.as_str(), response, id],
+        )?;
+        if changed == 0 {
+            return Ok(None);
+        }
+        Ok(Some(connection.query_row(
+            "SELECT request, created_at FROM history WHERE id = ?1",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?))
+    }
+
     pub fn list(&self, status: Option<InteractionStatus>) -> AppResult<Vec<HistoryEntry>> {
         let connection = self.db.lock()?;
         let mut statement = connection.prepare(

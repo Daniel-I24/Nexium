@@ -16,14 +16,15 @@ import type {
 
 /** Único punto de contacto con el backend: ningún componente llama a invoke directamente. */
 export const api = {
-  submitRequest: (text: string) => invoke<AssistantResponse>("assistant_submit", { text }),
+  /** `continues`: la entrada del historial que esta solicitud completa (tras un permiso o una aclaración). */
+  submitRequest: (text: string, continues: number | null = null) => invoke<AssistantResponse>("assistant_submit", { text, continues }),
   cancel: () => invoke<undefined>("assistant_cancel"),
   allowKnownFolders: () => invoke<string[]>("folders_allow_known"),
   /** Abre el selector de carpetas del sistema. `null` si se cerró sin elegir. */
   pickFolder: () => invoke<string[] | null>("folders_pick"),
   removeFolder: (folder: string) => invoke<string[]>("folders_remove", { folder }),
 
-  analyzeDocument: (token: string, task: DocumentTask) => invoke<AssistantResponse>("document_analyze", { token, task }),
+  analyzeDocument: (token: string, task: DocumentTask, continues: number | null = null) => invoke<AssistantResponse>("document_analyze", { token, task, continues }),
   /** Abre el selector de archivos del sistema. `null` si se cerró sin elegir. */
   pickDocument: () => invoke<DocumentCandidate | null>("document_pick"),
   openAttribution: () => invoke<undefined>("open_attribution"),
@@ -35,7 +36,7 @@ export const api = {
   cancelVoice: () => invoke<undefined>("voice_cancel"),
   downloadSpeechModel: (modelId: string) => invoke<undefined>("speech_model_download", { modelId }),
 
-  analyzeScreen: (question: string) => invoke<AssistantResponse>("screen_analyze", { question }),
+  analyzeScreen: (question: string, continues: number | null = null) => invoke<AssistantResponse>("screen_analyze", { question, continues }),
 
   listReminders: () => invoke<Reminder[]>("reminders_list"),
   createReminder: (content: string, dueAt: string, historyId: number | null) =>
@@ -46,6 +47,8 @@ export const api = {
   listHistory: (status: InteractionStatus | null) => invoke<HistoryEntry[]>("history_list", { status }),
   deleteHistory: (id: number) => invoke<undefined>("history_delete", { id }),
   clearHistory: () => invoke<undefined>("history_clear"),
+  /** Una solicitud pendiente que se cancela termina como cancelada en su misma entrada. */
+  cancelEntry: (id: number) => invoke<undefined>("history_cancel", { id }),
   recordFailure: (request: string, cause: string) => invoke<{ id: number; createdAt: string }>("history_record_failure", { request, cause }),
 
   getSettings: () => invoke<SettingsView>("settings_get"),

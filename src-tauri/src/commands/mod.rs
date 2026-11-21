@@ -28,8 +28,8 @@ use crate::{
         weather::{WeatherProvider, ATTRIBUTION_URL},
     },
     services::{
-        history::HistoryService, reminders::ReminderService, settings::SettingsService,
-        usage::UsageService,
+        history::HistoryService, performance::Timings, reminders::ReminderService,
+        settings::SettingsService, usage::UsageService,
     },
 };
 
@@ -121,11 +121,18 @@ pub async fn assistant_submit<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,
     text: String,
+    continues: Option<i64>,
 ) -> AppResult<AssistantResponse> {
     let text = validate_text(&text)?;
     let response = state
         .assistant
-        .process(text, state.fresh_cancel(), stage_sink(&app))
+        .process_timed(
+            text,
+            continues,
+            state.fresh_cancel(),
+            stage_sink(&app),
+            Timings::new("texto"),
+        )
         .await;
     present_stage(&app).await;
     Ok(response)
@@ -150,11 +157,12 @@ pub async fn screen_analyze<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, AppState>,
     question: String,
+    continues: Option<i64>,
 ) -> AppResult<AssistantResponse> {
     let question = validate_text(&question)?;
     let response = state
         .assistant
-        .analyze_screen(question, state.fresh_cancel(), stage_sink(&app))
+        .analyze_screen(question, continues, state.fresh_cancel(), stage_sink(&app))
         .await;
     present_stage(&app).await;
     Ok(response)

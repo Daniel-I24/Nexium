@@ -1,5 +1,6 @@
 use super::*;
 use crate::models::ScreenAnalysis;
+use crate::services::performance::Timings;
 
 #[test]
 fn the_origin_names_an_external_source() {
@@ -236,6 +237,64 @@ fn authorize(harness: &Harness) {
 }
 
 #[tokio::test]
+async fn a_request_keeps_a_single_history_entry_until_its_final_state() {
+    let h = harness(None, true, false);
+    let pending = ask(&h.assistant, "Resume mi informe de programación").await;
+    assert_eq!(pending.status, InteractionStatus::Pending);
+    authorize(&h);
+    // Al permitir las carpetas, la misma solicitud sigue en su entrada.
+    let offered = h
+        .assistant
+        .process_timed(
+            "Resume mi informe de programación",
+            Some(pending.id),
+            CancellationToken::new(),
+            silent(),
+            Timings::new("texto"),
+        )
+        .await;
+    assert_eq!(offered.id, pending.id);
+    let ResponseBody::DocumentConsent { .. } = offered.body else {
+        panic!("{:?}", offered.body)
+    };
+    let file = h._folder.path().join("informe programacion.txt");
+    std::fs::write(&file, "Informe con texto suficiente para resumirlo.").unwrap();
+    let done = h
+        .assistant
+        .analyze_document(
+            &file,
+            crate::models::DocumentTask::Summarize,
+            Some(pending.id),
+            CancellationToken::new(),
+            silent(),
+        )
+        .await;
+    assert_eq!(done.id, pending.id);
+    assert_eq!(done.request, "Resume mi informe de programación");
+    let history = h.assistant.history.list(None).unwrap();
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].status, InteractionStatus::Completed);
+    assert_eq!(history[0].response, "Trata de bases de datos.");
+}
+
+#[tokio::test]
+async fn a_continuation_of_a_deleted_entry_creates_a_new_one() {
+    let h = harness(None, true, false);
+    let response = h
+        .assistant
+        .process_timed(
+            "¿Qué hora es?",
+            Some(999),
+            CancellationToken::new(),
+            silent(),
+            Timings::new("texto"),
+        )
+        .await;
+    assert_ne!(response.id, 999);
+    assert_eq!(h.assistant.history.list(None).unwrap().len(), 1);
+}
+
+#[tokio::test]
 async fn a_document_needs_folders_and_then_is_offered_without_sending_anything() {
     let h = harness(None, true, false);
     let response = ask(&h.assistant, "Resume mi informe de programación").await;
@@ -273,6 +332,7 @@ async fn a_document_summary_never_stores_its_content() {
         .analyze_document(
             &file,
             crate::models::DocumentTask::Summarize,
+            None,
             CancellationToken::new(),
             silent(),
         )
@@ -301,6 +361,7 @@ async fn an_unreadable_document_is_explained_without_calling_the_ai() {
         .analyze_document(
             &file,
             crate::models::DocumentTask::Analyze,
+            None,
             CancellationToken::new(),
             silent(),
         )
@@ -530,7 +591,7 @@ async fn the_service_status_comes_from_real_use() {
         AiServiceStatus::QuotaExhausted
     );
     h.assistant
-        .analyze_screen("x", CancellationToken::new(), silent())
+        .analyze_screen("x", None, CancellationToken::new(), silent())
         .await;
     assert_eq!(
         h.assistant.ai_status.current(true),
@@ -584,7 +645,12 @@ async fn analysis_captures_once_and_does_not_keep_the_image() {
     let h = harness(None, true, false);
     let response = h
         .assistant
-        .analyze_screen("Explícame este error", CancellationToken::new(), silent())
+        .analyze_screen(
+            "Explícame este error",
+            None,
+            CancellationToken::new(),
+            silent(),
+        )
         .await;
     assert_eq!(h.capture_calls.load(Ordering::SeqCst), 1);
     assert_eq!(
@@ -605,7 +671,12 @@ async fn an_unreadable_analysis_shows_a_clear_message() {
     let h = harness(None, true, false);
     let response = h
         .assistant
-        .analyze_screen("respuesta ilegible", CancellationToken::new(), silent())
+        .analyze_screen(
+            "respuesta ilegible",
+            None,
+            CancellationToken::new(),
+            silent(),
+        )
         .await;
     let ResponseBody::Error {
         code,
@@ -624,7 +695,7 @@ async fn an_unreadable_analysis_shows_a_clear_message() {
 async fn without_the_service_no_capture_is_taken() {
     let h = harness(None, false, false);
     h.assistant
-        .analyze_screen("x", CancellationToken::new(), silent())
+        .analyze_screen("x", None, CancellationToken::new(), silent())
         .await;
     assert_eq!(h.capture_calls.load(Ordering::SeqCst), 0);
 }
@@ -634,7 +705,7 @@ async fn a_capture_permission_error_is_explained() {
     let h = harness(None, true, true);
     let response = h
         .assistant
-        .analyze_screen("x", CancellationToken::new(), silent())
+        .analyze_screen("x", None, CancellationToken::new(), silent())
         .await;
     assert!(
         matches!(response.body, ResponseBody::Error { ref message, .. } if message == "sin permiso")

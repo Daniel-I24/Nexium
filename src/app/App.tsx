@@ -40,7 +40,7 @@ export function App() {
           onStopListening={() => void assistant.stopListening()}
           onCancel={() => void assistant.cancel()}
           onSubmitText={(text) => goToAssistant(() => void assistant.submit(text))}
-          onAnalyzeScreen={() => goToAssistant(() => void assistant.requestCapture())}
+          onAnalyzeScreen={() => goToAssistant(assistant.analyzeScreenButton)}
           onConfirmCapture={() => void assistant.confirmCapture()}
           onRetry={assistant.retry}
         />

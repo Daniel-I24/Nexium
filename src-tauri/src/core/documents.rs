@@ -34,6 +34,7 @@ impl Assistant {
         &self,
         path: &Path,
         task: DocumentTask,
+        continues: Option<i64>,
         cancel: CancellationToken,
         stage: StageSink,
     ) -> AssistantResponse {
@@ -44,7 +45,8 @@ impl Assistant {
         let request = document_request(task, &file_name);
         let provider = self.ai.display_name().to_owned();
         if let Err(error) = self.check_ai_available() {
-            return self.finish(
+            return self.finish_in(
+                continues,
                 &request,
                 self.ai_failure(Category::Files, &error),
                 "sin datos",
@@ -55,14 +57,16 @@ impl Assistant {
         let extracted = match tokio::task::spawn_blocking(move || extract(&owned)).await {
             Ok(Ok(extracted)) => extracted,
             Ok(Err(error)) => {
-                return self.finish(
+                return self.finish_in(
+                    continues,
                     &request,
                     Outcome::failed(Category::Files, "document", error.to_string(), None),
                     "sin datos",
                 )
             }
             Err(_) => {
-                return self.finish(
+                return self.finish_in(
+                    continues,
                     &request,
                     Outcome::failed(
                         Category::Files,
@@ -90,7 +94,8 @@ impl Assistant {
         let answer = match answer {
             Ok(answer) => answer,
             Err(AiError::Cancelled) => {
-                return self.finish(
+                return self.finish_in(
+                    continues,
                     &request,
                     Outcome {
                         status: InteractionStatus::Cancelled,
@@ -105,7 +110,8 @@ impl Assistant {
                 )
             }
             Err(error) => {
-                return self.finish(
+                return self.finish_in(
+                    continues,
                     &request,
                     self.ai_failure(Category::Files, &error),
                     "sin datos",
@@ -115,7 +121,7 @@ impl Assistant {
         let _ = self.usage.record(answer.tokens);
         stage(Stage::Responding);
         let summary = answer.value.summary.clone();
-        self.finish(
+        self.finish_in(continues,
             &request,
             Outcome::done(
                 Category::Files,

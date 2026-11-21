@@ -58,6 +58,10 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   const captureQuestion = useRef(CAPTURE_REQUEST);
   const requestCaptureRef = useRef<(question: string) => Promise<void>>(() => Promise.resolve());
   const navigateRef = useRef(onNavigate);
+  /** La solicitud pendiente (permiso, aclaración, confirmación): lo que la complete actualiza su entrada. */
+  const pendingId = useRef<number | null>(null);
+  /** La entrada que continúa la captura, si la pidió una solicitud ("¿qué hay en mi pantalla?"). */
+  const captureContinues = useRef<number | null>(null);
 
   useEffect(() => {
     navigateRef.current = onNavigate;
@@ -76,9 +80,11 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
       setBar({ kind: "idle" });
       return;
     }
+    pendingId.current = response.status === "pending" && response.id > 0 ? response.id : null;
+    // Si completa la solicitud en curso, la sustituye: una solicitud, una sola respuesta.
     setSession(({ current: previous, tape: entries }) => ({
       current: response,
-      tape: previous ? [...entries, previous].slice(-TAPE_LENGTH) : entries,
+      tape: previous && previous.id !== response.id ? [...entries, previous].slice(-TAPE_LENGTH) : entries,
     }));
     const { body } = response;
     if (body.kind === "reminderDraft" && body.question) {
@@ -86,6 +92,7 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     } else if (body.kind === "clarification") {
       setBar({ kind: "clarify" });
     } else if (body.kind === "captureRequest") {
+      captureContinues.current = response.id > 0 ? response.id : null;
       void requestCaptureRef.current(body.question);
     } else if (body.kind === "navigate") {
       setBar({ kind: "idle" });
@@ -110,10 +117,10 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   );
 
   const submit = useCallback(
-    async (text: string) => {
+    async (text: string, continues: number | null = null) => {
       lastRequest.current = text;
       try {
-        present(await api.submitRequest(text));
+        present(await api.submitRequest(text, continues));
       } catch (error) {
         fail(error, text);
       }
@@ -146,12 +153,30 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     return () => void subscription.then((unlisten) => unlisten());
   }, [stopListening]);
 
+  /** "Cancelar" en un permiso de la conversación: no se hizo ni se envió nada. */
+  const dismissCurrent = useCallback((message: string) => {
+    if (pendingId.current !== null) void api.cancelEntry(pendingId.current).catch(() => undefined);
+    pendingId.current = null;
+    setSession((session) =>
+      session.current ? { ...session, current: { ...session.current, status: "cancelled", summary: message, body: { kind: "text", text: message } } } : session,
+    );
+    setBar({ kind: "idle" });
+  }, []);
+
   const cancel = useCallback(async () => {
     const kind = bar.kind;
     setBar({ kind: "idle" });
     if (kind === "listening") await api.cancelVoice().catch(fail);
     else if (kind === "processing" || kind === "responding") await api.cancel().catch(fail);
-  }, [bar.kind, fail]);
+    // Cancelar una pregunta o un permiso pendiente cierra su solicitud como cancelada.
+    else if ((kind === "clarify" || kind === "captureConsent") && pendingId.current !== null) dismissCurrent("Cancelado.");
+  }, [bar.kind, fail, dismissCurrent]);
+
+  /** Desde el botón Analizar pantalla no continúa ninguna solicitud; desde la conversación, sí (ver present). */
+  const analyzeScreenButton = useCallback(() => {
+    captureContinues.current = null;
+    void requestCaptureRef.current(CAPTURE_REQUEST);
+  }, []);
 
   const requestCapture = useCallback(
     async (question: string = CAPTURE_REQUEST) => {
@@ -173,7 +198,7 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   const confirmCapture = useCallback(async () => {
     setBar({ kind: "processing", step: "Tomando una sola captura…" });
     try {
-      present(await api.analyzeScreen(captureQuestion.current));
+      present(await api.analyzeScreen(captureQuestion.current, captureContinues.current));
     } catch (error) {
       fail(error, captureQuestion.current);
     }
@@ -209,14 +234,14 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     [current, saveReminder],
   );
 
-  const chooseSuggestion = useCallback((suggestion: SuggestedRequest) => void submit(suggestion.request), [submit]);
+  const chooseSuggestion = useCallback((suggestion: SuggestedRequest) => void submit(suggestion.request, pendingId.current), [submit]);
 
   /** Da permiso (Documentos y Escritorio, u otra carpeta elegida en el sistema) y continúa la solicitud sola. */
   const authorizeFolders = useCallback(
     async (choice: FolderChoice, pendingRequest: string) => {
       try {
         const folders = choice === "known" ? await api.allowKnownFolders() : await api.pickFolder();
-        if (folders) await submit(pendingRequest);
+        if (folders) await submit(pendingRequest, pendingId.current);
       } catch (error) {
         fail(error);
       }
@@ -229,7 +254,7 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     async (candidate: DocumentCandidate, task: DocumentTask) => {
       setBar(barStateFromStage("reading"));
       try {
-        present(await api.analyzeDocument(candidate.token, task));
+        present(await api.analyzeDocument(candidate.token, task, pendingId.current));
       } catch (error) {
         fail(error, `${task === "summarize" ? "Resumen" : "Análisis"} de «${candidate.name}${candidate.extension}»`);
       }
@@ -243,13 +268,6 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     lastRequest.current = null;
   }, []);
 
-  /** "Cancelar" en un permiso de la conversación: no se hizo ni se envió nada. */
-  const dismissCurrent = useCallback((message: string) => {
-    setSession((session) =>
-      session.current ? { ...session, current: { ...session.current, status: "cancelled", summary: message, body: { kind: "text", text: message } } } : session,
-    );
-    setBar({ kind: "idle" });
-  }, []);
 
   return {
     bar,
@@ -261,6 +279,7 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     stopListening,
     cancel,
     requestCapture,
+    analyzeScreenButton,
     confirmCapture,
     retry,
     saveReminder,
