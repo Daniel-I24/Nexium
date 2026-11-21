@@ -66,6 +66,19 @@ if (sources.length === 0) {
   // Lo que sí hay, para poder diagnosticarlo desde el registro de la CI.
   console.error(`Carpetas en ${target}: ${existsSync(target) ? readdirSync(target).join(", ") : "(no existe)"}`);
   console.error(`Carpetas build de release: ${buildRoots.join(", ") || "ninguna"}`);
+  // Cualquier carpeta con "whisper" en target, hasta cuatro niveles.
+  const found = [];
+  const search = (dir, depth) => {
+    if (depth > 4 || !existsSync(dir)) return;
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      if (!statSync(path).isDirectory()) continue;
+      if (name.toLowerCase().includes("whisper")) found.push(path);
+      else search(path, depth + 1);
+    }
+  };
+  search(target, 0);
+  console.error(`Carpetas con «whisper» en ${target}: ${found.slice(0, 20).join(", ") || "ninguna"}`);
   for (const { root, name } of whisperDirs) {
     const dir = join(root, name);
     const files = [...walk(dir)].map((file) => file.slice(dir.length + 1).replaceAll("\\", "/"));

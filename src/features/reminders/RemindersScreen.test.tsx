@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -81,7 +81,8 @@ describe("Recordatorios: abierto desde el aviso", () => {
     render(<RemindersScreen onPickExample={vi.fn()} highlight={2} />);
     const row = (await screen.findByText("Tomar agua")).closest("li") as HTMLElement;
     expect(row).toHaveAttribute("aria-current", "true");
-    expect(row).toHaveFocus();
+    // El foco lo da un efecto tras el render: se espera a que llegue.
+    await waitFor(() => expect(row).toHaveFocus());
     expect(row.querySelector("[data-highlight]")).toHaveClass("animate-highlight");
     const other = screen.getByText("Llamar al banco").closest("li") as HTMLElement;
     expect(other.querySelector("[data-highlight]")).toBeNull();
