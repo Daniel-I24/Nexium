@@ -146,6 +146,8 @@ Cuatro órdenes dichas por el propietario con su micrófono (Microphone Array, R
 | 12 hilos (todos los lógicos) | 1 349 ms | Peor: los hilos lógicos compiten |
 | Idioma automático | 6 940 ms | Detectar el idioma cuesta 6 s: español forzado |
 
+**Segunda medición, con batería.** Con cuatro grabaciones nuevas del propietario (mismo micrófono) y el código actual: sin `force-debug`, 18 962 ms de mediana y 19 844 ms como máximo; con él, 1 069 ms y 1 199 ms (transcripción y respuesta). Las cuatro órdenes se resuelven sin IA, y la de Wi-Fi ya responde con el nombre de la red. La revisión de parámetros repite el resultado: configuración de la app 1 027 ms, sin recorte 1 403 ms, sin contexto de vocabulario 907 ms, con reintentos de temperatura 973 ms, 12 hilos 3 259 ms (máximo 7 348 ms) y ventana completa 6 471 ms. Con batería o con la corriente, los tiempos son los mismos: el modo de energía no influye de forma apreciable.
+
 **Una corrección más.** «¿A qué red wifi estoy conectado?» se transcribió como «Aquí RedWiFi estoy conectado» y la regla lo tomaba como Internet. Wi-Fi pegado a la palabra anterior ahora se separa antes de aplicar las reglas.
 
 **Objetivos en este equipo, con esta voz:** transcripción de una orden corta por debajo de 2 s (1,07 s de mediana y 1,17 s como máximo) y orden local completa por debajo de 3 s (transcripción más respuesta, como mucho 1,19 s).

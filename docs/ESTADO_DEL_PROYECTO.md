@@ -8,13 +8,13 @@
 
 Se marca cada etapa solo cuando está comprobada.
 
-- [ ] **Etapa 1. Voz**
+- [x] **Etapa 1. Voz**
   - [x] Qué hace `force-debug` y con qué compilación queda whisper.cpp (ver `docs/RENDIMIENTO.md`)
   - [x] Corrección de la causa de los 13 s (whisper.cpp sin optimizar en distribución)
   - [x] Límite de 10 s para interpretar con IA, con error claro
   - [x] Pruebas de regresión con audio real a 48 kHz en estéreo
-  - [ ] Medición con las cuatro grabaciones del propietario y el binario de distribución (objetivos: menos de 2 s de transcripción y menos de 3 s en total)
-  - [ ] Revisión de la cadena completa con esas grabaciones y borrado de las grabaciones
+  - [x] Medición con las cuatro grabaciones del propietario y el binario de distribución: de 18,96 s a 1,07 s de mediana (máximo 1,20 s); objetivos cumplidos
+  - [x] Revisión de la cadena completa con esas grabaciones y borrado de las grabaciones
 - [ ] **Etapa 2. Pendientes de la última prueba**
   - [ ] Resumen de documentos detallado y ajustado a la longitud
   - [ ] Documentos por relevancia y preselección de una coincidencia clara
