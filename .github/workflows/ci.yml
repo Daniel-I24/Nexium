@@ -111,13 +111,11 @@ jobs:
         run: npx tauri build
 
       # Regresión: en distribución, whisper.cpp llegó a compilarse sin optimizar (13 s por orden en lugar de 1 s).
-      - name: whisper.cpp compilado con optimización
-        if: runner.os == 'Windows'
+      # La característica force-debug de whisper-rs-sys es lo que lo evita (ver Cargo.toml).
+      - name: whisper.cpp se compila optimizado
+        working-directory: src-tauri
         shell: bash
-        run: |
-          cache=$(ls src-tauri/target/release/build/whisper-rs-sys-*/out/build/CMakeCache.txt | head -1)
-          grep -E "^CMAKE_C_FLAGS_RELEASE:STRING=.*/O2" "$cache"
-          grep -E "^CMAKE_CXX_FLAGS_RELEASE:STRING=.*/O2" "$cache"
+        run: cargo tree -p whisper-rs-sys -e features -f "{p} [{f}]" --depth 0 | grep -F "[force-debug]"
 
       - uses: actions/upload-artifact@v4
         with:
