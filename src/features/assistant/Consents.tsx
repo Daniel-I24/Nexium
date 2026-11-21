@@ -65,6 +65,8 @@ interface DocumentConsentProps {
   candidates: DocumentCandidate[];
   maxCharacters: number;
   note: string | null;
+  /** Solo si la coincidencia es clara; si no, se elige antes de confirmar. */
+  preselected: string | null;
   onAnalyze: (candidate: DocumentCandidate, task: DocumentTask) => void;
   onDismiss: (message: string) => void;
 }
@@ -73,9 +75,9 @@ interface DocumentConsentProps {
  * Confirmación expresa antes de enviar un documento: nombra el archivo y adónde va su contenido.
  * Si hay varios candidatos, se elige uno; también se puede elegir otro con el selector del sistema.
  */
-export function DocumentConsent({ task, provider, candidates: found, maxCharacters, note, onAnalyze, onDismiss }: DocumentConsentProps) {
+export function DocumentConsent({ task, provider, candidates: found, maxCharacters, note, preselected, onAnalyze, onDismiss }: DocumentConsentProps) {
   const [candidates, setCandidates] = useState(found);
-  const [selected, setSelected] = useState<string | null>(found[0]?.token ?? null);
+  const [selected, setSelected] = useState<string | null>(preselected ?? (found.length === 1 ? (found[0]?.token ?? null) : null));
   const [sent, setSent] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
   const groupName = useId();

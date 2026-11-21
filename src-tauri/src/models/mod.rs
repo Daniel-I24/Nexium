@@ -212,6 +212,8 @@ pub enum ResponseBody {
         max_characters: usize,
         /// Por qué no hay candidatos, si no los hay.
         note: Option<String>,
+        /// El candidato que se marca de entrada, solo si la coincidencia es clara.
+        preselected: Option<String>,
     },
     /// Resumen o análisis de un documento, ya validado y en texto plano.
     DocumentAnalysis {

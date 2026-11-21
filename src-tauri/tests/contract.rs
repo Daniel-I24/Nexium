@@ -250,6 +250,7 @@ fn document_consent() {
                 }],
                 max_characters: 30_000,
                 note: None,
+                preselected: Some("t-1".into()),
             },
         ),
     );

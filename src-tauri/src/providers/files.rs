@@ -213,7 +213,16 @@ fn run_search(
             &mut budget,
         );
     }
-    found.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.path.cmp(&b.1.path)));
+    // Más términos en el nombre primero y, a igualdad, el nombre más corto: es el más específico.
+    found.sort_by(|a, b| {
+        b.0.cmp(&a.0)
+            .then_with(|| a.1.name.len().cmp(&b.1.name.len()))
+            .then_with(|| a.1.path.cmp(&b.1.path))
+    });
+    // Lo encontrado por contenido solo se muestra si ningún nombre coincide: si no, es ruido.
+    if found.iter().any(|(points, _)| *points > 0) {
+        found.retain(|(points, _)| *points > 0);
+    }
     truncated |= found.len() > MAX_RESULTS;
     SearchOutcome {
         files: found
@@ -371,21 +380,46 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn text_files_are_also_found_by_their_content_after_name_matches() {
+    async fn content_matches_only_appear_when_no_name_matches() {
         let dir = tree();
         fs::write(
             dir.path().join("apuntes.md"),
             "Clase 3: normalización en bases de datos",
         )
         .unwrap();
-        fs::write(dir.path().join("bases datos.pdf"), "x").unwrap();
-        let outcome = search(terms(&["bases", "datos"]), dir.path()).await;
-        let names: Vec<_> = outcome
+        let by_content = search(terms(&["bases", "datos"]), dir.path()).await;
+        let names: Vec<_> = by_content
             .files
             .iter()
             .map(|file| (file.name.as_str(), file.matched_in_content))
             .collect();
-        assert_eq!(names, [("bases datos", false), ("apuntes", true)]);
+        assert_eq!(names, [("apuntes", true)]);
+        fs::write(dir.path().join("bases datos.pdf"), "x").unwrap();
+        let by_name = search(terms(&["bases", "datos"]), dir.path()).await;
+        let names: Vec<_> = by_name
+            .files
+            .iter()
+            .map(|file| file.name.as_str())
+            .collect();
+        assert_eq!(names, ["bases datos"]);
+    }
+
+    #[tokio::test]
+    async fn the_most_specific_name_comes_first() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("prueba de rendimiento extendida.txt"), "x").unwrap();
+        fs::write(dir.path().join("documento-prueba.pdf"), "x").unwrap();
+        fs::write(dir.path().join("err-base.txt"), "una prueba").unwrap();
+        let outcome = search(terms(&["prueba"]), dir.path()).await;
+        let names: Vec<_> = outcome
+            .files
+            .iter()
+            .map(|file| file.name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            ["documento-prueba", "prueba de rendimiento extendida"]
+        );
     }
 
     #[tokio::test]

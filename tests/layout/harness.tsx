@@ -121,6 +121,7 @@ const responses: Record<string, () => AssistantResponse> = {
         ],
         maxCharacters: 30000,
         note: null,
+        preselected: null,
       },
       "pending",
     ),

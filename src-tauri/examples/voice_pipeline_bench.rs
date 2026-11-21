@@ -111,7 +111,8 @@ async fn main() {
 
     let (mut voice_totals, mut typed, mut local_hits) = (Vec::new(), Vec::new(), 0);
     for clip in &clips {
-        let samples = read_wav(&folder.join(&clip.file));
+        // Como la app: sin el silencio de los extremos y a volumen útil.
+        let samples = nexium_lib::providers::speech::prepare(&read_wav(&folder.join(&clip.file)));
         let audio_s = samples.len() as f64 / 16_000.0;
         let t0 = Instant::now();
         let text = speech

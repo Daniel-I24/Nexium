@@ -130,7 +130,8 @@
       "provider": "Google Gemini",
       "candidates": [{ "token": "t-1", "name": "Bases de datos", "extension": ".pdf", "location": "Documentos" }],
       "maxCharacters": 30000,
-      "note": null
+      "note": null,
+      "preselected": "t-1"
     }
   },
   "documentAnalysis": {

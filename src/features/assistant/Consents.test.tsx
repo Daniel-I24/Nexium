@@ -36,12 +36,19 @@ describe("permiso de carpetas", () => {
 
 describe("confirmación de un documento", () => {
   beforeEach(() => invoke.mockReset());
-  const props = { task: "summarize" as const, provider: "Google Gemini", maxCharacters: 30000, note: null, onDismiss: vi.fn() };
+  const props = { task: "summarize" as const, provider: "Google Gemini", maxCharacters: 30000, note: null, preselected: null, onDismiss: vi.fn() };
 
-  it("con varios candidatos se elige uno y se confirma ese", async () => {
+  it("una coincidencia clara viene marcada", () => {
+    render(<DocumentConsent {...props} preselected="t-2" candidates={[pdf, docx]} onAnalyze={vi.fn()} />);
+    expect(screen.getByRole("radio", { name: /Apuntes\.docx/ })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Resumir «Apuntes.docx»" })).toBeInTheDocument();
+  });
+
+  it("con varios candidatos sin uno claro, nada se envía hasta elegir", async () => {
     const onAnalyze = vi.fn();
     render(<DocumentConsent {...props} candidates={[pdf, docx]} onAnalyze={onAnalyze} />);
     expect(screen.getByText("Encontré 2 documentos. ¿Cuál quieres resumir?")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Resumir/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: /Apuntes\.docx/ }));
     expect(screen.getByText(/leerá «Apuntes\.docx» en este equipo y enviará su texto a Google Gemini/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Resumir «Apuntes.docx»" }));
