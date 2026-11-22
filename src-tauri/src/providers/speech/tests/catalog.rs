@@ -144,11 +144,12 @@ fn automatic_picks_precise_only_with_enough_memory_and_cores() {
 #[test]
 fn automatic_explains_its_choice() {
     assert_eq!(
-        auto_choice(hardware(15.7, 4)).1,
-        "este equipo tiene 16 GB de RAM y 4 núcleos, suficiente para que Preciso responda en torno a 1 s."
+        auto_choice(hardware(15.3, 6)).1,
+        "este equipo tiene 16 GB de RAM y 6 núcleos, suficiente para que Preciso responda en 1 o 2 s."
     );
     assert!(auto_choice(hardware(15.7, 2)).1.contains("2 núcleos"));
     assert!(auto_choice(hardware(3.8, 8)).1.contains("4 GB de RAM"));
+    assert!(auto_choice(hardware(7.4, 4)).1.contains("8 GB de RAM"));
 }
 
 #[test]

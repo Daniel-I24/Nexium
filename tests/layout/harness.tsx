@@ -199,7 +199,7 @@ const settings: SettingsView = {
   speechAuto: {
     modelId: "small",
     displayName: "Preciso",
-    reason: "este equipo tiene 16 GB de RAM y 4 núcleos, suficiente para que Preciso responda en torno a 1 s.",
+    reason: "este equipo tiene 16 GB de RAM y 6 núcleos, suficiente para que Preciso responda en 1 o 2 s.",
   },
   microphones: [
     { name: "Mezcla estéreo (Realtek(R) Audio) con un nombre de dispositivo muy largo", isMicrophone: false, isDefault: true },

@@ -19,7 +19,7 @@
 
 **Umbrales del modo automático:** Preciso con al menos 4 núcleos físicos y 7 GiB de memoria total (un equipo de 8 GB informa entre 7,2 y 7,9 GiB); Rápido en el resto.
 
-- **Núcleos:** el tiempo de whisper.cpp baja casi en proporción a los hilos, y Nexium usa uno por núcleo físico. Con 4 núcleos, Preciso transcribe una orden corta en 0,9 a 1,2 s (voz del propietario); con 2, pasaría de los 2 s del objetivo. Rápido, tres veces más rápido, queda por debajo.
+- **Núcleos:** el tiempo de whisper.cpp crece casi en proporción inversa a los hilos, y Nexium usa uno por núcleo físico. Con los 6 núcleos del equipo de pruebas, Preciso transcribe una orden corta en 0,9 a 1,2 s (voz del propietario); con 4, en torno a 1,5 s, aún dentro de los 2 s del objetivo; con 2 pasaría de los 3 s. Rápido, tres veces más rápido, queda por debajo en cualquier caso.
 - **Memoria:** Preciso necesita 332 MB de pico al transcribir y Rápido 148 MB, además de unos 180 MB de la app. Con 4 GB, el sistema y el navegador ya ocupan casi todo, y los 180 MB de diferencia pueden hacer que Windows pagine, que es mucho más lento que equivocarse algo más.
 - Si no se puede medir la memoria, se elige Rápido: nunca deja la voz lenta.
 

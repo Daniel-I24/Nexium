@@ -77,9 +77,9 @@ pub fn catalog_ids() -> Vec<&'static str> {
 /// Ajuste en el que Nexium elige el modelo según el equipo.
 pub const AUTO_MODEL: &str = "auto";
 /// Umbrales del modo automático, justificados en `docs/PRUEBA_VOZ.md`. Preciso necesita unos 330 MB más
-/// mientras transcribe, y su tiempo baja casi en proporción a los núcleos: con 4 tarda en torno a 1 s una orden
-/// corta; con 2 pasaría de los 2 s. Un equipo de 8 GB informa algo menos (memoria reservada por el sistema y
-/// la gráfica), por eso el umbral es de 7 GiB.
+/// mientras transcribe, y su tiempo crece casi en proporción inversa a los núcleos: con los 6 del equipo de
+/// pruebas tarda de 0,9 a 1,2 s una orden corta; con 4, en torno a 1,5 s; con 2 pasaría de los 3 s. Un equipo
+/// de 8 GB informa algo menos (memoria reservada por el sistema y la gráfica), por eso el umbral es de 7 GiB.
 pub const PRECISE_MIN_MEMORY_GIB: f64 = 7.0;
 pub const PRECISE_MIN_CORES: usize = 4;
 
@@ -118,19 +118,20 @@ pub struct AutoChoice {
 }
 
 pub fn auto_choice(hardware: Hardware) -> (&'static SpeechModel, String) {
-    let memory = hardware.memory_gib.round();
+    // Como se anuncia el equipo: 15,3 GiB son «16 GB».
+    let memory = hardware.memory_gib.ceil();
     let cores = hardware.physical_cores;
     let (id, reason) = if hardware.physical_cores < PRECISE_MIN_CORES {
         (
             "base",
             format!(
-                "este equipo tiene {cores} núcleos, y con Preciso cada orden tardaría más de 2 s."
+                "este equipo tiene {cores} núcleos, y con Preciso cada orden tardaría más de 3 s."
             ),
         )
     } else if hardware.memory_gib < PRECISE_MIN_MEMORY_GIB {
         ("base", format!("este equipo tiene {memory} GB de RAM, y Preciso necesita unos 330 MB más mientras transcribe."))
     } else {
-        ("small", format!("este equipo tiene {memory} GB de RAM y {cores} núcleos, suficiente para que Preciso responda en torno a 1 s."))
+        ("small", format!("este equipo tiene {memory} GB de RAM y {cores} núcleos, suficiente para que Preciso responda en 1 o 2 s."))
     };
     (find_model(id).unwrap_or(&CATALOG[0]), reason)
 }
