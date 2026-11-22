@@ -224,6 +224,20 @@ fn silent() -> StageSink {
     Arc::new(|_| {})
 }
 
+#[tokio::test]
+async fn the_performance_log_never_keeps_the_request() {
+    let mut h = harness(None, true, false);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("rendimiento.log");
+    h.assistant.performance = crate::services::performance::PerformanceLog::new(path.clone());
+    ask(&h.assistant, "¿Qué hora es? Secreto-7391").await;
+    ask(&h.assistant, "Busca el informe Confidencial-5512").await;
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(content.lines().count(), 2);
+    assert!(!content.contains("Secreto") && !content.contains("7391"));
+    assert!(!content.contains("Confidencial") && !content.contains("informe"));
+}
+
 async fn ask(assistant: &Assistant, text: &str) -> AssistantResponse {
     assistant
         .process(text, CancellationToken::new(), silent())
