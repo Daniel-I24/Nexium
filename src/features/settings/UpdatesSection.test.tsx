@@ -17,24 +17,32 @@ describe("Ajustes: actualizaciones", () => {
   });
 
   it("dice si ya tienes la última versión", async () => {
-    invoke.mockResolvedValueOnce({ current: "1.0.0", available: null });
+    invoke.mockResolvedValueOnce({ current: "1.0.0", published: true, available: null });
     render(<UpdatesSection />);
     await userEvent.click(screen.getByRole("button", { name: "Buscar actualizaciones" }));
     expect(await screen.findByText("Tienes la última versión, la 1.0.0.")).toBeInTheDocument();
   });
 
   it("ofrece instalar una versión nueva y la instala al pedirlo", async () => {
-    invoke.mockResolvedValueOnce({ current: "1.0.0", available: "1.0.1" }).mockResolvedValueOnce(undefined);
+    invoke.mockResolvedValueOnce({ current: "1.0.0", published: true, available: "1.0.1" }).mockResolvedValueOnce(undefined);
     render(<UpdatesSection />);
     await userEvent.click(screen.getByRole("button", { name: "Buscar actualizaciones" }));
     await userEvent.click(await screen.findByRole("button", { name: "Instalar la versión 1.0.1" }));
     expect(invoke).toHaveBeenLastCalledWith("update_install");
   });
 
-  it("explica un fallo de conexión", async () => {
-    invoke.mockRejectedValueOnce("No se pudo comprobar si hay una versión nueva. Revisa tu conexión a Internet.");
+  it("sin ninguna versión publicada lo dice, sin culpar a la conexión", async () => {
+    invoke.mockResolvedValueOnce({ current: "1.0.0", published: false, available: null });
     render(<UpdatesSection />);
     await userEvent.click(screen.getByRole("button", { name: "Buscar actualizaciones" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo comprobar");
+    expect(await screen.findByText("Todavía no hay ninguna versión publicada en GitHub. Tienes la 1.0.0.")).toBeInTheDocument();
+    expect(screen.queryByText(/conexión/)).toBeNull();
+  });
+
+  it("explica un fallo de conexión o de firma con el mensaje de Nexium", async () => {
+    invoke.mockRejectedValueOnce("No hay conexión con GitHub, donde se publican las versiones. Revisa tu conexión a Internet.");
+    render(<UpdatesSection />);
+    await userEvent.click(screen.getByRole("button", { name: "Buscar actualizaciones" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No hay conexión con GitHub");
   });
 });

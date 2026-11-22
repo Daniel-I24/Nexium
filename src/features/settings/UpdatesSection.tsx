@@ -9,6 +9,7 @@ type State =
   | { kind: "idle" }
   | { kind: "checking" }
   | { kind: "upToDate"; current: string }
+  | { kind: "unpublished"; current: string }
   | { kind: "available"; current: string; available: string }
   | { kind: "installing"; available: string }
   | { kind: "error"; message: string };
@@ -24,7 +25,8 @@ export function UpdatesSection() {
     setState({ kind: "checking" });
     try {
       const status = await api.checkUpdate();
-      setState(status.available ? { kind: "available", current: status.current, available: status.available } : { kind: "upToDate", current: status.current });
+      if (status.available) setState({ kind: "available", current: status.current, available: status.available });
+      else setState({ kind: status.published ? "upToDate" : "unpublished", current: status.current });
     } catch (error) {
       setState({ kind: "error", message: errorMessage(error) });
     }
@@ -44,6 +46,11 @@ export function UpdatesSection() {
       <h2 className="m-0 text-lg font-medium">Actualizaciones</h2>
       <p className="m-0 text-sm text-muted">Nexium solo busca versiones nuevas cuando lo pides, en sus publicaciones de GitHub, y solo instala las firmadas por Nexium.</p>
       {state.kind === "upToDate" && <Notice tone="ok">{`Tienes la última versión, la ${state.current}.`}</Notice>}
+      {state.kind === "unpublished" && (
+        <p role="status" className="m-0">
+          Todavía no hay ninguna versión publicada en GitHub. Tienes la {state.current}.
+        </p>
+      )}
       {state.kind === "available" && (
         <p role="status" className="m-0">
           Hay una versión nueva: la {state.available}. Tienes la {state.current}. Al instalarla, Nexium se cerrará y se volverá a abrir.

@@ -52,7 +52,7 @@ export const api = {
   recordFailure: (request: string, cause: string) => invoke<{ id: number; createdAt: string }>("history_record_failure", { request, cause }),
 
   /** Solo cuando la persona lo pide en Ajustes. */
-  checkUpdate: () => invoke<{ current: string; available: string | null }>("update_check"),
+  checkUpdate: () => invoke<{ current: string; published: boolean; available: string | null }>("update_check"),
   installUpdate: () => invoke<undefined>("update_install"),
 
   getSettings: () => invoke<SettingsView>("settings_get"),
