@@ -270,3 +270,5 @@ Se usa Tailwind CSS 4 con configuración en CSS, sin `tailwind.config.js`.
 - Un patrón para listas: filas con líneas finas, en resultados, recordatorios e historial por igual.
 - Todo estado se escribe con palabras, además de cualquier señal visual.
 - Ningún elemento se añade solo por decorar: los puntos que pide evitar el documento maestro (degradados, neón, tarjetas repetidas, radios grandes, sombras) quedan descartados por las reglas de la sección 7.
+
+**Iconos de la aplicación:** `src-tauri/icons/icon-source.svg` es el original. Los demás se generan con `npx tauri icon src-tauri/icons/icon-source.svg` y se conservan solo los que lista `tauri.conf.json`.

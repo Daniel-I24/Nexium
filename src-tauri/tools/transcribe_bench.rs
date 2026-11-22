@@ -4,6 +4,9 @@
 //! Con "auto", el codificador procesa solo la duración real del audio en lugar de la ventana de 30 s.
 //! Cada clip se guarda al terminar: al relanzar, se omiten los que ya están en el archivo.
 //! Se detiene con el código 3 si la memoria libre del equipo baja de 2 GB.
+
+#[path = "wav.rs"]
+mod wav;
 use std::{
     collections::HashSet,
     fs::OpenOptions,
@@ -15,6 +18,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+use wav::read_wav;
 
 use nexium_lib::providers::speech::audio_context;
 use serde::{Deserialize, Serialize};
@@ -74,21 +78,6 @@ fn edit_distance(a: &[String], b: &[String]) -> usize {
         }
     }
     row[b.len()]
-}
-
-fn read_wav(path: &Path) -> Vec<f32> {
-    let bytes = std::fs::read(path).expect("wav");
-    let data = bytes
-        .windows(4)
-        .position(|w| w == b"data")
-        .expect("chunk data")
-        + 8;
-    bytes[data..]
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|sample| f32::from(i16::from_le_bytes(*sample)) / 32768.0)
-        .collect()
 }
 
 /// Vigila la memoria durante la transcripción, no solo entre clips.

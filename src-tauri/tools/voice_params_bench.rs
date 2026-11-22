@@ -5,7 +5,11 @@
 //! Opciones (por defecto, las de la app): `crudo` (sin recorte ni normalización), `hilos=N`,
 //! `temperatura=0.2` (reintentos de temperatura), `sin-prompt`, `ventana-completa` (sin audio_ctx),
 //! `idioma-auto` y `repeticiones=N`.
+
+#[path = "wav.rs"]
+mod wav;
 use std::{path::Path, time::Instant};
+use wav::read_wav;
 
 use nexium_lib::{
     core::rules,
@@ -19,21 +23,6 @@ struct Clip {
     id: String,
     file: String,
     reference: String,
-}
-
-fn read_wav(path: &Path) -> Vec<f32> {
-    let bytes = std::fs::read(path).expect("wav");
-    let data = bytes
-        .windows(4)
-        .position(|w| w == b"data")
-        .expect("chunk data")
-        + 8;
-    bytes[data..]
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|sample| f32::from(i16::from_le_bytes(*sample)) / 32768.0)
-        .collect()
 }
 
 fn main() {

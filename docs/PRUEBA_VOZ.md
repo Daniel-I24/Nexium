@@ -29,7 +29,7 @@
 
 - **Audio:** 40 grabaciones humanas de 3,1 a 6,0 s, 15 voces, 209 s en total, de [CIEMPIESS Test](https://huggingface.co/datasets/ciempiess/ciempiess_test) (español de México). Es habla espontánea, con su transcripción de referencia.
 - **Equipo:** AMD Ryzen 5 7535HS, 16 GB, solo CPU, 6 hilos (los que usa la app en este equipo), 7 de noviembre de 2026.
-- **Herramienta:** `src-tauri/examples/transcribe_bench.rs`.
+- **Herramienta:** `src-tauri/tools/transcribe_bench.rs`.
 
 | Configuración | WER (palabras erróneas) | Transcripción: media | Mediana | P95 | Máximo | Carga del modelo | Memoria pico |
 |---|---|---|---|---|---|---|---|

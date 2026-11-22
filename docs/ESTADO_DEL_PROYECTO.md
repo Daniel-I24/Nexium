@@ -52,7 +52,7 @@ La prueba del 15 de noviembre dio por correctos G1, G2, G5 y G6. Lo demás se co
 | Historial | Una solicitud creaba varias entradas (pendiente de autorización, de confirmación, completada; «Falta la ciudad») | Lo que continúa una solicitud actualiza su misma entrada hasta el estado final, también en la conversación. Cancelar la cierra como cancelada |
 | Notificaciones | «Abrir Nexium» solo mostraba la ventana | Abre Recordatorios con ese recordatorio a la vista, con el foco y un destello breve. El título lleva un emoji según el contenido, elegido sin IA |
 
-**Limpieza.** Eliminado `examples/voice_check.rs` (lo cubren `voice_record`, `voice_pipeline_bench` y la prueba con audio real). Las pruebas largas pasan a archivos propios junto a su módulo y `models` se divide por temas: ningún archivo de código pasa de unas 370 líneas. No quedan funciones, tipos ni exportaciones sin uso, y todas las dependencias se usan.
+**Limpieza.** Eliminado `tools/voice_check.rs` (lo cubren `voice_record`, `voice_pipeline_bench` y la prueba con audio real). Las pruebas largas pasan a archivos propios junto a su módulo y `models` se divide por temas: ningún archivo de código pasa de unas 370 líneas. No quedan funciones, tipos ni exportaciones sin uso, y todas las dependencias se usan.
 
 **Pruebas nuevas.** Grabación real a 48 kHz y en estéreo por la cadena de cpal hasta Whisper (`a_48k_stereo_recording_reaches_whisper_as_16k_mono_voice`) y transcripción con modelo en menos de 2 s (`tests/voice_real_audio.rs`, ignorada sin modelo); recorte, normalización y filtro del audio; hilos de Whisper; límites de tiempo de la IA en la app y en el servidor; relevancia y preselección de documentos; resumen con datos importantes; una entrada por solicitud (núcleo e interfaz); emoji del aviso y apertura del recordatorio.
 
@@ -266,7 +266,7 @@ Las pruebas con datos de ejemplo no detectaron estos defectos; sí la ventana re
 
 ## Pruebas reales con Gemini
 
-Fecha: 7 de noviembre de 2026. Herramienta: `src-tauri/examples/gemini_live.rs`. La cuota no se agotó. Estas pruebas llaman al proveedor directamente: aún no pasan por la interfaz.
+Fecha: 7 de noviembre de 2026. Herramienta: `gemini_live`, sustituida después por `src-tauri/tools/ai_live.rs`. La cuota no se agotó. Estas pruebas llaman al proveedor directamente: aún no pasan por la interfaz.
 
 **Frases en español, con `gemini-3.5-flash-lite`:** 24 de 25 correctas, 1,25 s de media y 13 307 tokens en total.
 
@@ -297,7 +297,7 @@ Defectos encontrados:
 
 ## Pruebas reales con Open-Meteo
 
-Fecha: 7 de noviembre de 2026. Herramienta: `src-tauri/examples/weather_live.rs`, sin pasar por la interfaz.
+Fecha: 7 de noviembre de 2026. Herramienta: `src-tauri/tools/weather_live.rs`, sin pasar por la interfaz.
 
 - Medellín, Bogotá, Madrid y Ciudad de México devolvieron lugar, temperatura, condición y pronóstico de hoy y mañana.
 - Medellín coincide con una llamada directa a la API: 21,8 °C frente a 21,6 °C (con coordenadas algo distintas), chubascos, máxima de 25 °C y mínima de 18 °C.

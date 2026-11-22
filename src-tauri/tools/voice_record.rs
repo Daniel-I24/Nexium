@@ -1,5 +1,5 @@
 //! Graba frases con el mismo flujo que la app (micrófono automático o el elegido, mezcla a un canal y paso a
-//! 16 kHz) y las guarda como WAV para medirlas con `voice_pipeline_bench`. Solo para diagnóstico: el audio
+//! 16 kHz) y las guarda como WAV para medirlas con `voice_params_bench`. Solo para diagnóstico: el audio
 //! se guarda fuera del repositorio y se borra al terminar la medición.
 //!
 //!   cargo run --release --example voice_record -- <carpeta> [micrófono]

@@ -207,7 +207,7 @@ cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings &
 cd server && npm ci && npm run typecheck && npm test
 ```
 
-La CI ejecuta todo esto en Windows, macOS y Linux, y las del servidor aparte. Pruebas con servicios reales, que gastan cuota y nunca se ejecutan en CI:
+La CI ejecuta todo esto en Windows, macOS y Linux, y las del servidor aparte. Pruebas con servicios reales, que gastan cuota y nunca se ejecutan en CI (estas y las mediciones de voz están en [`src-tauri/tools`](src-tauri/tools/README.md)):
 
 ```bash
 cd src-tauri

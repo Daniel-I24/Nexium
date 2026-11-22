@@ -60,8 +60,8 @@ Objetivos: una orden local por voz en menos de 3 s en total, una orden escrita l
   2026-11-14 16:44:02 voz · local · system | fin de grabación 9 ms · carga del modelo 0 ms · transcripción 1068 ms · interpretación 0 ms · respuesta 251 ms · total 1331 ms
   ```
 
-- **Voz, en el banco de pruebas:** `src-tauri/examples/voice_pipeline_bench.rs` recorre la misma cadena que la app (modelo precargado, transcripción con Whisper `small`, intérprete local y respuesta) con 30 clips de órdenes: 15 frases dichas a dos velocidades por la voz española de Windows (Microsoft Helena), a 16 kHz. Es habla sintética y limpia: con una voz y un micrófono reales los tiempos y los aciertos pueden cambiar, y eso queda para la prueba manual.
-- **IA:** `src-tauri/examples/ai_live.rs frases` contra el servidor desplegado, con 25 frases que necesitan IA y 7 s de pausa entre ellas.
+- **Voz, en el banco de pruebas:** `voice_pipeline_bench` (eliminado en la 1.0.0: la app mide la misma cadena en `rendimiento.log`) recorre la misma cadena que la app (modelo precargado, transcripción con Whisper `small`, intérprete local y respuesta) con 30 clips de órdenes: 15 frases dichas a dos velocidades por la voz española de Windows (Microsoft Helena), a 16 kHz. Es habla sintética y limpia: con una voz y un micrófono reales los tiempos y los aciertos pueden cambiar, y eso queda para la prueba manual.
+- **IA:** `src-tauri/tools/ai_live.rs frases` contra el servidor desplegado, con 25 frases que necesitan IA y 7 s de pausa entre ellas.
 - **Equipo:** el de la línea base (AMD Ryzen 5 7535HS, 16 GB), con batería y sin conectar a la corriente; Whisper con 6 hilos. Los tiempos cambian en otras CPU.
 
 ### Antes y después
@@ -118,7 +118,7 @@ La prueba manual dio unos 13 s de transcripción por orden en la app instalada (
 
 ## La voz con grabaciones reales: 21 de noviembre de 2026
 
-Cuatro órdenes dichas por el propietario con su micrófono (Microphone Array, Realtek; 48 kHz, 2 canales, F32), grabadas con el mismo flujo de la app (`examples/voice_record.rs`) y borradas después de medir. Llegaban limpias: de 52 a 55 dB entre voz y ruido, picos de 0,23 a 0,66 y la voz entre 0,8 y 2,3 s dentro de los 5 s grabados. Equipo conectado a la corriente (plan «Turbo»).
+Cuatro órdenes dichas por el propietario con su micrófono (Microphone Array, Realtek; 48 kHz, 2 canales, F32), grabadas con el mismo flujo de la app (`tools/voice_record.rs`) y borradas después de medir. Llegaban limpias: de 52 a 55 dB entre voz y ruido, picos de 0,23 a 0,66 y la voz entre 0,8 y 2,3 s dentro de los 5 s grabados. Equipo conectado a la corriente (plan «Turbo»).
 
 **`force-debug`, comprobado.** En `whisper-rs-sys` 0.15.0 (la que usa `whisper-rs` 0.16.0), `build.rs` solo hace dos cosas con esa característica: define `CMAKE_BUILD_TYPE=RelWithDebInfo` y añade `-DWHISPER_DEBUG`. Con Visual Studio, `CMAKE_BUILD_TYPE` no decide la configuración: se compila `--config Release`, y lo que cambia es que el crate `cmake` ya no pisa las banderas de Release. El registro de MSBuild muestra `/O2 /Ob2 /D NDEBUG` en cada archivo. No es una compilación de depuración. `WHISPER_DEBUG` solo añade mensajes de registro (unas 35 líneas en cuatro órdenes), que Nexium descarta con `install_logging_hooks`. En Linux y macOS, `RelWithDebInfo` es `-O2 -g`.
 
@@ -132,7 +132,7 @@ Cuatro órdenes dichas por el propietario con su micrófono (Microphone Array, R
 | Sin `force-debug` (whisper.cpp en `/Od`, sin recorte) | 18 752 ms | 19 604 ms | 4 de 4 |
 | Con `force-debug` y la cadena actual | 1 074 ms | 1 166 ms | 4 de 4 |
 
-**Cada parámetro, con las mismas grabaciones** (`examples/voice_params_bench.rs`, mejor de dos repeticiones; la configuración de la app es la primera fila):
+**Cada parámetro, con las mismas grabaciones** (`tools/voice_params_bench.rs`, mejor de dos repeticiones; la configuración de la app es la primera fila):
 
 | Variante | Mediana | Conclusión |
 |---|---|---|
