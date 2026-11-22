@@ -15,6 +15,9 @@ export default defineConfig({
     strictPort: true,
     watch: { ignored: ["**/src-tauri/**"] },
   },
+  // Las dependencias de la app y de la página de las pruebas de diseño se analizan al arrancar el servidor. Si
+  // no, Vite las descubre en la primera carga y recarga la página a mitad de una prueba.
+  optimizeDeps: { entries: ["index.html", "tests/layout/harness.html"] },
   build: { target: "es2022", sourcemap: false },
   test: {
     environment: "jsdom",
