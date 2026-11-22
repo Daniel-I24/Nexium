@@ -31,7 +31,15 @@ Se marca cada etapa solo cuando está comprobada.
   - [x] Lint, tipado, Clippy, `cargo fmt`, `cargo audit` (0 vulnerabilidades), `npm audit` (0 en la app y el Worker) y todas las pruebas
   - [ ] Rendimiento final con el ejecutable de distribución
 - [ ] **Etapa 5. Verificación en la app instalada** (prueba manual final del propietario)
-- [ ] **Etapa 6. Publicación de la versión 1.0.0** (versión, instaladores en español, actualizador, publicación automática, README final y Release)
+  - [ ] Prueba F1 a F7 de `docs/PLAN_PRUEBAS_MANUALES.md`, con el instalador de `compilar-distribucion.cmd`
+- [ ] **Etapa 6. Publicación de la versión 1.0.0**
+  - [x] Versión 1.0.0 en la app, el servidor y el crate
+  - [x] Instaladores en español: NSIS (sin selector de idioma, por usuario) y MSI en es-ES
+  - [x] Actualizador con GitHub Releases y firma; clave privada fuera del repositorio; búsqueda solo a petición, en Ajustes
+  - [x] Flujo «Publicación»: al subir una etiqueta `v*`, instaladores de Windows, macOS (Apple Silicon e Intel) y Linux, con `latest.json`
+  - [x] README final con capturas, requisitos, instalación por sistema, privacidad, arquitectura, pruebas, atribución, licencia y limitaciones
+  - [ ] Secretos `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` guardados en GitHub (propietario)
+  - [ ] Etiqueta v1.0.0, Release publicada con los seis instaladores y prueba del instalador descargado
 
 ## Correcciones tras la prueba G1 a G7 (21 de noviembre de 2026)
 

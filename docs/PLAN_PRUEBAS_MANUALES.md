@@ -27,6 +27,47 @@ Instalador: descárgalo de la última ejecución de [CI](https://github.com/Dani
 | 17 | Analizar pantalla con una ventana sin datos personales | Aviso nombrando a Google Gemini antes de capturar; responde sobre esa ventana |
 | 18 | Revisar el Historial | Aparecen las solicitudes con su estado escrito y con icono, y se pueden filtrar y eliminar |
 
+## Prueba final de la versión 1.0.0 (Windows, app instalada)
+
+Desinstala la versión anterior desde **Configuración > Aplicaciones** e instala `Nexium_1.0.0_x64-setup.exe`, de `src-tauri\target\release\bundle\nsis`, que genera `compilar-distribucion.cmd`. Anota **Correcto**, **Falla** (con lo que viste) o **No probado**. Si algo falla, solo se repite esa prueba.
+
+### F1. Voz: cuatro frases y sus tiempos
+
+Pulsa Hablar, di cada frase y pulsa Terminar. Al final abre `%APPDATA%\io.github.daniel-i24.nexium\rendimiento.log` y copia las cuatro últimas líneas.
+
+| Frase | Esperado | Resultado |
+|---|---|---|
+| «¿Cuánta batería tengo?» | Porcentaje de batería, «sin IA» | |
+| «¿Cuánta RAM estoy usando?» | Memoria en uso y total, «sin IA» | |
+| «¿Qué hora es?» | La hora del equipo, «sin IA» | |
+| «¿A qué red wifi estoy conectado?» | El nombre de tu red, «sin IA» | |
+
+Esperado en `rendimiento.log`: cada transcripción por debajo de 2 000 ms y cada total por debajo de 3 000 ms.
+
+### F2. Resumen de un documento
+
+Escribe «Resume mi documento de prueba» y confirma el archivo. Esperado: un resumen de 2 o 3 frases, de 5 a 8 ideas clave con su nombre en negrita y los datos importantes del documento, si los tiene.
+
+### F3. Análisis de pantalla
+
+Pulsa **Analizar pantalla**, lee el aviso y pulsa **Capturar**. Esperado: en unos segundos, una descripción de lo que había en pantalla. Sin pulsar Capturar, no se toma ninguna imagen.
+
+### F4. Clima
+
+Escribe «¿Cómo está el clima en Bogotá?». Esperado: temperatura, estado del cielo, pronóstico de hoy, el origen «Open-Meteo, sin IA» y el enlace de atribución.
+
+### F5. Recordatorio con notificación
+
+Escribe «Recuérdame tomar agua dentro de dos minutos» y cierra la ventana (queda en la bandeja). Esperado: a los dos minutos, el aviso «💧 Recordatorio de Nexium» se queda en pantalla, y **Abrir Nexium** abre Recordatorios con ese recordatorio resaltado.
+
+### F6. Historial y Borrar todo
+
+Abre **Historial**. Esperado: una entrada por cada solicitud de F1 a F5, con su estado. Pulsa **Borrar todo** y confirma. Esperado: el historial queda vacío y lo indica; al cerrar Nexium con Salir y volver a abrirlo, sigue vacío.
+
+### F7. Actualizaciones
+
+En **Ajustes > Actualizaciones**, pulsa **Buscar actualizaciones**. Esperado mientras no esté publicada la 1.0.0: un mensaje claro de que no se pudo comprobar. Después de publicarla: «Tienes la última versión, la 1.0.0.».
+
 ## Prueba manual de lo corregido (21 de noviembre de 2026, app instalada)
 
 Desinstala la versión anterior e instala la nueva con el `.exe` de `src-tauri\target\release\bundle\nsis` que genera `compilar-distribucion.cmd`. Anota **Correcto**, **Falla** (con lo que viste) o **No probado**.
