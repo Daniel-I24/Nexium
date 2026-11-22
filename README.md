@@ -19,7 +19,7 @@ Los hechos salen del equipo, no de un modelo. La IA interpreta lo que pides, per
 - **Documentos:** «Resume mi documento de bases de datos» o «Analiza este archivo». Lee en el equipo `.txt`, `.md`, `.csv`, PDF con texto y `.docx`, ofrece los archivos por relevancia (primero los que coinciden por nombre) y pide tu confirmación antes de enviar su texto a la IA. El resumen tiene dos o tres frases, de cinco a ocho ideas clave explicadas y los datos importantes (fechas, cifras, definiciones). Un PDF escaneado o un formato no compatible se explican.
 - **Pantalla:** una sola captura en memoria, comprimida y enviada al servicio de IA, y después descartada.
 - **Clima y hora:** condiciones actuales y pronóstico de Open-Meteo; hora del equipo. Sin ciudad en la solicitud se usa la de Ajustes, y si no hay ninguna, Nexium la pregunta y ofrece guardarla.
-- **Recordatorios:** en lenguaje natural, con aclaración si la fecha es ambigua. Se guardan en SQLite. En Windows, el aviso se queda en pantalla hasta que lo descartes.
+- **Recordatorios:** en lenguaje natural, con aclaración si la fecha es ambigua. Se guardan en SQLite, con tres estados: Pendiente, Avisado (el aviso salió a su hora) y Vencido (la hora pasó sin poder avisar). En Windows, el aviso se queda en pantalla hasta que lo descartes.
 - **Historial:** solicitudes, categoría, estado y respuesta, sin audio ni imágenes. Cada solicitud tiene una sola entrada, que se actualiza hasta su estado final aunque pase por un permiso o una pregunta.
 - **Actualizaciones:** en **Ajustes > Actualizaciones**, solo cuando lo pides. Nexium instala únicamente versiones publicadas aquí y firmadas con su clave.
 
@@ -31,7 +31,7 @@ Los hechos salen del equipo, no de un modelo. La IA interpreta lo que pides, per
 | macOS | macOS 12.3 Monterey o posterior | Apple Silicon (M1 o posterior) o Intel, 8 GB de RAM | 250 MB con el modelo de voz preciso |
 | Linux | Ubuntu 24.04, Debian 13 o equivalentes, con WebKitGTK 4.1 y PipeWire | x86-64 de 4 núcleos y 8 GB de RAM | 250 MB con el modelo de voz preciso |
 
-Con 4 GB de RAM o un procesador de 2 núcleos, elige en Ajustes el modelo de voz **Rápido** (60 MB). La IA, el clima y las actualizaciones necesitan Internet; las consultas del equipo y la voz, no.
+El modelo de voz **Automático** (por defecto) usa Preciso con 4 núcleos y 8 GB de RAM o más, y Rápido (60 MB) en equipos más modestos; en Ajustes puedes ver qué eligió y por qué, y cambiarlo. La IA, el clima y las actualizaciones necesitan Internet; las consultas del equipo y la voz, no.
 
 ## Instalación
 
@@ -70,7 +70,7 @@ chmod +x Nexium_1.0.0_amd64.AppImage
 
 ### Primeros pasos
 
-1. En **Ajustes**, descarga el modelo de voz (una sola vez; se verifica su integridad).
+1. En **Ajustes**, descarga el modelo de voz que marca el modo automático (una sola vez; se verifica su integridad).
 2. Pulsa **Hablar** o escribe, por ejemplo: «¿Cuánta batería me queda?», «¿Cómo está el clima en Bogotá?», «Recuérdame llamar al dentista mañana a las 10» o «Resume mi documento de bases de datos».
 
 ### Actualizaciones
@@ -132,7 +132,7 @@ docs/           Análisis, diseño, estado, rendimiento, voz y pruebas manuales
 
 Quien usa Nexium no configura nada para la IA. **Ajustes** muestra el estado del servicio y el uso de hoy. El límite diario lo pone el servidor de Nexium para cada equipo y red; si se alcanza, Nexium dice a qué hora se restablece y no reintenta. Las operaciones locales no consumen cuota.
 
-Las órdenes simples (hora, fecha, batería, CPU, RAM, red, Wi-Fi, modo oscuro y abrir secciones) se resuelven en el equipo, sin IA. Los tiempos de cada solicitud quedan en `rendimiento.log`, en la carpeta de datos de Nexium, sin el texto pedido: ver [`docs/RENDIMIENTO.md`](docs/RENDIMIENTO.md).
+Las órdenes simples (hora, fecha, batería, CPU, RAM, red, Wi-Fi, modo oscuro y abrir secciones) se resuelven en el equipo, sin IA. Los tiempos de cada solicitud quedan en `rendimiento.log` (como mucho dos archivos de 256 KB), en la carpeta de datos de Nexium, sin el texto pedido: ver [`docs/RENDIMIENTO.md`](docs/RENDIMIENTO.md).
 
 ### Voz
 
