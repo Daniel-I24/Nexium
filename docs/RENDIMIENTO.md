@@ -152,6 +152,26 @@ Cuatro órdenes dichas por el propietario con su micrófono (Microphone Array, R
 
 **Objetivos en este equipo, con esta voz:** transcripción de una orden corta por debajo de 2 s (1,07 s de mediana y 1,17 s como máximo) y orden local completa por debajo de 3 s (transcripción más respuesta, como mucho 1,19 s).
 
+## Medición final de la 1.0.0: 22 de noviembre de 2026
+
+Ejecutable de distribución sin instalar, mismo método que la línea base, **conectado a la corriente** como la línea base (la medición del 21 de noviembre fue con batería). Equipo de 12 núcleos lógicos (6 físicos).
+
+| Medida | Línea base (11 nov.) | Antes de la limpieza (21 nov.) | 1.0.0 (22 nov.) |
+|---|---|---|---|
+| Instalador NSIS | 3,48 MiB | 4,90 MiB | 4,86 MiB |
+| Instalador MSI | 4,67 MiB | 6,68 MiB | 6,64 MiB |
+| Ejecutable `nexium.exe` | 11,1 MiB | 16,47 MiB | 16,45 MiB |
+| Frontend (`dist/`): fuentes | 262 KB (con copias `.woff`) | 171 KB | 129 KB |
+| Arranque | 527 a 573 ms | 688 a 806 ms, con batería | 498 a 588 ms (2 468 ms el primero, en frío) |
+| Memoria privada en reposo | 178 MB | 176 MB | 182 MB (`nexium.exe` 12 MB, 6 procesos) |
+| CPU en reposo | 0,44 % de un núcleo | 0,70 %, con batería | 0,42 % |
+| Orden local por voz, transcripción | | 18 962 ms (mediana, app instalada) | 881 a 1 048 ms (prueba F1 del propietario) |
+| Orden local por voz, total | | | 910 a 1 108 ms |
+
+«Antes de la limpieza» es el instalador 1.0.0 que compiló el propietario para la prueba F1 a F7, antes de las correcciones del 22 de noviembre. La limpieza quita 40 KB del instalador (fuentes cirílicas y vietnamitas que Nexium no usa); el crecimiento desde la línea base es el del actualizador firmado y la lectura local de documentos. Arranque, memoria y CPU vuelven a la línea base.
+
+**Comprobaciones del ejecutable 1.0.0:** `remote-debugging`, `9222` y `remote-allow-origins` aparecen 0 veces; la URL del servidor de Nexium, 1; la API de Gemini y el prefijo `AIza`, 0.
+
 ## Medición final: 21 de noviembre de 2026
 
 Ejecutable de distribución sin instalar, mismo método que la línea base, con batería.
@@ -194,6 +214,14 @@ Búsqueda de texto en `nexium.exe`:
 | URL del servidor de Nexium | 1 |
 | URL de la API de Gemini | 0 |
 | Prefijo de las claves de Google (`AIza`) | 0 |
+
+## Auditoría de dependencias: 22 de noviembre de 2026
+
+| Herramienta | Resultado |
+|---|---|
+| `npm audit` (app, incluidas las herramientas de desarrollo) | 0 vulnerabilidades. `minimatch`, que llegaba por ESLint, ya tiene versión corregida |
+| `npm audit` en `server/` | 0 vulnerabilidades |
+| `cargo audit` (661 crates) | 0 vulnerabilidades tras pasar `url` a 2.5.9 (RUSTSEC-2026-0592); 7 avisos de crates sin mantenimiento, sin vulnerabilidad conocida |
 
 ## Auditoría de dependencias
 

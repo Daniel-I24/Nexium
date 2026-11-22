@@ -1,6 +1,6 @@
 # Nexium: estado del proyecto
 
-Última actualización: 21 de noviembre de 2026.
+Última actualización: 22 de noviembre de 2026.
 
 **Etapa actual:** camino a la versión 1.0.0 (lista de verificación abajo). **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas, revisión final del 13 de noviembre y correcciones de la prueba manual del 15 de noviembre** (abajo). No queda nada pendiente de código para una fase posterior. Falta la prueba manual final del propietario con la app instalada: `docs/PLAN_PRUEBAS_MANUALES.md`.
 
@@ -26,20 +26,39 @@ Se marca cada etapa solo cuando está comprobada.
   - [x] Textos: trato de tú, puntuación y comillas angulares en todos los mensajes (prueba `tests/texts.rs`)
   - [x] Seguridad: sin secretos en el repositorio ni en el ejecutable, capacidades de Tauri mínimas (solo eventos), comandos sin rutas de la interfaz, CSP restrictiva y límites del Worker activos
   - [x] Dependencias: zip 9 y pdf-extract 0.12 corrigen 8 vulnerabilidades señaladas por `cargo audit`
-- [ ] **Etapa 4. Limpieza y optimización**
+- [x] **Etapa 4. Limpieza y optimización**
   - [x] Sin funciones, tipos ni exportaciones sin uso; pruebas largas en archivos propios; ningún archivo de código pasa de unas 400 líneas
   - [x] Lint, tipado, Clippy, `cargo fmt`, `cargo audit` (0 vulnerabilidades), `npm audit` (0 en la app y el Worker) y todas las pruebas
-  - [ ] Rendimiento final con el ejecutable de distribución
-- [ ] **Etapa 5. Verificación en la app instalada** (prueba manual final del propietario)
-  - [ ] Prueba F1 a F7 de `docs/PLAN_PRUEBAS_MANUALES.md`, con el instalador de `compilar-distribucion.cmd`
+  - [x] Rendimiento final con el ejecutable de distribución (`docs/RENDIMIENTO.md`, 22 de noviembre)
+- [x] **Etapa 5. Verificación en la app instalada**
+  - [x] Prueba F1 a F7 del propietario: F1, F2, F3 y F6 correctas; F4, F5 y F7 corregidas (abajo) y verificadas en la ventana real
 - [ ] **Etapa 6. Publicación de la versión 1.0.0**
   - [x] Versión 1.0.0 en la app, el servidor y el crate
   - [x] Instaladores en español: NSIS (sin selector de idioma, por usuario) y MSI en es-ES
   - [x] Actualizador con GitHub Releases y firma; clave privada fuera del repositorio; búsqueda solo a petición, en Ajustes
   - [x] Flujo «Publicación»: al subir una etiqueta `v*`, instaladores de Windows, macOS (Apple Silicon e Intel) y Linux, con `latest.json`
   - [x] README final con capturas, requisitos, instalación por sistema, privacidad, arquitectura, pruebas, atribución, licencia y limitaciones
-  - [ ] Secretos `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` guardados en GitHub (propietario)
+  - [x] Secretos `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` guardados en GitHub (propietario); la clave pública de la app corresponde a la privada (mismo identificador de clave en una firma de prueba)
   - [ ] Etiqueta v1.0.0, Release publicada con los seis instaladores y prueba del instalador descargado
+
+## Correcciones tras la prueba final F1 a F7 (22 de noviembre de 2026)
+
+| Problema | Causa | Corrección | Prueba |
+|---|---|---|---|
+| «Como esta el clima de Bogota?» respondía con Pasto, la ciudad de Ajustes | La regla solo reconocía «en <ciudad>» al final de la frase | Reconoce «de», «en» y «para», sin tildes ni mayúsculas, con el momento antes o después y nombres compuestos. La ciudad de Ajustes solo se usa si no se nombra ninguna. Si no existe, lo dice y sugiere hasta tres nombres parecidos | 24 variantes con ciudad y 8 sin ella; manejador con ciudad guardada; sugerencias |
+| Un recordatorio avisado a su hora aparecía como «Vencido» | La pantalla trataba como vencido todo lo avisado o con la fecha pasada | Tres estados guardados: Pendiente, Avisado (aviso enviado a su hora, con 5 min de margen) y Vencido (la hora pasó sin poder avisar). Migración con restricción CHECK que conserva los guardados | Servicio, aviso rechazado, edición, migración e interfaz |
+| «Recuérdame … dentro de un minuto», confirmado ya en ese minuto, daba «La fecha del recordatorio ya pasó» (encontrado en la verificación propia) | La hora se elige sin segundos | Se acepta el minuto en curso y se avisa enseguida | Prueba del servicio |
+| Actualizaciones decía «Revisa tu conexión a Internet» sin ninguna versión publicada | Todos los fallos daban el mismo mensaje | Mensajes distintos: sin conexión, ninguna versión publicada, ya tienes la última, hay una nueva, firma no válida y formato no válido | Pruebas de cada caso |
+
+También pedido en la misma revisión:
+
+- **Límite diario de IA:** sale de Ajustes el campo editable (la protección real es el límite del servidor). Ajustes muestra solo el uso de hoy; si el servidor rechaza por límite o cuota, Nexium dice a qué hora se restablece, a partir de `Retry-After`.
+- **Modelos de voz:** «Automático (recomendado)», por defecto, elige Preciso con 4 núcleos físicos y 7 GiB o más, y Rápido en el resto (umbrales en `docs/PRUEBA_VOZ.md`). Ajustes explica cada modelo en una línea, qué eligió el automático y por qué.
+- **`rendimiento.log`:** rota a `rendimiento.1.log` al pasar de 256 KB (como mucho 512 KB en disco). Solo admite textos fijos del código, así que no puede guardar el texto de una solicitud; una prueba de extremo a extremo lo comprueba.
+
+**Verificación propia en la ventana real** (versión de distribución instalada, controlada con UI Automation de Windows y capturas): clima con «de Bogota», «en medellin», «para cali», «DE BOGOTA mañana», «la paz», sin ciudad (Pasto) y una ciudad inexistente con sugerencias; recordatorio a tres minutos que pasa de Pendiente a Avisado con el aviso «💧 Recordatorio de Nexium» en pantalla, y «Abrir Nexium» que abre Recordatorios con el foco en ese recordatorio; recordatorio con Nexium cerrado que queda Vencido, sin aviso tardío; «Todavía no hay ninguna versión publicada»; Ajustes de voz con el modo automático; tamaños de 640 × 400 a maximizada; Asistente, Recordatorios, Historial y Ajustes. Los recordatorios de prueba se borraron después.
+
+**Limpieza:** herramientas de medición en `src-tauri/tools` (documentadas); fuera `voice_pipeline_bench` (la app mide lo mismo), `icons/icon.png` y `scripts/dev-env.sh`, sin uso; la fuente monoespaciada solo con alfabetos latinos; archivos largos divididos; `url` 2.5.9 y `minimatch` corregido; instaladores 0.1.0 borrados de la carpeta de compilación.
 
 ## Correcciones tras la prueba G1 a G7 (21 de noviembre de 2026)
 
