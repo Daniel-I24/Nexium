@@ -1,13 +1,14 @@
 # Nexium: prueba de Whisper con audio real
 
-**Estado:** medición con corpus terminada. Falta probar con tu voz y tu micrófono.
+**Estado:** medición con corpus y con la voz del propietario terminadas: con su voz, Preciso transcribe en 0,9 a 1,1 s (ver `RENDIMIENTO.md`).
 
 ## Decisión
 
 | Aspecto | Valor |
 |---|---|
-| Modelo por defecto | `ggml-small-q5_1.bin`, con `audio_ctx` ajustado a la duración del audio |
-| Alternativa en Ajustes | `ggml-base-q5_1.bin`, para equipos modestos: tres veces más rápido, pero con más errores |
+| Modelo por defecto | **Automático**: elige Preciso o Rápido según el equipo (umbrales abajo). Se puede fijar uno en Ajustes |
+| Preciso | `ggml-small-q5_1.bin`, con `audio_ctx` ajustado a la duración del audio |
+| Rápido | `ggml-base-q5_1.bin`: tres veces más rápido y con la mitad de memoria, pero con más errores |
 | Peso | 190 MB (`small`) y 60 MB (`base`). No van en el instalador |
 | Cuándo se descarga | Una sola vez, al pulsar Descargar en Ajustes, sección Voz. Si no está, Hablar lo indica y se puede seguir escribiendo |
 | Cuándo se carga | En la primera transcripción. Se libera tras un periodo sin uso, configurable en Ajustes (10 minutos por defecto, de 1 a 240) |
@@ -15,6 +16,12 @@
 | Origen | `huggingface.co/ggerganov/whisper.cpp` (licencia MIT) |
 | Dónde se guarda | Carpeta de datos de la app, en `models/`. En Windows: `%APPDATA%\io.github.daniel-i24.nexium\models\` |
 | Audio | Se transcribe en el equipo, no sale de él ni se guarda |
+
+**Umbrales del modo automático:** Preciso con al menos 4 núcleos físicos y 7 GiB de memoria total (un equipo de 8 GB informa entre 7,2 y 7,9 GiB); Rápido en el resto.
+
+- **Núcleos:** el tiempo de whisper.cpp baja casi en proporción a los hilos, y Nexium usa uno por núcleo físico. Con 4 núcleos, Preciso transcribe una orden corta en 0,9 a 1,2 s (voz del propietario); con 2, pasaría de los 2 s del objetivo. Rápido, tres veces más rápido, queda por debajo.
+- **Memoria:** Preciso necesita 332 MB de pico al transcribir y Rápido 148 MB, además de unos 180 MB de la app. Con 4 GB, el sistema y el navegador ya ocupan casi todo, y los 180 MB de diferencia pueden hacer que Windows pagine, que es mucho más lento que equivocarse algo más.
+- Si no se puede medir la memoria, se elige Rápido: nunca deja la voz lenta.
 
 **Por qué `small`:** comete menos errores que `base` (15,70 % frente a 20,87 %), y 1,5 s de espera es aceptable para una orden. Sin `audio_ctx`, `small` tardaba 6,45 s en frases de 3 a 6 s, más que el propio audio.
 

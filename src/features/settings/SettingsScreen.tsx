@@ -209,17 +209,29 @@ export function SettingsScreen() {
       <Section title="Voz">
           <p className="m-0 text-sm text-muted">La voz se transcribe en este equipo. El audio no sale de él ni se guarda.</p>
           <ul className="m-0 flex list-none flex-col p-0">
+            <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline py-3">
+              <label className="flex min-h-11 min-w-0 flex-1 basis-48 items-center gap-3">
+                <input type="radio" name="speech-model" className="size-4 shrink-0 accent-ink" checked={draft.speechModel === "auto"} onChange={() => update("speechModel", "auto")} />
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span>Automático (recomendado)</span>
+                  <span className="text-sm text-muted">{`Elige ${view.speechAuto.displayName}: ${view.speechAuto.reason}`}</span>
+                </span>
+              </label>
+            </li>
             {view.speechModels.map((model) => (
               <li key={model.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline py-3">
                 <label className="flex min-h-11 min-w-0 flex-1 basis-48 items-center gap-3">
                   <input type="radio" name="speech-model" className="size-4 shrink-0 accent-ink" disabled={!model.downloaded} checked={draft.speechModel === model.id} onChange={() => update("speechModel", model.id)} />
-                  <span>
-                    {model.displayName} <span className="font-mono text-sm text-muted">{model.sizeMb} MB</span>
+                  <span className="flex min-w-0 flex-col gap-1">
+                    <span>
+                      {model.displayName} <span className="font-mono text-sm text-muted">{model.sizeMb} MB</span>
+                    </span>
+                    <span className="text-sm text-muted">{model.description}</span>
                   </span>
                 </label>
                 {model.downloaded ? (
                   <span className="text-sm">
-                    <StatusLabel status="completed">Disponible</StatusLabel>
+                    {model.isActive ? <StatusLabel status="completed">En uso</StatusLabel> : <StatusLabel status="completed">Disponible</StatusLabel>}
                   </span>
                 ) : (
                   <Button disabled={download !== null} onClick={() => void startDownload(model.id)}>

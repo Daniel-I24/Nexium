@@ -130,6 +130,8 @@ export type AiServiceStatus = "notConfigured" | "notUsedYet" | "working" | "limi
 export interface SpeechModelStatus {
   id: string;
   displayName: string;
+  /** Qué gana y qué pierde, y para qué equipos conviene. */
+  description: string;
   sizeMb: number;
   path: string;
   downloaded: boolean;
@@ -160,6 +162,8 @@ export interface SettingsView {
   tokensToday: number;
   knownFolders: string[];
   speechModels: SpeechModelStatus[];
+  /** Lo que elige el modo automático en este equipo, y por qué. */
+  speechAuto: { modelId: string; displayName: string; reason: string };
   microphones: InputDevice[];
   activeMicrophone: string | null;
 }

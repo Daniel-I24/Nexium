@@ -9,7 +9,7 @@ use crate::{
     error::{AppError, AppResult},
 };
 
-pub const DEFAULT_SPEECH_MODEL: &str = "small";
+pub const DEFAULT_SPEECH_MODEL: &str = crate::providers::speech::AUTO_MODEL;
 pub const DEFAULT_SPEECH_IDLE_MINUTES: u32 = 10;
 /// Carpetas autorizadas a la vez, como mucho.
 pub const MAX_FOLDERS: usize = 20;
@@ -198,7 +198,7 @@ mod tests {
     #[test]
     fn the_voice_idle_period_is_validated_and_defaults_for_old_settings() {
         let mut settings = Settings::default();
-        let models = ["small"];
+        let models = ["auto", "small"];
         assert!(settings.validate(&models).is_ok());
         settings.speech_idle_minutes = 0;
         assert!(settings.validate(&models).is_err());

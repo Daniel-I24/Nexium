@@ -12,13 +12,14 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(()
 
 function view(overrides: Partial<SettingsView> = {}, microphone: string | null = null): SettingsView {
   return {
-    settings: { speechModel: "small", speechIdleMinutes: 10, weatherCity: "", authorizedFolders: [], microphone },
+    settings: { speechModel: "auto", speechIdleMinutes: 10, weatherCity: "", authorizedFolders: [], microphone },
     provider: { displayName: "Google Gemini", dataNotice: "Aviso." },
     aiStatus: "working",
     aiRequestsToday: 0,
     tokensToday: 0,
     knownFolders: [],
     speechModels: [],
+    speechAuto: { modelId: "small", displayName: "Preciso", reason: "este equipo tiene 16 GB de RAM y 4 núcleos." },
     microphones: [
       { name: "Stereo Mix", isMicrophone: false, isDefault: true },
       { name: "Microphone Array", isMicrophone: true, isDefault: false },
@@ -31,13 +32,13 @@ function view(overrides: Partial<SettingsView> = {}, microphone: string | null =
 beforeEach(() => invoke.mockReset());
 
 describe("Ajustes: modelos de voz", () => {
-  const model = (overrides: object) => ({ id: "small", displayName: "Preciso (recomendado)", sizeMb: 181, path: "", downloaded: false, damaged: false, isActive: true, ...overrides });
+  const model = (overrides: object) => ({ id: "small", displayName: "Preciso", description: "Entiende mejor nombres.", sizeMb: 181, path: "", downloaded: false, damaged: false, isActive: true, ...overrides });
 
   it("muestra el tamaño real y marca el modelo descargado como disponible", async () => {
     invoke.mockResolvedValue(view({ speechModels: [model({ downloaded: true })] }));
     render(<SettingsScreen />);
     expect(await screen.findByText("181 MB")).toBeInTheDocument();
-    expect(screen.getByText("Disponible")).toBeInTheDocument();
+    expect(screen.getByText("En uso")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Descargar" })).not.toBeInTheDocument();
   });
 
@@ -45,7 +46,19 @@ describe("Ajustes: modelos de voz", () => {
     invoke.mockResolvedValue(view({ speechModels: [model({ damaged: true })] }));
     render(<SettingsScreen />);
     expect(await screen.findByRole("button", { name: "Volver a descargar" })).toBeInTheDocument();
-    expect(screen.getByRole("radio")).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /^Preciso/ })).toBeDisabled();
+  });
+
+  it("ofrece el modo automático y explica qué eligió y por qué", async () => {
+    invoke.mockResolvedValue(view({ speechModels: [model({ downloaded: true }), model({ id: "base", displayName: "Rápido", description: "Responde antes.", sizeMb: 57, downloaded: true, isActive: false })] }));
+    render(<SettingsScreen />);
+    const auto = await screen.findByRole("radio", { name: /Automático \(recomendado\)/ });
+    expect(auto).toBeChecked();
+    expect(screen.getByText("Elige Preciso: este equipo tiene 16 GB de RAM y 4 núcleos.")).toBeInTheDocument();
+    expect(screen.getByText("Entiende mejor nombres.")).toBeInTheDocument();
+    // Se puede cambiar a un modelo concreto.
+    await userEvent.click(screen.getByRole("radio", { name: /Rápido/ }));
+    expect(screen.getByRole("radio", { name: /Rápido/ })).toBeChecked();
   });
 });
 

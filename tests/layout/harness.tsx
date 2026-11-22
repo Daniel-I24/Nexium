@@ -162,7 +162,7 @@ const reminders: Reminder[] = [
 ];
 
 const settings: SettingsView = {
-  settings: { speechModel: "small", speechIdleMinutes: 10, weatherCity: "Medellín", authorizedFolders: [longPath.replace(/\\[^\\]+$/, "")], microphone: null },
+  settings: { speechModel: "auto", speechIdleMinutes: 10, weatherCity: "Medellín", authorizedFolders: [longPath.replace(/\\[^\\]+$/, "")], microphone: null },
   provider: {
     displayName: "Google Gemini",
     dataNotice:
@@ -173,10 +173,34 @@ const settings: SettingsView = {
   tokensToday: 12_345,
   knownFolders: [longPath.replace(/\\[^\\]+$/, ""), "C:\\Users\\usuario\\Desktop"],
   speechModels: [
-    { id: "base", displayName: "Rápido", sizeMb: 142, path: "", downloaded: true, damaged: false, isActive: false },
-    { id: "small", displayName: "Preciso (recomendado)", sizeMb: 466, path: "", downloaded: true, damaged: false, isActive: true },
-    { id: "medium", displayName: "Muy preciso, más lento y con más memoria", sizeMb: 1462, path: "", downloaded: false, damaged: false, isActive: false },
+    {
+      id: "small",
+      displayName: "Preciso",
+      description:
+        "Entiende mejor nombres y frases largas, pero tarda unas tres veces más y usa unos 330 MB de memoria al transcribir. Para equipos con 8 GB de RAM y 4 núcleos o más.",
+      sizeMb: 181,
+      path: "",
+      downloaded: true,
+      damaged: false,
+      isActive: true,
+    },
+    {
+      id: "base",
+      displayName: "Rápido",
+      description:
+        "Responde unas tres veces antes y usa unos 150 MB, pero se equivoca más (21 % de palabras frente a 16 %). Para equipos con menos de 8 GB de RAM o menos de 4 núcleos.",
+      sizeMb: 57,
+      path: "",
+      downloaded: false,
+      damaged: false,
+      isActive: false,
+    },
   ],
+  speechAuto: {
+    modelId: "small",
+    displayName: "Preciso",
+    reason: "este equipo tiene 16 GB de RAM y 4 núcleos, suficiente para que Preciso responda en torno a 1 s.",
+  },
   microphones: [
     { name: "Mezcla estéreo (Realtek(R) Audio) con un nombre de dispositivo muy largo", isMicrophone: false, isDefault: true },
     { name: "Matriz de micrófonos (Tecnología Intel® Smart Sound para micrófonos digitales)", isMicrophone: true, isDefault: false },

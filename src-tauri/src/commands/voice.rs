@@ -16,7 +16,7 @@ use crate::{
 #[tauri::command]
 pub fn voice_start<R: Runtime>(app: AppHandle<R>, state: State<'_, AppState>) -> AppResult<()> {
     let settings = state.settings.get()?;
-    let model = speech::find_model(&settings.speech_model)
+    let model = speech::resolve_model(&settings.speech_model, speech::Hardware::detect())
         .ok_or_else(|| AppError::Validation("Ese modelo de voz no existe.".into()))?;
     state
         .ready_model(model)
@@ -85,7 +85,7 @@ pub async fn voice_stop<R: Runtime>(
         .map_err(|_| AppError::Operation("La grabación se interrumpió.".into()))?;
     timings.mark("fin de grabación");
     let settings = state.settings.get()?;
-    let model = speech::find_model(&settings.speech_model)
+    let model = speech::resolve_model(&settings.speech_model, speech::Hardware::detect())
         .ok_or_else(|| AppError::Validation("Ese modelo de voz no existe.".into()))?;
     speech::check_audible(&samples, &device)
         .and_then(|()| state.ready_model(model))

@@ -30,6 +30,8 @@ pub struct SettingsView {
     tokens_today: u64,
     known_folders: Vec<String>,
     speech_models: Vec<SpeechModelStatus>,
+    /// Lo que elegiría el modo automático en este equipo, y por qué.
+    speech_auto: speech::AutoChoice,
     microphones: Vec<speech::InputDevice>,
     /// El dispositivo que Nexium usará al pulsar Hablar con los ajustes guardados.
     active_microphone: Option<String>,
@@ -38,8 +40,16 @@ pub struct SettingsView {
 fn settings_view(state: &AppState) -> AppResult<SettingsView> {
     let settings = state.settings.get()?;
     let (ai_requests_today, tokens_today) = state.usage.today_totals()?;
+    let hardware = speech::Hardware::detect();
+    let (auto_model, reason) = speech::auto_choice(hardware);
+    let active = speech::resolve_model(&settings.speech_model, hardware).unwrap_or(auto_model);
     Ok(SettingsView {
-        speech_models: speech::statuses(&state.models_dir, &settings.speech_model),
+        speech_models: speech::statuses(&state.models_dir, active.id),
+        speech_auto: speech::AutoChoice {
+            model_id: auto_model.id.into(),
+            display_name: auto_model.display_name.into(),
+            reason,
+        },
         microphones: speech::input_devices(),
         active_microphone: speech::active_input(settings.microphone.as_deref()),
         settings,

@@ -1,6 +1,6 @@
 //! Catálogo de modelos de Whisper: estado en disco y descarga verificada por hash.
 
-use std::path::Path;
+use std::{path::Path, sync::OnceLock};
 
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -13,6 +13,8 @@ const MODEL_BASE_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resol
 pub struct SpeechModel {
     pub id: &'static str,
     pub display_name: &'static str,
+    /// Qué gana y qué pierde, y para qué equipos conviene, en una línea.
+    pub description: &'static str,
     pub file: &'static str,
     /// Tamaño exacto del archivo: se comprueba antes de usarlo, además del hash al descargarlo.
     pub size_bytes: u64,
@@ -22,14 +24,16 @@ pub struct SpeechModel {
 pub const CATALOG: &[SpeechModel] = &[
     SpeechModel {
         id: "small",
-        display_name: "Preciso (recomendado)",
+        display_name: "Preciso",
+        description: "Entiende mejor nombres y frases largas, pero tarda unas tres veces más y usa unos 330 MB de memoria al transcribir. Para equipos con 8 GB de RAM y 4 núcleos o más.",
         file: "ggml-small-q5_1.bin",
         size_bytes: 190_085_487,
         sha256: "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
     },
     SpeechModel {
         id: "base",
-        display_name: "Rápido, para equipos modestos",
+        display_name: "Rápido",
+        description: "Responde unas tres veces antes y usa unos 150 MB, pero se equivoca más (21 % de palabras frente a 16 %). Para equipos con menos de 8 GB de RAM o menos de 4 núcleos.",
         file: "ggml-base-q5_1.bin",
         size_bytes: 59_707_625,
         sha256: "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
@@ -63,8 +67,81 @@ pub fn find_model(id: &str) -> Option<&'static SpeechModel> {
     CATALOG.iter().find(|model| model.id == id)
 }
 
+/// Los valores válidos del ajuste: el modo automático y cada modelo.
 pub fn catalog_ids() -> Vec<&'static str> {
-    CATALOG.iter().map(|model| model.id).collect()
+    std::iter::once(AUTO_MODEL)
+        .chain(CATALOG.iter().map(|model| model.id))
+        .collect()
+}
+
+/// Ajuste en el que Nexium elige el modelo según el equipo.
+pub const AUTO_MODEL: &str = "auto";
+/// Umbrales del modo automático, justificados en `docs/PRUEBA_VOZ.md`. Preciso necesita unos 330 MB más
+/// mientras transcribe, y su tiempo baja casi en proporción a los núcleos: con 4 tarda en torno a 1 s una orden
+/// corta; con 2 pasaría de los 2 s. Un equipo de 8 GB informa algo menos (memoria reservada por el sistema y
+/// la gráfica), por eso el umbral es de 7 GiB.
+pub const PRECISE_MIN_MEMORY_GIB: f64 = 7.0;
+pub const PRECISE_MIN_CORES: usize = 4;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Hardware {
+    pub memory_gib: f64,
+    pub physical_cores: usize,
+}
+
+impl Hardware {
+    /// Se mide una vez: no cambia mientras Nexium está abierto.
+    pub fn detect() -> Self {
+        static DETECTED: OnceLock<Hardware> = OnceLock::new();
+        *DETECTED.get_or_init(|| {
+            let system = sysinfo::System::new_with_specifics(
+                sysinfo::RefreshKind::nothing()
+                    .with_memory(sysinfo::MemoryRefreshKind::nothing().with_ram()),
+            );
+            Self {
+                // Sin poder medirla se asume un equipo modesto: Rápido nunca deja la voz lenta.
+                memory_gib: system
+                    .map_or(0.0, |system| system.total_memory() as f64 / 1_073_741_824.0),
+                physical_cores: usize::try_from(super::whisper_threads()).unwrap_or(1),
+            }
+        })
+    }
+}
+
+/// Lo que elige el modo automático y por qué, para mostrarlo en Ajustes.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoChoice {
+    pub model_id: String,
+    pub display_name: String,
+    pub reason: String,
+}
+
+pub fn auto_choice(hardware: Hardware) -> (&'static SpeechModel, String) {
+    let memory = hardware.memory_gib.round();
+    let cores = hardware.physical_cores;
+    let (id, reason) = if hardware.physical_cores < PRECISE_MIN_CORES {
+        (
+            "base",
+            format!(
+                "este equipo tiene {cores} núcleos, y con Preciso cada orden tardaría más de 2 s."
+            ),
+        )
+    } else if hardware.memory_gib < PRECISE_MIN_MEMORY_GIB {
+        ("base", format!("este equipo tiene {memory} GB de RAM, y Preciso necesita unos 330 MB más mientras transcribe."))
+    } else {
+        ("small", format!("este equipo tiene {memory} GB de RAM y {cores} núcleos, suficiente para que Preciso responda en torno a 1 s."))
+    };
+    (find_model(id).unwrap_or(&CATALOG[0]), reason)
+}
+
+/// El modelo que se usa con un ajuste guardado. `None` si el ajuste no existe.
+pub fn resolve_model(setting: &str, hardware: Hardware) -> Option<&'static SpeechModel> {
+    if setting == AUTO_MODEL {
+        Some(auto_choice(hardware).0)
+    } else {
+        find_model(setting)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -72,6 +149,7 @@ pub fn catalog_ids() -> Vec<&'static str> {
 pub struct SpeechModelStatus {
     pub id: String,
     pub display_name: String,
+    pub description: String,
     pub size_mb: u64,
     pub path: String,
     /// Completo y con su tamaño exacto: se puede usar.
@@ -81,6 +159,7 @@ pub struct SpeechModelStatus {
     pub is_active: bool,
 }
 
+/// `active` es el modelo que se usa de verdad, ya resuelto el modo automático.
 pub fn statuses(directory: &Path, active: &str) -> Vec<SpeechModelStatus> {
     CATALOG
         .iter()
@@ -90,6 +169,7 @@ pub fn statuses(directory: &Path, active: &str) -> Vec<SpeechModelStatus> {
             SpeechModelStatus {
                 id: model.id.into(),
                 display_name: model.display_name.into(),
+                description: model.description.into(),
                 size_mb: megabytes(model.size_bytes),
                 downloaded: state == ModelState::Ready,
                 damaged: state == ModelState::Damaged,
@@ -165,6 +245,7 @@ mod tests {
         let model = SpeechModel {
             id: "prueba",
             display_name: "Prueba",
+            description: "",
             file: "modelo.bin",
             size_bytes: 4,
             sha256: "",
@@ -258,6 +339,7 @@ mod tests {
         let model = SpeechModel {
             id: "x",
             display_name: "x",
+            description: "",
             file: "m.bin",
             size_bytes: body.len() as u64,
             sha256: digest,
@@ -270,7 +352,44 @@ mod tests {
     }
 
     #[test]
-    fn the_catalog_has_the_default_model() {
-        assert!(find_model(crate::services::settings::DEFAULT_SPEECH_MODEL).is_some());
+    fn the_default_is_automatic_and_always_resolves() {
+        assert_eq!(crate::services::settings::DEFAULT_SPEECH_MODEL, AUTO_MODEL);
+        assert!(resolve_model(AUTO_MODEL, Hardware::detect()).is_some());
+        assert!(catalog_ids().contains(&AUTO_MODEL));
+    }
+
+    fn hardware(memory_gib: f64, physical_cores: usize) -> Hardware {
+        Hardware {
+            memory_gib,
+            physical_cores,
+        }
+    }
+
+    #[test]
+    fn automatic_picks_precise_only_with_enough_memory_and_cores() {
+        let pick = |memory, cores| auto_choice(hardware(memory, cores)).0.id;
+        assert_eq!(pick(15.7, 4), "small");
+        // Un equipo de 8 GB informa algo menos.
+        assert_eq!(pick(7.4, 4), "small");
+        assert_eq!(pick(15.7, 2), "base");
+        assert_eq!(pick(3.8, 8), "base");
+        assert_eq!(pick(5.9, 4), "base");
+    }
+
+    #[test]
+    fn automatic_explains_its_choice() {
+        assert_eq!(
+            auto_choice(hardware(15.7, 4)).1,
+            "este equipo tiene 16 GB de RAM y 4 núcleos, suficiente para que Preciso responda en torno a 1 s."
+        );
+        assert!(auto_choice(hardware(15.7, 2)).1.contains("2 núcleos"));
+        assert!(auto_choice(hardware(3.8, 8)).1.contains("4 GB de RAM"));
+    }
+
+    #[test]
+    fn a_chosen_model_is_kept() {
+        let small_machine = hardware(3.8, 2);
+        assert_eq!(resolve_model("small", small_machine).unwrap().id, "small");
+        assert!(resolve_model("grande", small_machine).is_none());
     }
 }
