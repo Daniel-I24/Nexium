@@ -9,7 +9,7 @@ Los hechos salen del equipo, no de un modelo. La IA interpreta lo que pides, per
 | | |
 |---|---|
 | ![Lectura de la memoria en uso, en tema claro](docs/capturas/asistente-lectura-claro.png) | ![Clima actual y pronóstico de Open-Meteo, en tema claro](docs/capturas/asistente-clima-claro.png) |
-| ![Recordatorios pendientes y vencidos, en tema oscuro](docs/capturas/recordatorios-oscuro.png) | |
+| ![Recordatorios vencido, avisado y pendientes, en tema oscuro](docs/capturas/recordatorios-oscuro.png) | |
 
 ## Funciones
 
