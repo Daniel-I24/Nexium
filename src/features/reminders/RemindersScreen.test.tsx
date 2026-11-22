@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Reminder } from "@/types/api";
 
-import { isOverdue, RemindersScreen } from "./RemindersScreen";
+import { RemindersScreen } from "./RemindersScreen";
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -40,20 +40,24 @@ describe("Recordatorios", () => {
     expect(invoke).not.toHaveBeenCalledWith("reminders_delete", expect.anything());
   });
 
-  it("Vencido y Pendiente se distinguen con icono y palabra", async () => {
-    backend([reminder(1, "Pasado", past, "notified"), reminder(2, "Futuro", future)]);
+  it("Pendiente, Avisado y Vencido se distinguen con icono y palabra", async () => {
+    backend([reminder(1, "Sin poder avisar", past, "missed"), reminder(2, "Ya avisado", past, "notified"), reminder(3, "Futuro", future)]);
     render(<RemindersScreen onPickExample={vi.fn()} />);
-    const overdue = await screen.findByText("Vencido");
-    expect(overdue.closest("[data-status='overdue']")?.querySelector("svg")).not.toBeNull();
-    const pending = screen.getByText("Pendiente");
-    expect(pending.closest("[data-status='pending']")?.querySelector("svg")).not.toBeNull();
+    for (const [label, status] of [
+      ["Vencido", "overdue"],
+      ["Avisado", "completed"],
+      ["Pendiente", "pending"],
+    ] as const) {
+      const element = await screen.findByText(label, { selector: "[data-status]" });
+      expect(element.closest(`[data-status='${status}']`)?.querySelector("svg")).not.toBeNull();
+    }
   });
 
-  it("vencido es una fecha pasada o un aviso ya emitido", () => {
-    const now = new Date("2026-11-13T12:00:00Z");
-    expect(isOverdue(reminder(1, "a", "2026-11-13T11:00:00Z"), now)).toBe(true);
-    expect(isOverdue(reminder(1, "a", "2026-11-14T11:00:00Z", "notified"), now)).toBe(true);
-    expect(isOverdue(reminder(1, "a", "2026-11-14T11:00:00Z"), now)).toBe(false);
+  it("un recordatorio avisado a su hora no aparece como vencido", async () => {
+    backend([reminder(2, "Tomar agua", past, "notified")]);
+    render(<RemindersScreen onPickExample={vi.fn()} />);
+    expect(await screen.findByText("Avisado", { selector: "[data-status]" })).toBeInTheDocument();
+    expect(screen.queryByText("Vencido", { selector: "[data-status]" })).toBeNull();
   });
 
   it("sin recordatorios explica cómo crear uno y ofrece un ejemplo", async () => {

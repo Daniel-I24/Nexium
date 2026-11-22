@@ -10,7 +10,6 @@ import type { Reminder } from "@/types/api";
 
 import { ReminderRow } from "./ReminderRow";
 
-export { isOverdue } from "./ReminderRow";
 
 /** Las indicaciones de las notificaciones dependen del sistema. */
 function isWindows() {
@@ -65,7 +64,9 @@ export function RemindersScreen({ onPickExample, highlight = null }: RemindersSc
       <div className="flex flex-col gap-4">
         <h1 className="m-0 text-xl font-medium">Recordatorios</h1>
         <p className="m-0 max-w-reading text-sm text-muted">
-          Los avisos solo se emiten mientras Nexium está abierto o en la bandeja del sistema. Si lo cierras con Salir, verás los vencidos al volver a abrirlo.
+          Nexium avisa a la hora indicada mientras está abierto o en la bandeja del sistema. <strong className="font-medium text-ink">Pendiente</strong>: la
+          hora no ha llegado. <strong className="font-medium text-ink">Avisado</strong>: el aviso se envió a su hora. <strong className="font-medium text-ink">Vencido</strong>: la
+          hora pasó sin poder avisar, por ejemplo porque Nexium estaba cerrado con Salir.
         </p>
         {isWindows() && (
           <p className="m-0 max-w-reading text-sm text-muted">

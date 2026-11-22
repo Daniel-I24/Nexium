@@ -155,7 +155,8 @@ const history: HistoryEntry[] = Array.from({ length: 12 }, (_, index) => ({
 }));
 
 const reminders: Reminder[] = [
-  { id: 1, content: "Pagar la factura de la luz antes de que corten el servicio, con el número de referencia que llegó por correo", dueAt: iso(-30), status: "notified" },
+  { id: 1, content: "Pagar la factura de la luz antes de que corten el servicio, con el número de referencia que llegó por correo", dueAt: iso(-30), status: "missed" },
+  { id: 4, content: "Tomar agua", dueAt: iso(-2), status: "notified" },
   { id: 2, content: "Entregar el proyecto", dueAt: iso(20), status: "pending" },
   { id: 3, content: "Llamar al dentista", dueAt: iso(200), status: "pending" },
 ];

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/Button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DueFields } from "@/components/DueFields";
-import { StatusLabel } from "@/components/StatusLabel";
+import { StatusLabel, type Status } from "@/components/StatusLabel";
 import { api, errorMessage } from "@/services/api";
 import type { Reminder } from "@/types/api";
 import { isCompleteLocal, toLocalInput } from "@/utils/dates";
@@ -13,10 +13,12 @@ export function longDate(iso: string) {
   return new Date(iso).toLocaleString("es", { dateStyle: "full", timeStyle: "short" });
 }
 
-/** Vencido: ya avisado o con la fecha pasada. Se marca con icono, palabra y una línea lateral, no solo con color. */
-export function isOverdue(reminder: Reminder, now: Date = new Date()) {
-  return reminder.status === "notified" || new Date(reminder.dueAt) < now;
-}
+/** El estado que guarda Nexium, con icono y palabra: nunca solo con color. */
+export const reminderStates = {
+  pending: { status: "pending", label: "Pendiente" },
+  notified: { status: "completed", label: "Avisado" },
+  missed: { status: "overdue", label: "Vencido" },
+} as const satisfies Record<Reminder["status"], { status: Status; label: string }>;
 
 const inputStyle = "h-11 w-full min-w-0 rounded-sm border border-line bg-panel px-3 text-md text-ink";
 
@@ -90,7 +92,9 @@ export function ReminderRow({ reminder, index, highlighted, onChanged, onError }
     );
   }
 
-  const overdue = isOverdue(reminder);
+  const state = reminderStates[reminder.status];
+  // Vencido lleva además una línea lateral: es el único que pide atención.
+  const overdue = reminder.status === "missed";
   return (
     <li
       ref={item}
@@ -103,7 +107,7 @@ export function ReminderRow({ reminder, index, highlighted, onChanged, onError }
       <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
         <span className="wrap-anywhere">{reminder.content}</span>
         <span className="font-mono text-sm text-muted">{longDate(reminder.dueAt)}</span>
-        <span className="text-sm">{overdue ? <StatusLabel status="overdue">Vencido</StatusLabel> : <StatusLabel status="pending">Pendiente</StatusLabel>}</span>
+        <span className="text-sm"><StatusLabel status={state.status}>{state.label}</StatusLabel></span>
       </div>
       <div className="flex flex-wrap gap-3">
         <Button aria-label={`Editar: ${reminder.content}`} onClick={() => setEditing(true)}>

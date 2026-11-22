@@ -7,7 +7,8 @@ use rusqlite::Connection;
 
 use crate::error::{AppError, AppResult};
 
-const MIGRATIONS: &[&str] = &[r"
+const MIGRATIONS: &[&str] = &[
+    r"
     CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE reminders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,7 +31,27 @@ const MIGRATIONS: &[&str] = &[r"
         requests INTEGER NOT NULL DEFAULT 0,
         tokens INTEGER NOT NULL DEFAULT 0
     );
-"];
+",
+    r"
+    -- 1.0.0: tres estados de recordatorio (pending, notified, missed). Cualquier otro valor, que no debería
+    -- existir, pasa a vencido: su hora no se puede comprobar.
+    CREATE TABLE reminders_v2 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        content TEXT NOT NULL,
+        due_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'notified', 'missed')),
+        created_at TEXT NOT NULL
+    );
+    INSERT INTO reminders_v2 (id, content, due_at, status, created_at)
+        SELECT id, content, due_at,
+               CASE WHEN status IN ('pending', 'notified', 'missed') THEN status ELSE 'missed' END,
+               created_at
+        FROM reminders;
+    DROP TABLE reminders;
+    ALTER TABLE reminders_v2 RENAME TO reminders;
+    CREATE INDEX reminders_due ON reminders (status, due_at);
+",
+];
 
 /// Conexión única compartida: las consultas son breves y locales.
 #[derive(Clone)]
@@ -98,6 +119,44 @@ mod tests {
             .query_row("SELECT value FROM settings WHERE key='a'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(value, "b");
+    }
+
+    #[test]
+    fn saved_reminders_keep_their_state_after_the_1_0_migration() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection.execute_batch(MIGRATIONS[0]).unwrap();
+        connection.pragma_update(None, "user_version", 1).unwrap();
+        connection
+            .execute_batch(
+                "INSERT INTO reminders (id, content, due_at, status, created_at) VALUES
+                 (7, 'a tiempo', '2026-12-01T10:00:00+00:00', 'pending', 'x'),
+                 (8, 'avisado', '2026-11-01T10:00:00+00:00', 'notified', 'x'),
+                 (9, 'raro', '2026-11-01T10:00:00+00:00', 'otro', 'x');",
+            )
+            .unwrap();
+        let db = Database::prepare(connection).unwrap();
+        let connection = db.lock().unwrap();
+        let rows: Vec<(i64, String)> = connection
+            .prepare("SELECT id, status FROM reminders ORDER BY id")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            rows,
+            [
+                (7, "pending".to_owned()),
+                (8, "notified".to_owned()),
+                (9, "missed".to_owned())
+            ]
+        );
+        assert!(connection
+            .execute(
+                "UPDATE reminders SET status = 'desconocido' WHERE id = 7",
+                []
+            )
+            .is_err());
     }
 
     #[test]

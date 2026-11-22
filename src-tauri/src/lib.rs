@@ -166,14 +166,18 @@ fn start_reminder_scheduler<R: Runtime>(app: AppHandle<R>, reminders: ReminderSe
     tauri::async_runtime::spawn(async move {
         loop {
             if let Ok(due) = reminders.take_due(Utc::now()) {
-                for reminder in &due {
-                    let _ = notifications.notify_reminder(
-                        &reminder_title(&reminder.content),
-                        &reminder.content,
-                        reminder.id,
-                    );
+                for reminder in &due.to_notify {
+                    let sent = notifications
+                        .notify_reminder(
+                            &reminder_title(&reminder.content),
+                            &reminder.content,
+                            reminder.id,
+                        )
+                        .is_ok();
+                    let _ = reminders.mark_notified(reminder.id, sent);
                 }
-                if !due.is_empty() {
+                // También cuando solo hubo vencidos: la pantalla de Recordatorios cambia de estado.
+                if due.changed() {
                     let _ = app.emit("reminders://changed", ());
                 }
             }

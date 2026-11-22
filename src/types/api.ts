@@ -107,7 +107,8 @@ export interface Reminder {
   id: number;
   content: string;
   dueAt: string;
-  status: "pending" | "notified";
+  /** Pendiente: su hora no ha llegado. Avisado: se notificó a su hora. Vencido: la hora pasó sin poder avisar. */
+  status: "pending" | "notified" | "missed";
 }
 
 export interface HistoryEntry {
