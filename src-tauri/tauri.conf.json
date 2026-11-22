@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Nexium",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "identifier": "io.github.daniel-i24.nexium",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -51,7 +51,39 @@
       "minimumSystemVersion": "12.3"
     },
     "linux": {
-      "deb": { "depends": ["libasound2"] }
+      "deb": {
+        "depends": [
+          "libasound2"
+        ]
+      }
+    },
+    "publisher": "Daniel-I24",
+    "copyright": "© 2026 Daniel-I24. Licencia MIT.",
+    "category": "Productivity",
+    "shortDescription": "Asistente inteligente de escritorio",
+    "longDescription": "Nexium responde por voz o por escrito sobre tu equipo, el clima, tus archivos y documentos, recordatorios y lo que ves en pantalla. La voz se transcribe en el equipo.",
+    "windows": {
+      "nsis": {
+        "languages": [
+          "Spanish"
+        ],
+        "displayLanguageSelector": false,
+        "installMode": "currentUser"
+      },
+      "wix": {
+        "language": "es-ES"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEExRDUxNkE2QjY2RTJBMTUKUldRVkttNjJwaGJWb1Fyd0JsMldMbkx6ZkxoMVpKVDhQUDNBWnIvaTBVR091dVN6UUNCd1RYcXcK",
+      "endpoints": [
+        "https://github.com/Daniel-I24/Nexium/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

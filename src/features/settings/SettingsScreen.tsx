@@ -10,6 +10,8 @@ import { api, errorMessage, events } from "@/services/api";
 import type { AiServiceStatus, DownloadProgress, InputDevice, Settings, SettingsView } from "@/types/api";
 import { count } from "@/utils/plural";
 
+import { UpdatesSection } from "./UpdatesSection";
+
 const statusLabels: Record<AiServiceStatus, string> = {
   notConfigured: "No incluido en esta versión",
   notUsedYet: "Incluido. Sin usar todavía en esta sesión",
@@ -257,6 +259,8 @@ export function SettingsScreen() {
             (CC BY 4.0). Su uso gratuito es solo para fines no comerciales.
           </p>
         </Section>
+
+        <UpdatesSection />
       </div>
     </ScreenLayout>
   );

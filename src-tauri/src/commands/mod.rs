@@ -4,6 +4,7 @@ pub mod documents;
 pub mod folders;
 pub mod records;
 pub mod settings;
+pub mod updates;
 pub mod voice;
 pub mod weather;
 

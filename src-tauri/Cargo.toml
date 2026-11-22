@@ -1,6 +1,6 @@
 [package]
 name = "nexium"
-version = "0.1.0"
+version = "1.0.0"
 description = "Asistente inteligente de escritorio multiplataforma"
 edition = "2021"
 rust-version = "1.90"
@@ -47,6 +47,7 @@ dotenvy = "0.15"
 uuid = { version = "1", features = ["v4"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 # Lectura local de documentos para resumirlos: PDF con texto y .docx (un ZIP con XML).
 pdf-extract = "0.12"
 zip = { version = "9", default-features = false, features = ["deflate"] }

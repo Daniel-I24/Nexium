@@ -242,6 +242,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let handle = app.handle().clone();
             let state = build_state(&handle)?;
@@ -279,6 +280,8 @@ pub fn run() {
             commands::documents::document_analyze,
             commands::documents::document_pick,
             commands::weather::weather_city_set,
+            commands::updates::update_check,
+            commands::updates::update_install,
             commands::open_attribution,
             commands::voice::voice_start,
             commands::voice::voice_stop,
