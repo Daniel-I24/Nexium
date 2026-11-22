@@ -44,12 +44,14 @@ impl WeatherHandler {
         let report = match self.weather.report(&city).await {
             Ok(report) => report,
             Err(WeatherError::CityNotFound) => {
+                // Nunca se cambia por la ciudad de Ajustes: se dice y se sugieren nombres parecidos.
+                let similar = self.weather.similar_cities(&city).await;
                 return Outcome::failed(
                     Category::Weather,
                     "cityNotFound",
                     format!("No encontré la ciudad «{city}»."),
-                    None,
-                )
+                    Some(city_not_found_hint(&similar)),
+                );
             }
             Err(_) => {
                 return Outcome::failed(
@@ -115,6 +117,20 @@ impl WeatherHandler {
     }
 }
 
+fn city_not_found_hint(similar: &[String]) -> String {
+    match similar {
+        [] => "Revisa cómo está escrita y vuelve a pedirlo.".into(),
+        [only] => format!("¿Quisiste decir «{only}»? Vuelve a pedirlo con ese nombre."),
+        [rest @ .., last] => format!(
+            "Las más parecidas son {} y «{last}». Vuelve a pedirlo con el nombre correcto.",
+            rest.iter()
+                .map(|name| format!("«{name}»"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
 #[async_trait]
 impl CommandHandler for WeatherHandler {
     async fn handle(&self, intent: &Intent, _: &HandlerContext) -> Option<Outcome> {
@@ -122,5 +138,98 @@ impl CommandHandler for WeatherHandler {
             return None;
         };
         Some(self.answer(city.as_ref(), *when).await)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        database::Database,
+        providers::weather::{DayForecast, WeatherReport},
+    };
+
+    /// Solo conoce Bogotá y Pasto; para lo demás sugiere Bogotá.
+    struct KnownCities;
+
+    #[async_trait]
+    impl WeatherProvider for KnownCities {
+        async fn report(&self, city: &str) -> Result<WeatherReport, WeatherError> {
+            let day = DayForecast {
+                condition: "nublado".into(),
+                min_c: 10.0,
+                max_c: 20.0,
+            };
+            match crate::core::rules::normalize(city).as_str() {
+                place @ ("bogota" | "pasto") => Ok(WeatherReport {
+                    place: place.into(),
+                    temperature_c: 15.0,
+                    condition: "nublado".into(),
+                    today: day.clone(),
+                    tomorrow: day,
+                }),
+                _ => Err(WeatherError::CityNotFound),
+            }
+        }
+        async fn find_city(&self, city: &str) -> Result<String, WeatherError> {
+            Ok(city.into())
+        }
+        async fn similar_cities(&self, _: &str) -> Vec<String> {
+            vec!["Bogotá, Colombia".into()]
+        }
+    }
+
+    fn handler() -> WeatherHandler {
+        let settings = SettingsService::new(Database::in_memory().unwrap());
+        let mut saved = settings.get().unwrap();
+        saved.weather_city = "Pasto".into();
+        settings.save(&saved).unwrap();
+        WeatherHandler {
+            weather: Arc::new(KnownCities),
+            settings,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_named_city_is_used_instead_of_the_saved_one() {
+        let outcome = handler()
+            .answer(Some(&"Bogota".into()), WeatherWhen::Now)
+            .await;
+        assert!(outcome.summary.contains("bogota"), "{}", outcome.summary);
+        assert!(!outcome.summary.contains("pasto"));
+    }
+
+    #[tokio::test]
+    async fn the_saved_city_is_used_only_without_a_named_one() {
+        let outcome = handler().answer(None, WeatherWhen::Now).await;
+        assert!(outcome.summary.contains("pasto"), "{}", outcome.summary);
+    }
+
+    #[tokio::test]
+    async fn an_unknown_city_is_said_with_similar_names_and_never_replaced() {
+        let outcome = handler()
+            .answer(Some(&"Bogotx".into()), WeatherWhen::Now)
+            .await;
+        let ResponseBody::Error { message, hint, .. } = &outcome.body else {
+            panic!("{:?}", outcome.body);
+        };
+        assert_eq!(message, "No encontré la ciudad «Bogotx».");
+        assert_eq!(
+            hint.as_deref(),
+            Some("¿Quisiste decir «Bogotá, Colombia»? Vuelve a pedirlo con ese nombre.")
+        );
+        assert!(!outcome.summary.contains("pasto"));
+    }
+
+    #[test]
+    fn the_hint_lists_the_closest_names() {
+        assert_eq!(
+            city_not_found_hint(&[]),
+            "Revisa cómo está escrita y vuelve a pedirlo."
+        );
+        assert_eq!(
+            city_not_found_hint(&["Cali, Colombia".into(), "Calima, Colombia".into(), "Cali, Perú".into()]),
+            "Las más parecidas son «Cali, Colombia», «Calima, Colombia» y «Cali, Perú». Vuelve a pedirlo con el nombre correcto."
+        );
     }
 }

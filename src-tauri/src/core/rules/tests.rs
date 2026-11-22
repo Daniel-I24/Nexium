@@ -216,6 +216,67 @@ fn recognizes_weather_with_city_and_day() {
 }
 
 #[test]
+fn a_named_city_is_always_recognized() {
+    let city = |phrase: &str| match match_local(phrase) {
+        Some(Intent::Weather { city, .. }) => city,
+        other => panic!("{phrase}: {other:?}"),
+    };
+    for (phrase, expected) in [
+        ("Como esta el clima de Bogota?", "Bogota"),
+        ("¿Cómo está el clima de Bogotá?", "Bogotá"),
+        ("clima de bogota", "bogota"),
+        ("CLIMA DE BOGOTA", "BOGOTA"),
+        ("clima en medellin", "medellin"),
+        ("clima para cali", "cali"),
+        ("¿Qué tiempo hace en Medellín?", "Medellín"),
+        ("¿Qué temperatura hace en Pasto?", "Pasto"),
+        ("¿Va a llover mañana en Bogotá?", "Bogotá"),
+        ("¿Va a llover en Cali mañana?", "Cali"),
+        ("¿Está lloviendo en Manizales?", "Manizales"),
+        ("Pronóstico para Cartagena", "Cartagena"),
+        ("pronostico del clima para barranquilla", "barranquilla"),
+        ("dime el clima de hoy en Cali", "Cali"),
+        ("clima de mañana en Tunja", "Tunja"),
+        ("clima en Santa Marta hoy, por favor", "Santa Marta"),
+        ("clima de Bogota por favor", "Bogota"),
+        ("¿Cómo está el clima en Nueva York?", "Nueva York"),
+        (
+            "clima en San José de las Lajas del Río Grande",
+            "San José de las Lajas del Río Grande",
+        ),
+        ("¿Qué temperatura hace en La Paz?", "La Paz"),
+        ("la temperatura en la paz", "la paz"),
+        ("Clima de Ciudad de México", "Ciudad de México"),
+        ("temperatura de buenos aires", "buenos aires"),
+        ("clima en el cairo", "el cairo"),
+    ] {
+        assert_eq!(city(phrase).as_deref(), Some(expected), "{phrase}");
+    }
+}
+
+#[test]
+fn without_a_named_city_the_saved_one_is_used() {
+    for phrase in [
+        "¿Cómo está el clima?",
+        "clima de hoy",
+        "clima para mañana",
+        "¿Cómo está el clima hoy?",
+        "pronóstico de lluvia",
+        "¿Qué tiempo hace ahora?",
+        "clima en la ciudad",
+        "clima de esta ciudad",
+    ] {
+        assert!(
+            matches!(
+                match_local(phrase),
+                Some(Intent::Weather { city: None, .. })
+            ),
+            "{phrase}"
+        );
+    }
+}
+
+#[test]
 fn recognizes_screen_requests() {
     for phrase in [
         "¿Qué aparece en mi pantalla?",

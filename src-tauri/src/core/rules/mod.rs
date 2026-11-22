@@ -16,7 +16,7 @@ use crate::{
     models::{DocumentTask, FileQuery, Intent, Section, SystemMetric, WeatherWhen},
     providers::ai::schema::valid_file_name,
 };
-use places::original_city;
+use places::{original_city, weather_city};
 #[cfg(test)]
 use text::edit_distance;
 
@@ -158,8 +158,6 @@ static OVERVIEW: LazyLock<Regex> = LazyLock::new(|| {
 });
 static WEATHER: LazyLock<Regex> =
     LazyLock::new(|| regex(r"\b(clima|tiempo hace|temperatura|llover|lloviendo|pronostico)\b"));
-static WEATHER_CITY: LazyLock<Regex> =
-    LazyLock::new(|| regex(r"\ben ([a-z][a-z ]{1,40}?)(?: hoy| manana| ahora)?$"));
 static SCREEN: LazyLock<Regex> = LazyLock::new(|| {
     regex(r"\b(mi pantalla|la pantalla|este error|este mensaje|esta interfaz|esta ventana)\b")
 });
@@ -180,11 +178,7 @@ fn weather_intent(original: &str, text: &str) -> Intent {
     } else {
         WeatherWhen::Now
     };
-    let city = WEATHER_CITY
-        .captures(text)
-        .and_then(|c| c.get(1))
-        .filter(|m| is_place_name(m.as_str()))
-        .map(|m| original_city(original, m.as_str()));
+    let city = weather_city(text).map(|city| original_city(original, &city));
     Intent::Weather { city, when }
 }
 

@@ -40,6 +40,11 @@ pub trait WeatherProvider: Send + Sync {
     async fn report(&self, city: &str) -> Result<WeatherReport, WeatherError>;
     /// Nombre oficial de una ciudad ("medellin" pasa a "Medellín"), o `CityNotFound` si no existe.
     async fn find_city(&self, city: &str) -> Result<String, WeatherError>;
+    /// Ciudades de nombre parecido para una que no existe ("Bogotaa"), como mucho tres. Vacío si no hay o si
+    /// falla la conexión: solo sirve para sugerir.
+    async fn similar_cities(&self, _city: &str) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 pub struct OpenMeteo {
@@ -151,23 +156,48 @@ fn day(daily: &Daily, index: usize) -> Result<DayForecast, WeatherError> {
 }
 
 impl OpenMeteo {
-    async fn geocode(&self, city: &str) -> Result<Place, WeatherError> {
+    async fn search(&self, name: &str, count: usize) -> Result<Vec<Place>, WeatherError> {
         let places: GeocodingResponse = self
             .get(
                 format!("{}/search", self.geocoding_url),
                 &[
-                    ("name", city.to_owned()),
-                    ("count", "1".into()),
+                    ("name", name.to_owned()),
+                    ("count", count.to_string()),
                     ("language", "es".into()),
                     ("format", "json".into()),
                 ],
             )
             .await?;
-        places
-            .results
+        Ok(places.results)
+    }
+
+    async fn geocode(&self, city: &str) -> Result<Place, WeatherError> {
+        self.search(city, 1)
+            .await?
             .into_iter()
             .next()
             .ok_or(WeatherError::CityNotFound)
+    }
+}
+
+/// Comienzos cada vez más cortos de un nombre, de al menos tres letras: Open-Meteo busca por el comienzo del
+/// nombre, así que «Bogotaa» encuentra Bogotá al buscar «Bogota».
+pub fn shorter_prefixes(city: &str) -> Vec<String> {
+    let chars: Vec<char> = city.trim().chars().collect();
+    let mut prefixes: Vec<String> = [chars.len().saturating_sub(1), chars.len() * 2 / 3, 4]
+        .into_iter()
+        .filter(|&length| length >= 3 && length < chars.len())
+        .map(|length| chars[..length].iter().collect::<String>().trim().to_owned())
+        .collect();
+    prefixes.dedup();
+    prefixes
+}
+
+fn place_name(place: Place) -> String {
+    if place.country.is_empty() {
+        place.name
+    } else {
+        format!("{}, {}", place.name, place.country)
     }
 }
 
@@ -175,6 +205,24 @@ impl OpenMeteo {
 impl WeatherProvider for OpenMeteo {
     async fn find_city(&self, city: &str) -> Result<String, WeatherError> {
         Ok(self.geocode(city).await?.name)
+    }
+
+    async fn similar_cities(&self, city: &str) -> Vec<String> {
+        for prefix in shorter_prefixes(city) {
+            let Ok(places) = self.search(&prefix, 3).await else {
+                return Vec::new();
+            };
+            if !places.is_empty() {
+                let mut names: Vec<String> = Vec::new();
+                for name in places.into_iter().map(place_name) {
+                    if !names.contains(&name) {
+                        names.push(name);
+                    }
+                }
+                return names;
+            }
+        }
+        Vec::new()
     }
 
     async fn report(&self, city: &str) -> Result<WeatherReport, WeatherError> {
@@ -196,11 +244,7 @@ impl WeatherProvider for OpenMeteo {
             )
             .await?;
         Ok(WeatherReport {
-            place: if place.country.is_empty() {
-                place.name
-            } else {
-                format!("{}, {}", place.name, place.country)
-            },
+            place: place_name(place),
             temperature_c: forecast.current.temperature_2m,
             condition: condition_name(forecast.current.weather_code).to_owned(),
             today: day(&forecast.daily, 0)?,
@@ -272,6 +316,37 @@ mod tests {
             client(&server).report("Nolugar").await.unwrap_err(),
             WeatherError::CityNotFound
         );
+    }
+
+    #[tokio::test]
+    async fn an_unknown_city_gets_similar_names() {
+        let server = server_with_data().await;
+        Mock::given(path("/search"))
+            .and(query_param("name", "Bogot"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(json!({ "results": [
+                { "name": "Bogotá", "latitude": 4.6, "longitude": -74.1, "country": "Colombia" },
+                { "name": "Bogotol", "latitude": 56.2, "longitude": 89.5, "country": "Rusia" },
+                { "name": "Bogotol", "latitude": 56.3, "longitude": 89.6, "country": "Rusia" }
+            ] })),
+            )
+            .mount(&server)
+            .await;
+        assert_eq!(
+            client(&server).similar_cities("Bogotx").await,
+            ["Bogotá, Colombia", "Bogotol, Rusia"]
+        );
+        assert!(client(&server).similar_cities("Nolugar").await.is_empty());
+    }
+
+    #[test]
+    fn suggestions_search_by_shorter_beginnings() {
+        assert_eq!(shorter_prefixes("Bogotaa"), ["Bogota", "Bogo"]);
+        assert_eq!(
+            shorter_prefixes("Medellinn"),
+            ["Medellin", "Medell", "Mede"]
+        );
+        assert!(shorter_prefixes("Rio").is_empty());
     }
 
     #[tokio::test]
