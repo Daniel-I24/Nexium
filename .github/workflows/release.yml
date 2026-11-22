@@ -18,10 +18,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: Windows, os: windows-latest, target: "" }
-          - { name: macOS Apple Silicon, os: macos-latest, target: aarch64-apple-darwin }
-          - { name: macOS Intel, os: macos-15-intel, target: x86_64-apple-darwin }
-          - { name: Linux, os: ubuntu-24.04, target: "" }
+          # «app» en macOS: el actualizador usa su .app.tar.gz; se publica el .dmg para instalar.
+          - { name: Windows, os: windows-latest, target: "", bundles: "nsis,msi" }
+          - { name: macOS Apple Silicon, os: macos-latest, target: aarch64-apple-darwin, bundles: "app,dmg" }
+          - { name: macOS Intel, os: macos-15-intel, target: x86_64-apple-darwin, bundles: "app,dmg" }
+          - { name: Linux, os: ubuntu-24.04, target: "", bundles: "deb,appimage" }
     env:
       # La dirección del servidor de IA no es secreta: se fija al compilar.
       NEXIUM_AI_SERVER_URL: https://nexium-ai.nexium-ai.workers.dev
@@ -61,9 +62,25 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Nexium ${{ github.ref_name }}
           releaseBody: |
-            Instaladores de Nexium para Windows, macOS y Linux. Las instrucciones de instalación, los avisos de
-            SmartScreen y Gatekeeper y la privacidad están en el README del repositorio.
+            Primera versión estable de Nexium, el asistente de escritorio que responde por voz o por escrito, en español.
+
+            ## Novedades
+            - Voz transcrita en tu equipo con Whisper, en torno a 1 s por orden. Modo automático que elige el modelo Preciso o Rápido según tu equipo.
+            - Respuestas con datos reales del equipo: hora, CPU, memoria, batería, red y Wi-Fi, sin IA.
+            - Clima de Open-Meteo para la ciudad que nombres, escrita como quieras («clima de Bogota», «clima en medellin»).
+            - Resumen de documentos (.txt, .md, .csv, PDF con texto y .docx) y análisis de pantalla, siempre con tu confirmación.
+            - Recordatorios con aviso del sistema y estados Pendiente, Avisado y Vencido.
+            - Historial con una entrada por solicitud, y actualizaciones firmadas desde Ajustes.
+
+            ## Instalación
+            - **Windows 10 u 11 (64 bits):** descarga el archivo que termina en `_x64-setup.exe` (o el `.msi`) y ábrelo. Si aparece «Windows protegió su PC» (SmartScreen), pulsa **Más información** y **Ejecutar de todas formas**.
+            - **macOS 12.3 o posterior:** descarga el `.dmg` de tu Mac (`aarch64` para Apple Silicon, `x64` para Intel), arrastra Nexium a Aplicaciones y ábrelo. Cuando Gatekeeper lo bloquee, ve a **Ajustes del Sistema > Privacidad y seguridad** y pulsa **Abrir igualmente**.
+            - **Linux (Ubuntu 24.04 o equivalente):** `sudo apt install ./Nexium_*_amd64.deb`, o da permiso de ejecución al `.AppImage` y ábrelo.
+
+            Los instaladores no llevan firma comercial: por eso avisan SmartScreen y Gatekeeper la primera vez. Descárgalos solo desde esta página. Los archivos `.sig` y `latest.json` son para el actualizador de Nexium.
+
+            Requisitos, privacidad y limitaciones: [README](https://github.com/Daniel-I24/Nexium#readme).
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
-          args: --config src-tauri/tauri.release.conf.json ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+          args: --config src-tauri/tauri.release.conf.json --bundles ${{ matrix.bundles }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
