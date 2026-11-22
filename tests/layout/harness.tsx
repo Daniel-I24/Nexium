@@ -39,8 +39,8 @@ const responses: Record<string, () => AssistantResponse> = {
       ],
       attribution: null,
     }),
-  clima: () =>
-    response("¿Cómo está el clima hoy en San José de las Lajas del Río Grande?", {
+  clima: () => ({
+    ...response("¿Cómo está el clima hoy en San José de las Lajas del Río Grande?", {
       kind: "reading",
       value: "22",
       unit: "°C",
@@ -49,6 +49,8 @@ const responses: Record<string, () => AssistantResponse> = {
       rows: [{ label: "Pronóstico de hoy", value: "12 °C a 23 °C", mono: true, unavailable: false }],
       attribution: { text: "Datos meteorológicos de Open-Meteo (CC BY 4.0)", url: "https://open-meteo.com" },
     }),
+    originLabel: "Open-Meteo, sin IA",
+  }),
   archivos: () =>
     response("Busca mi informe de bases de datos", {
       kind: "files",

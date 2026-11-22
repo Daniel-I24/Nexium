@@ -1,12 +1,83 @@
 # Nexium
 
-Asistente inteligente de escritorio para Windows, macOS y Linux. Entiende solicitudes en español, por voz o por texto, y responde con datos reales de tu equipo: hora, CPU, memoria, batería, red, archivos, clima, recordatorios y análisis de pantalla bajo demanda.
+Asistente inteligente de escritorio para Windows, macOS y Linux. Entiende solicitudes en español, por voz o por texto, y responde con datos reales de tu equipo: hora, CPU, memoria, batería, red, archivos, documentos, clima, recordatorios y análisis de pantalla bajo demanda.
 
-Los hechos salen del equipo, no de un modelo. La IA interpreta lo que pides, pero solo la aplicación ejecuta operaciones, mediante funciones controladas.
+Los hechos salen del equipo, no de un modelo. La IA interpreta lo que pides, pero solo la aplicación ejecuta operaciones, mediante funciones controladas. La voz se transcribe en tu equipo.
 
-> **Estado:** ver [`docs/ESTADO_DEL_PROYECTO.md`](docs/ESTADO_DEL_PROYECTO.md). Solo se ha ejecutado en Windows. En macOS y Linux se compila y se prueba en CI, pero faltan las [pruebas manuales](docs/PLAN_PRUEBAS_MANUALES.md).
+**[Descargar la última versión](https://github.com/Daniel-I24/Nexium/releases/latest)**
 
-## Privacidad: léelo antes de usar la IA
+| | |
+|---|---|
+| ![Lectura de la memoria en uso, en tema claro](docs/capturas/asistente-lectura-claro.png) | ![Clima actual y pronóstico de Open-Meteo, en tema claro](docs/capturas/asistente-clima-claro.png) |
+| ![Recordatorios pendientes y vencidos, en tema oscuro](docs/capturas/recordatorios-oscuro.png) | |
+
+## Funciones
+
+- **Voz:** botón visible, micrófono solo mientras la barra está en amarillo, transcripción local con Whisper.
+- **Sistema:** CPU, RAM, batería, Internet, Wi-Fi, nombre de la red y modo oscuro. Lo que un sistema no permite consultar aparece como "No disponible", nunca con un valor inventado.
+- **Archivos:** búsqueda en las carpetas que autorices (Documentos y Escritorio, o las que elijas con el selector del sistema): por nombre y, en `.txt`, `.md` y `.csv`, también por contenido. Nunca modifica, mueve ni elimina nada.
+- **Documentos:** «Resume mi documento de bases de datos» o «Analiza este archivo». Lee en el equipo `.txt`, `.md`, `.csv`, PDF con texto y `.docx`, ofrece los archivos por relevancia (primero los que coinciden por nombre) y pide tu confirmación antes de enviar su texto a la IA. El resumen tiene dos o tres frases, de cinco a ocho ideas clave explicadas y los datos importantes (fechas, cifras, definiciones). Un PDF escaneado o un formato no compatible se explican.
+- **Pantalla:** una sola captura en memoria, comprimida y enviada al servicio de IA, y después descartada.
+- **Clima y hora:** condiciones actuales y pronóstico de Open-Meteo; hora del equipo. Sin ciudad en la solicitud se usa la de Ajustes, y si no hay ninguna, Nexium la pregunta y ofrece guardarla.
+- **Recordatorios:** en lenguaje natural, con aclaración si la fecha es ambigua. Se guardan en SQLite. En Windows, el aviso se queda en pantalla hasta que lo descartes.
+- **Historial:** solicitudes, categoría, estado y respuesta, sin audio ni imágenes. Cada solicitud tiene una sola entrada, que se actualiza hasta su estado final aunque pase por un permiso o una pregunta.
+- **Actualizaciones:** en **Ajustes > Actualizaciones**, solo cuando lo pides. Nexium instala únicamente versiones publicadas aquí y firmadas con su clave.
+
+## Requisitos mínimos
+
+| Sistema | Versión | Procesador y memoria | Disco |
+|---|---|---|---|
+| Windows | Windows 10 (1809) u 11, de 64 bits, con WebView2 (incluido en Windows 11; el instalador lo descarga si falta) | x86-64 de 4 núcleos y 8 GB de RAM | 250 MB con el modelo de voz preciso |
+| macOS | macOS 12.3 Monterey o posterior | Apple Silicon (M1 o posterior) o Intel, 8 GB de RAM | 250 MB con el modelo de voz preciso |
+| Linux | Ubuntu 24.04, Debian 13 o equivalentes, con WebKitGTK 4.1 y PipeWire | x86-64 de 4 núcleos y 8 GB de RAM | 250 MB con el modelo de voz preciso |
+
+Con 4 GB de RAM o un procesador de 2 núcleos, elige en Ajustes el modelo de voz **Rápido** (60 MB). La IA, el clima y las actualizaciones necesitan Internet; las consultas del equipo y la voz, no.
+
+## Instalación
+
+Descarga el instalador de tu sistema desde la [página de la última versión](https://github.com/Daniel-I24/Nexium/releases/latest). Descarga los instaladores únicamente de ahí.
+
+Nexium es un proyecto universitario y sus instaladores no están firmados con un certificado comercial, así que el sistema avisará la primera vez. No hace falta desactivar ninguna protección del sistema.
+
+### Windows
+
+1. Descarga `Nexium_1.0.0_x64-setup.exe` (recomendado) o `Nexium_1.0.0_x64_es-ES.msi`.
+2. Ábrelo. Si aparece **Windows protegió su PC** (SmartScreen), pulsa **Más información** y después **Ejecutar de todas formas**.
+3. Sigue el asistente, en español. El `.exe` instala solo para tu usuario y no pide permisos de administrador.
+4. Abre Nexium desde el menú Inicio.
+
+### macOS
+
+1. Descarga `Nexium_1.0.0_aarch64.dmg` si tu Mac tiene Apple Silicon (M1 o posterior), o `Nexium_1.0.0_x64.dmg` si es Intel. Lo ves en **Menú Apple > Acerca de este Mac**.
+2. Abre el `.dmg` y arrastra Nexium a **Aplicaciones**.
+3. Abre Nexium. Cuando macOS lo bloquee (Gatekeeper), ve a **Ajustes del Sistema > Privacidad y seguridad**, baja hasta el aviso sobre Nexium y pulsa **Abrir igualmente**. Solo hay que hacerlo una vez.
+4. La primera vez que hables o analices la pantalla, macOS pedirá permiso de micrófono o de grabación de pantalla.
+
+### Linux
+
+**Ubuntu o Debian (`.deb`):**
+
+```bash
+sudo apt install ./Nexium_1.0.0_amd64.deb
+```
+
+**Cualquier distribución (`.AppImage`):**
+
+```bash
+chmod +x Nexium_1.0.0_amd64.AppImage
+./Nexium_1.0.0_amd64.AppImage
+```
+
+### Primeros pasos
+
+1. En **Ajustes**, descarga el modelo de voz (una sola vez; se verifica su integridad).
+2. Pulsa **Hablar** o escribe, por ejemplo: «¿Cuánta batería me queda?», «¿Cómo está el clima en Bogotá?», «Recuérdame llamar al dentista mañana a las 10» o «Resume mi documento de bases de datos».
+
+### Actualizaciones
+
+En **Ajustes > Actualizaciones**, pulsa **Buscar actualizaciones**. Si hay una versión nueva, Nexium la descarga, comprueba su firma, la instala y se reinicia. Nunca busca por su cuenta.
+
+## Privacidad
 
 La IA viene integrada: no necesitas configurar ninguna clave. Tus solicitudes y capturas **pasan por el servidor de Nexium hacia Google Gemini**, en su capa gratuita. El servidor no guarda su contenido; solo registra métricas de uso y errores, y cuenta el uso con un identificador anónimo de instalación y tu dirección IP, que no se almacena. Detalles en [`server/README.md`](server/README.md).
 
@@ -30,48 +101,54 @@ Esto importa sobre todo en el **análisis de pantalla** y en el **resumen de doc
 
 Otras condiciones de esos términos: hay que tener 18 años o más, el servicio está pensado para desarrolladores con fines profesionales o comerciales, y en el Espacio Económico Europeo, Reino Unido y Suiza una aplicación ofrecida a usuarios solo puede usar servicios de pago.
 
-## Funciones
-
-- **Voz:** botón visible, micrófono solo mientras la barra está en amarillo, transcripción local con Whisper.
-- **Sistema:** CPU, RAM, batería, Internet, Wi-Fi, nombre de la red y modo oscuro. Lo que un sistema no permite consultar aparece como "No disponible", nunca con un valor inventado.
-- **Archivos:** búsqueda en las carpetas que autorices (Documentos y Escritorio, o las que elijas con el selector del sistema): por nombre y, en `.txt`, `.md` y `.csv`, también por contenido. Nunca modifica, mueve ni elimina nada.
-- **Documentos:** «Resume mi documento de bases de datos» o «Analiza este archivo». Lee en el equipo `.txt`, `.md`, `.csv`, PDF con texto y `.docx`, ofrece los archivos por relevancia (primero los que coinciden por nombre) y pide tu confirmación antes de enviar su texto a la IA. El resumen tiene dos o tres frases, de cinco a ocho ideas clave explicadas y los datos importantes (fechas, cifras, definiciones). Un PDF escaneado o un formato no compatible se explican.
-- **Pantalla:** una sola captura en memoria, comprimida y enviada al servicio de IA, y después descartada.
-- **Clima y hora:** condiciones actuales y pronóstico de Open-Meteo; hora del equipo. Sin ciudad en la solicitud se usa la de Ajustes, y si no hay ninguna, Nexium la pregunta y ofrece guardarla.
-- **Recordatorios:** en lenguaje natural, con aclaración si la fecha es ambigua. Se guardan en SQLite. En Windows, el aviso se queda en pantalla hasta que lo descartes.
-- **Historial:** solicitudes, categoría, estado y respuesta, sin audio ni imágenes. Cada solicitud tiene una sola entrada, que se actualiza hasta su estado final aunque pase por un permiso o una pregunta.
-
-## Tecnologías
-
-Tauri 2, React 19, TypeScript 6, Tailwind CSS 4, Rust, SQLite (`rusqlite`), Whisper (`whisper-rs`), `cpal`, `xcap`, `sysinfo`, Cloudflare Workers, API de Gemini y Open-Meteo. La justificación está en [`docs/ANALISIS_TECNICO.md`](docs/ANALISIS_TECNICO.md).
-
 ## Arquitectura
 
 ```text
 React (solo presentación)
-   │  comandos tipados de Tauri; ninguno genérico
+   │  comandos tipados de Tauri; ninguno genérico ni con rutas de archivos
    ▼
 Rust: reglas locales ──► IA si hace falta ──► Intent validado ──► CommandHandler
-        SystemProvider · FileSearchProvider · WeatherProvider · AiProvider
-        SpeechProvider · ScreenCaptureProvider · NotificationProvider
+        SystemProvider · FileSearchProvider · DocumentProvider · WeatherProvider
+        AiProvider · SpeechProvider · ScreenCaptureProvider · NotificationProvider
    │  solo si hace falta IA
    ▼
-Servidor de Nexium (Cloudflare Worker): valida, limita el uso y guarda la clave
+Servidor intermediario de Nexium (Cloudflare Worker)
+   valida cada solicitud, limita el uso por instalación, por IP y en total, y guarda la clave
    ▼
 Google Gemini
 ```
 
-La clave de Gemini solo existe como secreto de Cloudflare: nunca en el código, los instaladores, la CI ni tu equipo.
+La clave de Gemini solo existe como secreto de Cloudflare: nunca en el código, los instaladores, la CI ni tu equipo. El servidor tiene su propio [README](server/README.md).
 
 ```text
 src/            Interfaz: app, components, features, services, types, styles
 src-tauri/src/  commands, core, providers, services, database, models, platform
-server/         Worker intermediario de IA, con su README y sus pruebas
-tests/          Pruebas de integración y contratos con Rust
-docs/           Análisis, diseño, estado, prueba de voz y pruebas manuales
+server/         Servidor intermediario de IA, con sus pruebas
+tests/          Contratos entre la interfaz y Rust, y pruebas de diseño
+docs/           Análisis, diseño, estado, rendimiento, voz y pruebas manuales
 ```
 
-## Requisitos para compilar
+## Configuración
+
+Quien usa Nexium no configura nada para la IA. **Ajustes** muestra el estado del servicio y un límite diario propio de solicitudes. Las operaciones locales no consumen cuota; si la cuota se agota, Nexium lo explica y no reintenta.
+
+Las órdenes simples (hora, fecha, batería, CPU, RAM, red, Wi-Fi, modo oscuro y abrir secciones) se resuelven en el equipo, sin IA. Los tiempos de cada solicitud quedan en `rendimiento.log`, en la carpeta de datos de Nexium, sin el texto pedido: ver [`docs/RENDIMIENTO.md`](docs/RENDIMIENTO.md).
+
+### Voz
+
+El modelo se descarga una sola vez desde **Ajustes**, con tu confirmación, y se verifica su hash. Se guarda en la carpeta de datos de la aplicación, dentro de `models/`. Se carga en memoria mientras hablas, la primera vez que pulsas Hablar, y se libera tras un periodo sin uso, configurable en **Ajustes** (10 minutos por defecto). En automático, Nexium usa el primer micrófono real y nunca una entrada que grabe el sonido del equipo, como Stereo Mix, aunque sea la predeterminada. Detalles y mediciones: [`docs/PRUEBA_VOZ.md`](docs/PRUEBA_VOZ.md).
+
+### Notificaciones de los recordatorios
+
+Los recordatorios avisan con una notificación del sistema mientras Nexium está abierto o en la bandeja. El título lleva un emoji según el contenido (💊 medicina, 💧 agua, 🗓️ reunión o cita, 📚 estudio o entrega, 🛒 compras, 🏃 ejercicio y 🔔 en el resto), elegido en el equipo sin IA. En Windows usan el escenario de recordatorio: el aviso aparece desplegado, con el botón **Abrir Nexium**, que abre Recordatorios con ese recordatorio resaltado, y se queda en pantalla hasta que lo descartes. Que aparezca en pantalla depende de la configuración de Windows:
+
+- En **Configuración > Sistema > Notificaciones**, las notificaciones deben estar activadas y, en la lista de aplicaciones, Nexium debe tener activado **Mostrar banners de notificación**.
+- Con **No molestar** activado, Windows solo muestra los avisos de las aplicaciones y recordatorios que permitas en **Establecer notificaciones prioritarias**. Si no, el aviso va directamente al centro de notificaciones.
+- Al ejecutar Nexium sin instalar (en desarrollo), Windows atribuye el aviso a PowerShell; el instalado lo firma como Nexium.
+
+## Desarrollo local
+
+### Requisitos para compilar
 
 - Node.js 22.12 o superior y Rust 1.90 o superior (con `rustup`).
 - CMake y `libclang`, que necesita Whisper.
@@ -96,32 +173,12 @@ sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file lib
   libxrandr-dev libdbus-1-dev libpipewire-0.3-dev libwayland-dev libegl-dev libgbm-dev
 ```
 
-## Ejecución
+### Ejecución
 
 ```bash
 npm ci
 npm run tauri dev
 ```
-
-## Configuración
-
-### IA
-
-Quien usa Nexium no configura nada. **Ajustes** muestra el estado del servicio y un límite diario propio de solicitudes.
-
-Las operaciones locales no consumen cuota. Si la cuota se agota, Nexium lo explica y no reintenta ni cambia de plan.
-
-Modelos e instrucciones están en el servidor (`server/src/ai-contract.json`): `gemini-3.5-flash-lite` para interpretar y resumir documentos, y `gemini-3.6-flash` para analizar la pantalla.
-
-Las órdenes simples (hora, fecha, batería, CPU, RAM, red, Wi-Fi, modo oscuro y abrir secciones) se resuelven en el equipo, sin IA. Los tiempos de cada solicitud quedan en `rendimiento.log`, en la carpeta de datos de Nexium, sin el texto pedido: ver [`docs/RENDIMIENTO.md`](docs/RENDIMIENTO.md).
-
-### Notificaciones
-
-Los recordatorios avisan con una notificación del sistema mientras Nexium está abierto o en la bandeja. El título lleva un emoji según el contenido (💊 medicina, 💧 agua, 🗓️ reunión o cita, 📚 estudio o entrega, 🛒 compras, 🏃 ejercicio y 🔔 en el resto), elegido en el equipo sin IA. En Windows usan el escenario de recordatorio: el aviso aparece desplegado, con el botón **Abrir Nexium**, que abre Recordatorios con ese recordatorio resaltado, y se queda en pantalla hasta que lo descartes. Que aparezca en pantalla depende de la configuración de Windows:
-
-- En **Configuración > Sistema > Notificaciones**, las notificaciones deben estar activadas y, en la lista de aplicaciones, Nexium debe tener activado **Mostrar banners de notificación**.
-- Con **No molestar** activado, Windows solo muestra los avisos de las aplicaciones y recordatorios que permitas en **Establecer notificaciones prioritarias**. Si no, el aviso va directamente al centro de notificaciones.
-- Al ejecutar Nexium sin instalar (en desarrollo), Windows atribuye el aviso a PowerShell; el instalado lo firma como Nexium.
 
 ### Variables de entorno
 
@@ -130,43 +187,34 @@ Los recordatorios avisan con una notificación del sistema mientras Nexium está
 | `NEXIUM_AI_SERVER_URL` | Al compilar | Dirección del servidor de Nexium. Sin ella, la compilación no incluye IA. No es secreta |
 | `GEMINI_API_KEY` | Solo en desarrollo, en `.env` | Sin `NEXIUM_AI_SERVER_URL`, `tauri dev` llama directamente a Gemini con esta clave. Ese código no existe en los instaladores |
 
-### Voz
+### Compilación
 
-El modelo se descarga una sola vez desde **Ajustes**, con tu confirmación, y se verifica su hash. Se guarda en la carpeta de datos de la aplicación, dentro de `models/`. Se carga en memoria mientras hablas, la primera vez que pulsas Hablar, y se libera tras un periodo sin uso, configurable en **Ajustes** (10 minutos por defecto). En automático, Nexium usa el primer micrófono real y nunca una entrada que grabe el sonido del equipo, como Stereo Mix, aunque sea la predeterminada. Detalles y mediciones: [`docs/PRUEBA_VOZ.md`](docs/PRUEBA_VOZ.md).
+```bash
+npm run tauri build
+```
+
+whisper.cpp se compila optimizado también en distribución gracias a la característica `force-debug` de `whisper-rs-sys`: sin ella, con MSVC quedaba sin optimizar y cada transcripción tardaba unos 13 s. Ver [`docs/RENDIMIENTO.md`](docs/RENDIMIENTO.md).
+
+Cada envío a `main` compila los instaladores de prueba en GitHub Actions. Al subir una etiqueta `v*`, el flujo **Publicación** compila los instaladores firmados para el actualizador y los publica en una Release, con el `latest.json` que consulta Nexium. La clave privada de firma llega como secreto del repositorio (`TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) y nunca está en el código.
 
 ## Pruebas
 
 ```bash
-npm run lint        # ESLint y reglas de Tailwind
-npm test            # Vitest
-cd src-tauri && cargo test
-cd server && npm ci && npm test
+npm run lint             # ESLint y reglas de Tailwind
+npm test                 # Vitest: interfaz y contratos con Rust
+npm run test:layout      # Playwright: 23 vistas en 5 tamaños de ventana, 6 escalas de texto y 2 temas
+cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+cd server && npm ci && npm run typecheck && npm test
 ```
 
-Pruebas con servicios reales, que gastan cuota y nunca se ejecutan en CI:
+La CI ejecuta todo esto en Windows, macOS y Linux, y las del servidor aparte. Pruebas con servicios reales, que gastan cuota y nunca se ejecutan en CI:
 
 ```bash
 cd src-tauri
 cargo run --example ai_live -- frases
 ```
 
-## Compilación y distribución
-
-```bash
-npm run tauri build
-```
-
-whisper.cpp se compila optimizado también en distribución gracias a la característica `force-debug` de `whisper-rs-sys` (sin ella, con MSVC quedaba sin optimizar y cada transcripción tardaba unos 13 s; ver `docs/RENDIMIENTO.md`). La CI lo comprueba en Windows.
-
-Cada envío a `main` compila instaladores en GitHub Actions (`.msi`, `.exe`, `.dmg`, `.deb`, `.AppImage`) y los deja en "Artifacts".
-
-### Abrir un instalador sin firmar
-
-Nexium es un proyecto universitario distribuido solo en GitHub, y sus instaladores no están firmados. El sistema avisará la primera vez. Descarga los instaladores únicamente de la página de [Releases](https://github.com/Daniel-I24/Nexium/releases) de este repositorio. No hace falta desactivar ninguna protección del sistema.
-
-**Windows (SmartScreen):** al abrir el instalador aparece "Windows protegió su PC". Pulsa **Más información** y después **Ejecutar de todas formas**.
-
-**macOS (Gatekeeper):** abre el `.dmg`, arrastra Nexium a Aplicaciones e inténtalo abrir. Cuando macOS lo bloquee, ve a **Ajustes del Sistema → Privacidad y seguridad**, baja hasta el aviso sobre Nexium y pulsa **Abrir igualmente**. Solo hay que hacerlo una vez.
+Las pruebas manuales están en [`docs/PLAN_PRUEBAS_MANUALES.md`](docs/PLAN_PRUEBAS_MANUALES.md).
 
 ## Limitaciones conocidas
 
@@ -179,6 +227,8 @@ Nexium es un proyecto universitario distribuido solo en GitHub, y sus instalador
 - La base de datos local no está cifrada. Contiene solicitudes y respuestas, que puedes eliminar desde Historial.
 - La IA necesita Internet y comparte una cuota gratuita limitada: en días de mucho uso puede agotarse hasta el día siguiente. Las consultas locales siguen funcionando.
 - La IA no está disponible en el Espacio Económico Europeo, Reino Unido ni Suiza, porque los [términos de Google](https://aistudio.google.com/docs/terms) solo permiten allí servicios de pago. Tampoco cuando no se puede determinar el país, como en la red Tor. El servidor lo decide según el país que informa Cloudflare, y Nexium lo explica con un mensaje. Las consultas locales siguen funcionando.
+- Solo se ha probado a mano en Windows. En macOS y Linux se compila y se prueba automáticamente en la CI, pero faltan las pruebas manuales.
+- Los instaladores no llevan firma comercial: SmartScreen y Gatekeeper avisan la primera vez.
 
 ## Atribución
 
@@ -186,4 +236,4 @@ Datos meteorológicos de [Open-Meteo](https://open-meteo.com/), con licencia [CC
 
 ## Licencia
 
-[MIT](LICENSE).
+[MIT](LICENSE). © 2026 Daniel-I24.
