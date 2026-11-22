@@ -15,14 +15,21 @@ Se marca cada etapa solo cuando está comprobada.
   - [x] Pruebas de regresión con audio real a 48 kHz en estéreo
   - [x] Medición con las cuatro grabaciones del propietario y el binario de distribución: de 18,96 s a 1,07 s de mediana (máximo 1,20 s); objetivos cumplidos
   - [x] Revisión de la cadena completa con esas grabaciones y borrado de las grabaciones
-- [ ] **Etapa 2. Pendientes de la última prueba**
-  - [ ] Resumen de documentos detallado y ajustado a la longitud
-  - [ ] Documentos por relevancia y preselección de una coincidencia clara
-  - [ ] Una sola entrada por solicitud, en Historial y en la conversación
-  - [ ] «Abrir Nexium» abre Recordatorios y resalta el recordatorio
-  - [ ] Emoji en el título del aviso, con 🔔 por defecto
-- [ ] **Etapa 3. Revisión completa de calidad** (recorrido de la app, textos y seguridad)
-- [ ] **Etapa 4. Limpieza y optimización** (código sin uso, archivos largos, auditorías, pruebas y rendimiento final)
+- [x] **Etapa 2. Pendientes de la última prueba** (comprobado en el código, el servidor desplegado y sus pruebas)
+  - [x] Resumen de documentos detallado y ajustado a la longitud
+  - [x] Documentos por relevancia y preselección de una coincidencia clara
+  - [x] Una sola entrada por solicitud, en Historial y en la conversación
+  - [x] «Abrir Nexium» abre Recordatorios y resalta el recordatorio
+  - [x] Emoji en el título del aviso, con 🔔 por defecto
+- [x] **Etapa 3. Revisión completa de calidad**
+  - [x] Recorrido de pantallas, estados vacíos, errores, cargas, diálogos, temas y tamaños (23 vistas en las pruebas de diseño, revisadas en capturas)
+  - [x] Textos: trato de tú, puntuación y comillas angulares en todos los mensajes (prueba `tests/texts.rs`)
+  - [x] Seguridad: sin secretos en el repositorio ni en el ejecutable, capacidades de Tauri mínimas (solo eventos), comandos sin rutas de la interfaz, CSP restrictiva y límites del Worker activos
+  - [x] Dependencias: zip 9 y pdf-extract 0.12 corrigen 8 vulnerabilidades señaladas por `cargo audit`
+- [ ] **Etapa 4. Limpieza y optimización**
+  - [x] Sin funciones, tipos ni exportaciones sin uso; pruebas largas en archivos propios; ningún archivo de código pasa de unas 400 líneas
+  - [x] Lint, tipado, Clippy, `cargo fmt`, `cargo audit` (0 vulnerabilidades), `npm audit` (0 en la app y el Worker) y todas las pruebas
+  - [ ] Rendimiento final con el ejecutable de distribución
 - [ ] **Etapa 5. Verificación en la app instalada** (prueba manual final del propietario)
 - [ ] **Etapa 6. Publicación de la versión 1.0.0** (versión, instaladores en español, actualizador, publicación automática, README final y Release)
 
