@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use chrono::Local;
+use chrono::{DateTime, Local};
 use tokio_util::sync::CancellationToken;
 
 use super::{
@@ -56,14 +56,6 @@ impl Assistant {
         if !self.ai.is_configured() {
             return Err(AiError::NotConfigured);
         }
-        let limit = self
-            .settings
-            .get()
-            .map_or(u32::MAX, |settings| settings.daily_ai_limit);
-        let (requests, _) = self.usage.today_totals().unwrap_or((0, 0));
-        if requests >= limit {
-            return Err(AiError::LocalLimitReached);
-        }
         Ok(())
     }
 
@@ -72,10 +64,9 @@ impl Assistant {
         let local_hint = "Las consultas de hora, sistema y red siguen funcionando.".to_owned();
         match error {
             AiError::NotConfigured => ("Esta versión de Nexium no incluye el servicio de IA.".into(), Some(local_hint)),
-            AiError::QuotaExhausted => (self.ai.quota_message(), Some(local_hint)),
+            AiError::QuotaExhausted(resets_in) => (self.ai.quota_message(), Some(format!("{} {local_hint}", reset_sentence(*resets_in, Local::now())))),
             AiError::RateLimited => ("El servicio de IA recibió demasiadas solicitudes en poco tiempo.".into(), Some(format!("Espera un minuto y vuelve a intentarlo. {local_hint}"))),
-            AiError::DailyLimit => ("Se alcanzó el límite diario de uso de IA de este equipo o esta red.".into(), Some(format!("Vuelve a intentarlo mañana. {local_hint}"))),
-            AiError::LocalLimitReached => ("Alcanzaste el límite diario de solicitudes de IA configurado en Nexium.".into(), Some(format!("Puedes cambiarlo en Ajustes. {local_hint}"))),
+            AiError::DailyLimit(resets_in) => ("Se alcanzó el límite diario de uso de IA de este equipo o esta red.".into(), Some(format!("{} {local_hint}", reset_sentence(*resets_in, Local::now())))),
             AiError::RegionUnavailable => ("El servicio de IA de Nexium no está disponible en tu región.".into(), Some(format!("No se ofrece en el Espacio Económico Europeo, Reino Unido ni Suiza. {local_hint}"))),
             AiError::RegionUnknown => ("No se pudo determinar tu país, y el servicio de IA de Nexium no se ofrece sin conocerlo.".into(), Some(format!("Si usas Tor o una conexión que oculte tu ubicación, prueba con otra conexión. {local_hint}"))),
             AiError::Unavailable => (
@@ -386,6 +377,25 @@ impl Assistant {
             ),
         }
     }
+}
+
+/// Cuándo vuelve a haber IA, en la hora del equipo: el servidor indica los segundos que faltan.
+pub(crate) fn reset_sentence(resets_in: Option<u64>, now: DateTime<Local>) -> String {
+    let Some(at) = resets_in
+        .and_then(|seconds| i64::try_from(seconds).ok())
+        .and_then(|seconds| now.checked_add_signed(chrono::Duration::seconds(seconds)))
+    else {
+        return "Vuelve a intentarlo mañana.".into();
+    };
+    let day = match (at.date_naive() - now.date_naive()).num_days() {
+        0 => "hoy".to_owned(),
+        1 => "mañana".to_owned(),
+        _ => at.format("el %d/%m").to_string(),
+    };
+    format!(
+        "Se restablece {day} a las {}, hora de tu equipo.",
+        at.format("%H:%M")
+    )
 }
 
 /// Un dato externo no es una lectura del equipo: se nombra su fuente.

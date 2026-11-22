@@ -56,10 +56,10 @@ fn usable_url(url: &str) -> Option<String> {
     (url.len() > "https://".len() && (url.starts_with("https://") || local)).then(|| url.to_owned())
 }
 
-fn map_error(detail: ErrorDetail) -> AiError {
+fn map_error(detail: ErrorDetail, retry_after: Option<u64>) -> AiError {
     match detail.code.as_str() {
-        "service_quota" => AiError::QuotaExhausted,
-        "daily_limit" => AiError::DailyLimit,
+        "service_quota" => AiError::QuotaExhausted(retry_after),
+        "daily_limit" => AiError::DailyLimit(retry_after),
         "region_unavailable" => AiError::RegionUnavailable,
         "country_unknown" => AiError::RegionUnknown,
         "rate_limited" => AiError::RateLimited,
@@ -112,9 +112,15 @@ impl NexiumServer {
         if response.status().is_success() {
             return response.json().await.map_err(|_| AiError::InvalidResponse);
         }
+        // Los segundos hasta que se restablece un límite, si el servidor los indica.
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.trim().parse().ok());
         // Una página de error de la plataforma no trae nuestro formato.
         match response.json::<ErrorEnvelope>().await {
-            Ok(envelope) => Err(map_error(envelope.error)),
+            Ok(envelope) => Err(map_error(envelope.error, retry_after)),
             Err(_) => Err(AiError::Unavailable),
         }
     }
@@ -131,7 +137,7 @@ impl AiProvider for NexiumServer {
     }
 
     fn quota_message(&self) -> String {
-        "Se agotó la cuota diaria gratuita del servicio de IA de Nexium. Vuelve a intentarlo mañana.".into()
+        "Se agotó la cuota diaria gratuita del servicio de IA de Nexium.".into()
     }
 
     fn is_configured(&self) -> bool {

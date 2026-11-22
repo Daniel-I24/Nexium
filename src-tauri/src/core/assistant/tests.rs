@@ -520,7 +520,7 @@ fn each_cause_of_failure_has_its_own_message() {
         message(AiError::NotConfigured),
         message(AiError::Unavailable),
         message(AiError::Timeout),
-        message(AiError::QuotaExhausted),
+        message(AiError::QuotaExhausted(None)),
         message(AiError::RegionUnavailable),
         message(AiError::RegionUnknown),
     ];
@@ -546,7 +546,7 @@ fn each_cause_of_failure_has_its_own_message() {
 
 #[tokio::test]
 async fn quota_exhausted_shows_a_clear_message_without_retrying() {
-    let h = harness(Some(Err(AiError::QuotaExhausted)), true, false);
+    let h = harness(Some(Err(AiError::QuotaExhausted(None))), true, false);
     let response = ask(&h.assistant, "cuéntame algo sobre el proyecto").await;
     let ResponseBody::Error {
         code,
@@ -575,7 +575,7 @@ async fn without_the_service_no_call_is_made() {
 
 #[tokio::test]
 async fn the_service_status_comes_from_real_use() {
-    let h = harness(Some(Err(AiError::QuotaExhausted)), true, false);
+    let h = harness(Some(Err(AiError::QuotaExhausted(None))), true, false);
     assert_eq!(
         h.assistant.ai_status.current(true),
         AiServiceStatus::NotUsedYet
@@ -600,15 +600,29 @@ async fn the_service_status_comes_from_real_use() {
 }
 
 #[tokio::test]
-async fn the_daily_limit_stops_ai_calls() {
-    let h = harness(None, true, false);
-    let mut settings = h.assistant.settings.get().unwrap();
-    settings.daily_ai_limit = 1;
-    h.assistant.settings.save(&settings).unwrap();
-    h.assistant.usage.record(1).unwrap();
+async fn a_daily_limit_says_when_it_resets() {
+    let h = harness(Some(Err(AiError::DailyLimit(Some(3600)))), true, false);
     let response = ask(&h.assistant, "cuéntame algo").await;
-    assert!(matches!(response.body, ResponseBody::Error { ref code, .. } if code == "localLimit"));
-    assert_eq!(h.ai_calls.load(Ordering::SeqCst), 0);
+    let ResponseBody::Error { code, hint, .. } = response.body else {
+        panic!()
+    };
+    assert_eq!(code, "dailyLimit");
+    assert!(hint.unwrap().contains("Se restablece"));
+}
+
+#[test]
+fn the_reset_time_is_given_in_local_time() {
+    use chrono::TimeZone;
+    let now = Local.with_ymd_and_hms(2026, 11, 22, 18, 30, 0).unwrap();
+    assert_eq!(
+        reset_sentence(Some(1800), now),
+        "Se restablece hoy a las 19:00, hora de tu equipo."
+    );
+    assert_eq!(
+        reset_sentence(Some(6 * 3600), now),
+        "Se restablece mañana a las 00:30, hora de tu equipo."
+    );
+    assert_eq!(reset_sentence(None, now), "Vuelve a intentarlo mañana.");
 }
 
 #[tokio::test]

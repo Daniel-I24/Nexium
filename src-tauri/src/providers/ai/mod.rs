@@ -79,8 +79,8 @@ impl AiStatusTracker {
     pub fn record<T>(&self, result: &Result<T, AiError>) {
         let status = match result {
             Ok(_) => AiServiceStatus::Working,
-            Err(AiError::RateLimited | AiError::DailyLimit) => AiServiceStatus::Limited,
-            Err(AiError::QuotaExhausted) => AiServiceStatus::QuotaExhausted,
+            Err(AiError::RateLimited | AiError::DailyLimit(_)) => AiServiceStatus::Limited,
+            Err(AiError::QuotaExhausted(_)) => AiServiceStatus::QuotaExhausted,
             Err(AiError::RegionUnavailable | AiError::RegionUnknown) => {
                 AiServiceStatus::RegionUnavailable
             }
@@ -121,9 +121,12 @@ mod tests {
     fn the_status_follows_the_last_real_use() {
         assert_eq!(after(Ok(())), AiServiceStatus::Working);
         assert_eq!(after(Err(AiError::RateLimited)), AiServiceStatus::Limited);
-        assert_eq!(after(Err(AiError::DailyLimit)), AiServiceStatus::Limited);
         assert_eq!(
-            after(Err(AiError::QuotaExhausted)),
+            after(Err(AiError::DailyLimit(None))),
+            AiServiceStatus::Limited
+        );
+        assert_eq!(
+            after(Err(AiError::QuotaExhausted(None))),
             AiServiceStatus::QuotaExhausted
         );
         assert_eq!(

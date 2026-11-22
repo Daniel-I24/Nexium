@@ -211,9 +211,9 @@ async fn phrases(provider: &dyn AiProvider) {
                 );
             }
             Err(
-                error @ (AiError::QuotaExhausted
+                error @ (AiError::QuotaExhausted(_)
                 | AiError::RateLimited
-                | AiError::DailyLimit
+                | AiError::DailyLimit(_)
                 | AiError::NotConfigured),
             ) => {
                 println!(

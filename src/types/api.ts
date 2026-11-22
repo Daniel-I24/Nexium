@@ -138,7 +138,6 @@ export interface SpeechModelStatus {
 }
 
 export interface Settings {
-  dailyAiLimit: number;
   speechModel: string;
   speechIdleMinutes: number;
   weatherCity: string;

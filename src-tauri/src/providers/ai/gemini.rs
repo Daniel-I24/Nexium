@@ -164,9 +164,9 @@ fn map_error(status: u16, error: &ErrorDetail) -> AiError {
         .unwrap_or(&error.status)
         .to_ascii_lowercase();
     match (status, code.as_str()) {
-        (429, "quota_exceeded") => AiError::QuotaExhausted,
+        (429, "quota_exceeded") => AiError::QuotaExhausted(None),
         // RESOURCE_EXHAUSTED es el código de la API heredada: tampoco distingue minuto de día si el mensaje no lo dice.
-        (429, "resource_exhausted") if error.message.to_ascii_lowercase().contains("per day") => AiError::QuotaExhausted,
+        (429, "resource_exhausted") if error.message.to_ascii_lowercase().contains("per day") => AiError::QuotaExhausted(None),
         (429, _) => AiError::RateLimited,
         (401, _) => AiError::Rejected("Google rechazó la clave de .env.".into()),
         (403, _) => AiError::Rejected("Google denegó el acceso: el proyecto puede estar restringido o la clave puede estar bloqueada.".into()),

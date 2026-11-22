@@ -5,14 +5,13 @@ use thiserror::Error;
 pub enum AiError {
     #[error("Esta versión no incluye el servicio de IA.")]
     NotConfigured,
+    /// Con los segundos que faltan para que se restablezca, si el servidor los indica.
     #[error("Se agotó la cuota diaria.")]
-    QuotaExhausted,
+    QuotaExhausted(Option<u64>),
     #[error("Demasiadas solicitudes en poco tiempo.")]
     RateLimited,
-    #[error("Se alcanzó el límite diario configurado en Nexium.")]
-    LocalLimitReached,
     #[error("Se alcanzó el límite diario de uso del servicio.")]
-    DailyLimit,
+    DailyLimit(Option<u64>),
     #[error("El servicio de IA no está disponible en esta región.")]
     RegionUnavailable,
     #[error("No se pudo determinar el país desde el que se usa el servicio de IA.")]
@@ -35,10 +34,9 @@ impl AiError {
     pub fn code(&self) -> &'static str {
         match self {
             Self::NotConfigured => "notConfigured",
-            Self::QuotaExhausted => "quotaExhausted",
+            Self::QuotaExhausted(_) => "quotaExhausted",
             Self::RateLimited => "rateLimited",
-            Self::LocalLimitReached => "localLimit",
-            Self::DailyLimit => "dailyLimit",
+            Self::DailyLimit(_) => "dailyLimit",
             Self::RegionUnavailable => "regionUnavailable",
             Self::RegionUnknown => "regionUnknown",
             Self::Rejected(_) => "rejected",

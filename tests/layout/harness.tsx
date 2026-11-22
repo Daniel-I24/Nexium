@@ -162,7 +162,7 @@ const reminders: Reminder[] = [
 ];
 
 const settings: SettingsView = {
-  settings: { dailyAiLimit: 200, speechModel: "small", speechIdleMinutes: 10, weatherCity: "Medellín", authorizedFolders: [longPath.replace(/\\[^\\]+$/, "")], microphone: null },
+  settings: { speechModel: "small", speechIdleMinutes: 10, weatherCity: "Medellín", authorizedFolders: [longPath.replace(/\\[^\\]+$/, "")], microphone: null },
   provider: {
     displayName: "Google Gemini",
     dataNotice:

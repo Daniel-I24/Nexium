@@ -62,7 +62,7 @@ async fn daily_quota_is_reported_and_not_retried() {
     let server = failing_server(429, "quota_exceeded", 1).await;
     assert_eq!(
         provider(&server).interpret(request()).await.unwrap_err(),
-        AiError::QuotaExhausted
+        AiError::QuotaExhausted(None)
     );
 }
 

@@ -23,7 +23,6 @@ pub fn display_path(path: &Path) -> String {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
-    pub daily_ai_limit: u32,
     pub speech_model: String,
     pub speech_idle_minutes: u32,
     pub weather_city: String,
@@ -37,7 +36,6 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            daily_ai_limit: 200,
             speech_model: DEFAULT_SPEECH_MODEL.into(),
             speech_idle_minutes: DEFAULT_SPEECH_IDLE_MINUTES,
             weather_city: String::new(),
@@ -49,11 +47,6 @@ impl Default for Settings {
 
 impl Settings {
     pub fn validate(&self, known_speech_models: &[&str]) -> AppResult<()> {
-        if !(1..=10_000).contains(&self.daily_ai_limit) {
-            return Err(AppError::Validation(
-                "El límite diario debe estar entre 1 y 10 000.".into(),
-            ));
-        }
         if !known_speech_models.contains(&self.speech_model.as_str()) {
             return Err(AppError::Validation("Ese modelo de voz no existe.".into()));
         }
@@ -198,7 +191,8 @@ mod tests {
             r#"{"aiProvider":"gemini","interpretModel":"x","visionModel":"y","dailyAiLimit":7}"#,
         )
         .unwrap();
-        assert_eq!(stored.daily_ai_limit, 7);
+        // El límite diario editable ya no existe: el valor guardado se ignora.
+        assert_eq!(stored, Settings::default());
     }
 
     #[test]

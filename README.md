@@ -130,7 +130,7 @@ docs/           Análisis, diseño, estado, rendimiento, voz y pruebas manuales
 
 ## Configuración
 
-Quien usa Nexium no configura nada para la IA. **Ajustes** muestra el estado del servicio y un límite diario propio de solicitudes. Las operaciones locales no consumen cuota; si la cuota se agota, Nexium lo explica y no reintenta.
+Quien usa Nexium no configura nada para la IA. **Ajustes** muestra el estado del servicio y el uso de hoy. El límite diario lo pone el servidor de Nexium para cada equipo y red; si se alcanza, Nexium dice a qué hora se restablece y no reintenta. Las operaciones locales no consumen cuota.
 
 Las órdenes simples (hora, fecha, batería, CPU, RAM, red, Wi-Fi, modo oscuro y abrir secciones) se resuelven en el equipo, sin IA. Los tiempos de cada solicitud quedan en `rendimiento.log`, en la carpeta de datos de Nexium, sin el texto pedido: ver [`docs/RENDIMIENTO.md`](docs/RENDIMIENTO.md).
 

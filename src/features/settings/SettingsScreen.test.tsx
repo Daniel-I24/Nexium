@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(() => Promise.resolve(()
 
 function view(overrides: Partial<SettingsView> = {}, microphone: string | null = null): SettingsView {
   return {
-    settings: { dailyAiLimit: 200, speechModel: "small", speechIdleMinutes: 10, weatherCity: "", authorizedFolders: [], microphone },
+    settings: { speechModel: "small", speechIdleMinutes: 10, weatherCity: "", authorizedFolders: [], microphone },
     provider: { displayName: "Google Gemini", dataNotice: "Aviso." },
     aiStatus: "working",
     aiRequestsToday: 0,
@@ -93,7 +93,9 @@ describe("Ajustes: uso de IA", () => {
   it("concuerda la cantidad de solicitudes y de tokens", async () => {
     invoke.mockResolvedValue(view({ aiRequestsToday: 1, tokensToday: 1 }));
     render(<SettingsScreen />);
-    expect(await screen.findByText("Hoy: 1 solicitud · 1 token")).toBeInTheDocument();
+    expect(await screen.findByText("Uso de hoy: 1 solicitud · 1 token")).toBeInTheDocument();
+    // El límite real lo pone el servidor: en Ajustes no se edita.
+    expect(screen.queryByLabelText(/Límite diario/)).toBeNull();
   });
 });
 

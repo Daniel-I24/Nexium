@@ -170,11 +170,11 @@ export function SettingsScreen() {
         <Section title={`Inteligencia artificial: ${view.provider.displayName}`}>
           <p className="m-0 border-t-2 border-query pt-2 text-sm">{view.provider.dataNotice}</p>
           <p className="m-0 text-sm">Estado del servicio: {statusLabels[view.aiStatus]}.</p>
-          <Field label="Límite diario de solicitudes de IA">
-            <input type="number" min={1} max={10000} value={draft.dailyAiLimit} onChange={(event) => update("dailyAiLimit", Number(event.target.value))} className={`font-mono ${inputStyle}`} />
-          </Field>
           <p className="m-0 font-mono text-sm text-muted">
-            Hoy: {count(view.aiRequestsToday, "solicitud", "solicitudes")} · {count(view.tokensToday, "token", "tokens")}
+            Uso de hoy: {count(view.aiRequestsToday, "solicitud", "solicitudes")} · {count(view.tokensToday, "token", "tokens")}
+          </p>
+          <p className="m-0 text-sm text-muted">
+            El servidor de Nexium limita el uso diario de cada equipo y red. Si se alcanza, Nexium te dice a qué hora se restablece.
           </p>
         </Section>
 

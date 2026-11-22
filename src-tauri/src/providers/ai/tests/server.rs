@@ -119,9 +119,12 @@ async fn a_free_text_analysis_is_rejected() {
 async fn each_server_error_has_its_meaning_and_is_not_retried() {
     assert_eq!(
         error_for(429, "service_quota").await,
-        AiError::QuotaExhausted
+        AiError::QuotaExhausted(None)
     );
-    assert_eq!(error_for(429, "daily_limit").await, AiError::DailyLimit);
+    assert_eq!(
+        error_for(429, "daily_limit").await,
+        AiError::DailyLimit(None)
+    );
     assert_eq!(error_for(429, "rate_limited").await, AiError::RateLimited);
     assert_eq!(
         error_for(451, "region_unavailable").await,
@@ -239,4 +242,21 @@ fn the_notice_names_the_server_and_the_use_by_google() {
     let provider = NexiumServer::new(None, INSTALL.into());
     assert!(provider.data_notice().contains("servidor de Nexium"));
     assert!(provider.data_notice().contains("Google puede usar"));
+}
+
+#[tokio::test]
+async fn a_limit_carries_when_it_resets() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("Retry-After", "5400")
+                .set_body_json(json!({ "error": { "code": "daily_limit", "message": "Límite." } })),
+        )
+        .mount(&server)
+        .await;
+    assert_eq!(
+        provider(&server).interpret(request()).await.unwrap_err(),
+        AiError::DailyLimit(Some(5400))
+    );
 }
