@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local, Timelike, Utc};
 use rusqlite::{params, Row};
 
 use crate::{
@@ -54,7 +54,12 @@ fn validate(content: &str, due_at: &str, now: DateTime<Utc>) -> AppResult<(Strin
     }
     let due = DateTime::parse_from_rfc3339(due_at)
         .map_err(|_| AppError::Validation("La fecha del recordatorio no es válida.".into()))?;
-    if due.with_timezone(&Utc) <= now {
+    // La fecha y la hora se eligen por minutos: un recordatorio para el minuto en curso («dentro de un minuto»
+    // confirmado ya en ese minuto) es válido y se avisa enseguida. Solo se rechaza un minuto ya terminado.
+    let current_minute = now
+        - chrono::Duration::seconds(i64::from(now.second()))
+        - chrono::Duration::nanoseconds(i64::from(now.nanosecond()));
+    if due.with_timezone(&Utc) < current_minute {
         return Err(AppError::Validation(
             "La fecha del recordatorio ya pasó.".into(),
         ));
@@ -176,6 +181,27 @@ mod tests {
         assert_eq!(reminders.list().unwrap()[0].content, "Entregar ya");
         reminders.delete(created.id).unwrap();
         assert!(reminders.list().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_reminder_for_the_current_minute_is_accepted_and_notified_at_once() {
+        let reminders = service();
+        // A las 12:00:40, «dentro de un minuto» se confirmó como 12:00, sin segundos.
+        let late = now() + Duration::seconds(40);
+        let created = reminders
+            .create("tomar agua", &now().to_rfc3339(), late)
+            .unwrap();
+        assert_eq!(
+            reminders.take_due(late).unwrap().to_notify[0].id,
+            created.id
+        );
+        assert!(reminders
+            .create(
+                "tomar agua",
+                &(now() - Duration::seconds(1)).to_rfc3339(),
+                late
+            )
+            .is_err());
     }
 
     #[test]
