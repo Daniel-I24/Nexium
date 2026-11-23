@@ -1,8 +1,21 @@
 # Nexium: estado del proyecto
 
-Última actualización: 22 de noviembre de 2026.
+Última actualización: 22 de noviembre de 2026 (versión 1.0.1).
 
 **Etapa actual:** versión 1.0.0 publicada (lista de verificación abajo); falta la prueba de instalación del propietario desde la Release. **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas, revisión final del 13 de noviembre y correcciones de la prueba manual del 15 de noviembre** (abajo). No queda nada pendiente de código para una fase posterior. Falta la prueba manual final del propietario con la app instalada: `docs/PLAN_PRUEBAS_MANUALES.md`.
+
+## Versión 1.0.1: lista de verificación
+
+- [x] **Cierre al pulsar «Hablar» en la 1.0.0 descargada de la Release**
+  - [x] Reproducido con el instalador de la Release: el Visor de eventos registra `0xc000001d` (instrucción ilegal) en `nexium.exe`, desplazamiento `0x91bb8a`
+  - [x] Causa: la instrucción es `vmovups zmm0` (AVX-512). ggml compila por defecto con `GGML_NATIVE`, para el procesador que compila; el servidor de la CI tiene AVX-512 y el equipo del propietario no. Las compilaciones locales funcionaban porque se hacían en ese equipo
+  - [x] Corrección: `GGML_NATIVE=OFF` y una base x86-64 común (SSE4.2, AVX, AVX2, FMA, F16C, BMI2) en `src-tauri/.cargo/config.toml`, en los tres sistemas; en Apple Silicon, la base del sistema en lugar del procesador del servidor
+  - [x] Comprobación en ejecución: sin esas instrucciones, Nexium explica que la voz no está disponible en lugar de cerrarse; los pánicos de la voz se contienen y se muestran como mensaje
+  - [x] La CI y la publicación fallan si ggml-cpu contiene instrucciones AVX-512 (`scripts/check-cpu-baseline.sh`, comprobado con una compilación AVX-512 a propósito: 5 872 instrucciones detectadas)
+  - [x] Dependencias de ejecución: sin OpenMP; la 1.0.0 necesitaba `MSVCP140.dll` (no viene con Windows). Ahora el runtime de C++ va dentro del ejecutable, y la CI lo comprueba (`scripts/check-windows-dependencies.sh`)
+- [x] **Release más clara:** sin `.msi`; notas generadas en cada versión con la tabla de descarga, los archivos técnicos y los avisos de SmartScreen y Gatekeeper; borrador que solo se publica si los cuatro sistemas pasan las comprobaciones; README con «Descargar» al principio
+- [x] **Firma del instalador:** opciones documentadas en `docs/ANALISIS_TECNICO.md` (sin contratar nada)
+- [ ] **Publicación:** etiqueta v1.0.1, Release comprobada, actualización real desde la 1.0.0 y «Hablar» con el instalador de la Release
 
 ## Camino a la versión 1.0.0: lista de verificación
 
