@@ -1,0 +1,2 @@
+# Los scripts de shell se ejecutan con bash también en Windows: siempre con finales de línea LF.
+*.sh text eol=lf
