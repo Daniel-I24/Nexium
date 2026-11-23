@@ -15,7 +15,12 @@
   - [x] Dependencias de ejecución: sin OpenMP; la 1.0.0 necesitaba `MSVCP140.dll` (no viene con Windows). Ahora el runtime de C++ va dentro del ejecutable, y la CI lo comprueba (`scripts/check-windows-dependencies.sh`)
 - [x] **Release más clara:** sin `.msi`; notas generadas en cada versión con la tabla de descarga, los archivos técnicos y los avisos de SmartScreen y Gatekeeper; borrador que solo se publica si los cuatro sistemas pasan las comprobaciones; README con «Descargar» al principio
 - [x] **Firma del instalador:** opciones documentadas en `docs/ANALISIS_TECNICO.md` (sin contratar nada)
-- [ ] **Publicación:** etiqueta v1.0.1, Release comprobada, actualización real desde la 1.0.0 y «Hablar» con el instalador de la Release
+- [x] **Publicación:** [Release v1.0.1](https://github.com/Daniel-I24/Nexium/releases/tag/v1.0.1)
+  - [x] CI en verde en Windows, macOS, Linux y el servidor; en la Release, ggml-cpu sin instrucciones AVX-512 en los cuatro sistemas y el ejecutable de Windows sin DLL de Visual C++
+  - [x] Release con `.exe`, dos `.dmg`, `.deb` y AppImage, sus `.sig`, los `.app.tar.gz` y `latest.json` (versión 1.0.1, nueve entradas firmadas); sin `.msi`; notas con la tabla de descarga
+  - [x] Actualización real: la 1.0.0 instalada desde la Release encuentra la 1.0.1, la descarga, comprueba la firma, la instala y se reinicia en la 1.0.1, que responde «Tienes la última versión, la 1.0.1.»
+  - [x] «Hablar» con el binario de la Release 1.0.1: graba y transcribe sin cerrarse (1,0 a 1,5 s); «¿Qué hora es?», dicho por la voz de Windows a través del micrófono, se resolvió en local en 1 033 ms. El resto de frases no se pudo comprobar así porque sonaba música en el equipo: queda para la prueba del propietario
+  - [ ] Prueba del propietario con su voz
 
 ## Camino a la versión 1.0.0: lista de verificación
 
