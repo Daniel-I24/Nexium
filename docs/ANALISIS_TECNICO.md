@@ -397,3 +397,28 @@ Prueba desechable ejecutada hoy en este equipo con Windows 11, fuera del reposit
 | Voz | Alta | Compilación nativa, audio y modelo |
 | Análisis de pantalla | Alta | Permisos, Wayland y privacidad |
 | Distribución multiplataforma | Alta | CI y sistemas no disponibles para prueba directa |
+
+## Firma del instalador de Windows
+
+Estudio del 22 de noviembre de 2026, para decidir después de la presentación. No se ha contratado ni solicitado nada. Precios y condiciones según las páginas de cada proveedor en esa fecha: hay que confirmarlos antes de decidir.
+
+**Por qué aparece SmartScreen:** el instalador no lleva firma de código, y SmartScreen avisa de los archivos sin firma o con poca «reputación» (pocas descargas conocidas). Firmar quita el «editor desconocido», pero el aviso puede seguir saliendo hasta que el certificado gana reputación con descargas reales. Desde 2024, ni siquiera los certificados EV dan reputación inmediata.
+
+| Opción | Costo | Requisitos | Plazo | Encaje con Nexium |
+|---|---|---|---|---|
+| **SignPath Foundation** (gratuita para código abierto) | 0 € | Licencia OSI sin partes privativas (MIT, cumple); código público y descargas gratuitas; compilación automática en CI (GitHub Actions, cumple); aprobación manual de cada versión; autenticación en dos pasos del equipo; página de política de firma con la frase «Free code signing provided by SignPath.io, certificate by SignPath Foundation»; proyecto activo, ya publicado y con cierta reputación verificable | Revisión de la solicitud por la fundación: días o semanas, sin plazo publicado | **La mejor opción gratuita.** El certificado sale a nombre de «SignPath Foundation», no del autor. Requiere que la reputación del proyecto sea suficiente: con pocas descargas, pueden pedir esperar |
+| **Certum Open Source Code Signing** | Unos 25 a 69 € al año (código electrónico, nube SimplySign o tarjeta con lector; varía según tienda) | Desarrollador de software de código abierto, no comercial; verificación de identidad; validez máxima de 459 días desde el 27 de febrero de 2026 | Días, tras verificar la identidad | Certificado a nombre del autor. La firma en la nube (SimplySign) complica automatizarla en la CI |
+| **Azure Artifact Signing** (antes Trusted Signing) | Unos 9,99 USD al mes | Suscripción de Azure de pago; las personas individuales solo pueden usarlo en Estados Unidos y Canadá | Días, tras la validación de identidad | **No disponible** para una persona en Colombia |
+| **Certificado OV o EV comercial** (DigiCert, Sectigo, etc.) | De unos 200 a más de 500 USD al año, con token físico o firma en la nube | Empresa o persona verificada | Días o semanas | Caro para un proyecto universitario, y no evita el aviso al principio |
+| **Microsoft Store** | 0 € para cuentas individuales desde 2025 | Cuenta de desarrollador con verificación de identidad. Un paquete MSIX lo firma la Tienda; un `.exe` enviado a la Tienda debe venir ya firmado | Revisión de cada envío: días | Evitaría el aviso solo para quien instale desde la Tienda, y exigiría empaquetar Nexium como MSIX. Las descargas de GitHub seguirían igual |
+
+**Recomendación:** solicitar SignPath Foundation cuando Nexium tenga algo de uso real. Pasos:
+
+1. Publicar en el repositorio una política de firma (`CODE_SIGNING.md`) con la frase de atribución, quién aprueba cada versión y cómo se compila.
+2. Activar la autenticación en dos pasos en GitHub y en SignPath.
+3. Solicitarlo en signpath.org con la URL del repositorio, la página de descargas (las Releases) y una descripción.
+4. Tras la aprobación, añadir al flujo «Publicación» el envío del instalador de Windows a SignPath y su aprobación manual antes de publicar.
+
+Como alternativa de pago barata y a nombre propio, Certum Open Source.
+
+Fuentes: [condiciones de SignPath Foundation](https://signpath.org/terms.html), [tienda de Certum: Open Source Code Signing](https://shop.certum.eu/open-source-code-signing.html), [opciones de firma de código de Microsoft](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options), [registro gratuito en Microsoft Store](https://blogs.windows.com/windowsdeveloper/2025/09/10/free-developer-registration-for-individual-developers-on-microsoft-store/).
