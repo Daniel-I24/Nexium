@@ -119,14 +119,36 @@ const views: Record<string, (page: Page) => Promise<void>> = {
   },
 };
 
+/**
+ * Abre la página de pruebas. En la CI de Windows, con muchas páginas a la vez, el servidor de desarrollo a veces
+ * deja una carga sin terminar: solo la carga se repite una vez, nunca las comprobaciones de diseño. Si tampoco
+ * carga la segunda vez, el fallo incluye los errores de la consola y las peticiones fallidas.
+ */
+async function loadHarness(page: Page) {
+  const diagnostics: string[] = [];
+  page.on("console", (message) => message.type() === "error" && diagnostics.push(`consola: ${message.text()}`));
+  page.on("pageerror", (error) => diagnostics.push(`error: ${error.message}`));
+  page.on("requestfailed", (request) => diagnostics.push(`petición fallida: ${request.url()} (${request.failure()?.errorText})`));
+  const navigation = page.getByRole("navigation", { name: "Secciones" });
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    await page.goto("/tests/layout/harness.html");
+    // La primera carga compila la app en el servidor de desarrollo: en la CI puede pasar de 5 s.
+    try {
+      await navigation.waitFor({ state: "visible", timeout: attempt === 1 ? 20_000 : 30_000 });
+      return;
+    } catch {
+      diagnostics.push(`intento ${attempt}: la navegación no apareció`);
+    }
+  }
+  throw new Error(["La página de pruebas no cargó:", ...diagnostics].join("\n"));
+}
+
 const shots = process.env.NEXIUM_SHOTS ? "test-results/capturas" : null;
 
 for (const [name, open] of Object.entries(views)) {
   test(name, async ({ page }, info) => {
     await page.setViewportSize({ width: 1100, height: 720 });
-    await page.goto("/tests/layout/harness.html");
-    // La primera carga compila la app en el servidor de desarrollo: en la CI puede pasar de 5 s.
-    await expect(page.getByRole("navigation", { name: "Secciones" })).toBeVisible({ timeout: 30_000 });
+    await loadHarness(page);
     await open(page);
 
     const problems: string[] = [];
