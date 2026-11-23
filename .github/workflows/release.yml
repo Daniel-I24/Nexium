@@ -59,6 +59,8 @@ jobs:
         if: runner.os == 'Linux'
         timeout-minutes: 10
         run: |
+          # Un espejo de Ubuntu llegó a quedarse colgado a mitad de un paquete: sin respuesta en 30 s, se reintenta.
+          echo 'Acquire::http::Timeout "30"; Acquire::https::Timeout "30"; Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/99nexium-reintentos
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev \
             libayatana-appindicator3-dev librsvg2-dev libasound2-dev cmake pkg-config libclang-dev libxcb1-dev \
