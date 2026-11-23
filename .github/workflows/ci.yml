@@ -40,8 +40,9 @@ jobs:
 
       - name: Dependencias de Linux
         if: runner.os == 'Linux'
-        # Suele tardar menos de un minuto. Dos veces se colgó más de 2 horas en apt.
-        timeout-minutes: 10
+        # Suele tardar menos de un minuto, pero el espejo de Ubuntu a veces va muy lento (115 MB en más de 10 min).
+        # El límite evita esperas de horas, como dos veces antes, sin cortar una descarga lenta pero activa.
+        timeout-minutes: 25
         run: |
           # Un espejo de Ubuntu llegó a quedarse colgado a mitad de un paquete: sin respuesta en 30 s, se reintenta.
           echo 'Acquire::http::Timeout "30"; Acquire::https::Timeout "30"; Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/99nexium-reintentos
