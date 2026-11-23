@@ -1,7 +1,11 @@
 name: Publicación
 
-# Al subir una etiqueta v1.2.3: compila los instaladores firmados de los tres sistemas y los publica en una
-# Release de GitHub, con el latest.json que consulta el actualizador.
+# Al subir una etiqueta v1.2.3:
+# 1. se crea un borrador de Release;
+# 2. cada sistema compila sus instaladores firmados, los sube al borrador (con el latest.json del actualizador) y
+#    comprueba que whisper.cpp no lleva instrucciones del procesador del servidor;
+# 3. solo si los cuatro terminan bien, se comprueban los archivos y se publica con las notas en español de
+#    .github/release-notes.md y .github/changes/<versión>.md.
 on:
   push:
     tags: ["v*"]
@@ -10,16 +14,38 @@ permissions:
   contents: write
 
 jobs:
+  borrador:
+    name: Borrador de la Release
+    runs-on: ubuntu-24.04
+    outputs:
+      id: ${{ steps.crear.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Novedades de la versión
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          test -f ".github/changes/${version}.md" || { echo "::error::Falta .github/changes/${version}.md con las novedades."; exit 1; }
+      - id: crear
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Nexium $GITHUB_REF_NAME" \
+            --notes "Borrador en preparación: las notas se añaden al publicarla."
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\" and .draft) | .id" | head -1)
+          test -n "$id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
   publicar:
     name: ${{ matrix.name }}
+    needs: borrador
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
-          # «app» en macOS: el actualizador usa su .app.tar.gz; se publica el .dmg para instalar.
-          - { name: Windows, os: windows-latest, target: "", bundles: "nsis,msi" }
+          # «app» en macOS: el actualizador usa su .app.tar.gz; para instalar se descarga el .dmg.
+          - { name: Windows, os: windows-latest, target: "", bundles: "nsis" }
           - { name: macOS Apple Silicon, os: macos-latest, target: aarch64-apple-darwin, bundles: "app,dmg" }
           - { name: macOS Intel, os: macos-15-intel, target: x86_64-apple-darwin, bundles: "app,dmg" }
           - { name: Linux, os: ubuntu-24.04, target: "", bundles: "deb,appimage" }
@@ -59,28 +85,34 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Nexium ${{ github.ref_name }}
-          releaseBody: |
-            Primera versión estable de Nexium, el asistente de escritorio que responde por voz o por escrito, en español.
-
-            ## Novedades
-            - Voz transcrita en tu equipo con Whisper, en torno a 1 s por orden. Modo automático que elige el modelo Preciso o Rápido según tu equipo.
-            - Respuestas con datos reales del equipo: hora, CPU, memoria, batería, red y Wi-Fi, sin IA.
-            - Clima de Open-Meteo para la ciudad que nombres, escrita como quieras («clima de Bogota», «clima en medellin»).
-            - Resumen de documentos (.txt, .md, .csv, PDF con texto y .docx) y análisis de pantalla, siempre con tu confirmación.
-            - Recordatorios con aviso del sistema y estados Pendiente, Avisado y Vencido.
-            - Historial con una entrada por solicitud, y actualizaciones firmadas desde Ajustes.
-
-            ## Instalación
-            - **Windows 10 u 11 (64 bits):** descarga el archivo que termina en `_x64-setup.exe` (o el `.msi`) y ábrelo. Si aparece «Windows protegió su PC» (SmartScreen), pulsa **Más información** y **Ejecutar de todas formas**.
-            - **macOS 12.3 o posterior:** descarga el `.dmg` de tu Mac (`aarch64` para Apple Silicon, `x64` para Intel), arrastra Nexium a Aplicaciones y ábrelo. Cuando Gatekeeper lo bloquee, ve a **Ajustes del Sistema > Privacidad y seguridad** y pulsa **Abrir igualmente**.
-            - **Linux (Ubuntu 24.04 o equivalente):** `sudo apt install ./Nexium_*_amd64.deb`, o da permiso de ejecución al `.AppImage` y ábrelo.
-
-            Los instaladores no llevan firma comercial: por eso avisan SmartScreen y Gatekeeper la primera vez. Descárgalos solo desde esta página. Los archivos `.sig` y `latest.json` son para el actualizador de Nexium.
-
-            Requisitos, privacidad y limitaciones: [README](https://github.com/Daniel-I24/Nexium#readme).
-          releaseDraft: false
-          prerelease: false
+          releaseId: ${{ needs.borrador.outputs.id }}
           includeUpdaterJson: true
           args: --config src-tauri/tauri.release.conf.json --bundles ${{ matrix.bundles }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+
+      # Regresión de la 1.0.0: whisper.cpp con instrucciones del procesador del servidor (AVX-512).
+      - name: whisper.cpp sin instrucciones del procesador del servidor
+        working-directory: src-tauri
+        shell: bash
+        run: ../scripts/check-cpu-baseline.sh ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+
+  publicar-notas:
+    name: Notas y publicación
+    needs: publicar
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Comprobar los archivos y publicar
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          node scripts/release-notes.mjs "$version" > notas.md
+          assets=$(gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name')
+          echo "$assets"
+          for expected in "Nexium_${version}_x64-setup.exe" "Nexium_${version}_x64-setup.exe.sig" \
+            "Nexium_${version}_aarch64.dmg" "Nexium_${version}_x64.dmg" \
+            "Nexium_${version}_amd64.deb" "Nexium_${version}_amd64.AppImage" latest.json; do
+            echo "$assets" | grep -qxF "$expected" || { echo "::error::Falta $expected en la Release."; exit 1; }
+          done
+          if echo "$assets" | grep -qE '[.]msi'; then echo "::error::La Release no debe incluir el .msi."; exit 1; fi
+          gh release edit "$GITHUB_REF_NAME" --notes-file notas.md --draft=false --latest

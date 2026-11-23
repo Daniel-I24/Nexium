@@ -4,7 +4,19 @@ Asistente inteligente de escritorio para Windows, macOS y Linux. Entiende solici
 
 Los hechos salen del equipo, no de un modelo. La IA interpreta lo que pides, pero solo la aplicación ejecuta operaciones, mediante funciones controladas. La voz se transcribe en tu equipo.
 
-**[Descargar la última versión](https://github.com/Daniel-I24/Nexium/releases/latest)**
+## Descargar
+
+Desde la [página de la última versión](https://github.com/Daniel-I24/Nexium/releases/latest), descarga solo el archivo de tu equipo (`x.y.z` es el número de versión):
+
+| Tu equipo | Descarga este archivo |
+|---|---|
+| Windows 10 u 11 (64 bits) | `Nexium_x.y.z_x64-setup.exe` |
+| Mac con Apple Silicon (M1, M2, M3 o M4) | `Nexium_x.y.z_aarch64.dmg` |
+| Mac con Intel | `Nexium_x.y.z_x64.dmg` |
+| Linux: Ubuntu o Debian | `Nexium_x.y.z_amd64.deb` |
+| Otras distribuciones de Linux | `Nexium_x.y.z_amd64.AppImage` |
+
+Los demás archivos de la página (`.sig`, `.app.tar.gz`, `latest.json` y el código fuente) son técnicos: los usa el actualizador de Nexium y no hace falta descargarlos. Cómo instalar en cada sistema, y qué hacer con los avisos de SmartScreen y Gatekeeper, está en [Instalación](#instalación).
 
 | | |
 |---|---|
@@ -41,31 +53,32 @@ Nexium es un proyecto universitario y sus instaladores no están firmados con un
 
 ### Windows
 
-1. Descarga `Nexium_1.0.0_x64-setup.exe` (recomendado) o `Nexium_1.0.0_x64_es-ES.msi`.
-2. Ábrelo. Si aparece **Windows protegió su PC** (SmartScreen), pulsa **Más información** y después **Ejecutar de todas formas**.
-3. Sigue el asistente, en español. El `.exe` instala solo para tu usuario y no pide permisos de administrador.
+1. Descarga `Nexium_x.y.z_x64-setup.exe` y ábrelo.
+2. Si aparece **«Windows protegió su PC»** (SmartScreen), pulsa **Más información** y después **Ejecutar de todas formas**. Aparece porque el instalador no lleva una firma comercial ([opciones de firma](docs/ANALISIS_TECNICO.md#firma-del-instalador-de-windows)).
+3. Sigue el asistente, en español. Instala solo para tu usuario y no pide permisos de administrador.
 4. Abre Nexium desde el menú Inicio.
 
 ### macOS
 
-1. Descarga `Nexium_1.0.0_aarch64.dmg` si tu Mac tiene Apple Silicon (M1 o posterior), o `Nexium_1.0.0_x64.dmg` si es Intel. Lo ves en **Menú Apple > Acerca de este Mac**.
+1. Descarga `Nexium_x.y.z_aarch64.dmg` si tu Mac tiene Apple Silicon, o `Nexium_x.y.z_x64.dmg` si es Intel. Lo ves en **Menú Apple > Acerca de este Mac**: «Chip Apple M…» es Apple Silicon; «Procesador Intel…» es Intel.
 2. Abre el `.dmg` y arrastra Nexium a **Aplicaciones**.
-3. Abre Nexium. Cuando macOS lo bloquee (Gatekeeper), ve a **Ajustes del Sistema > Privacidad y seguridad**, baja hasta el aviso sobre Nexium y pulsa **Abrir igualmente**. Solo hay que hacerlo una vez.
-4. La primera vez que hables o analices la pantalla, macOS pedirá permiso de micrófono o de grabación de pantalla.
+3. Abre Nexium. macOS dirá que no puede comprobar el desarrollador (Gatekeeper).
+4. Ve a **Ajustes del Sistema > Privacidad y seguridad**, baja hasta el aviso sobre Nexium y pulsa **Abrir igualmente**. Confirma con tu contraseña. Solo hay que hacerlo una vez.
+5. La primera vez que hables o analices la pantalla, macOS pedirá permiso de micrófono o de grabación de pantalla.
 
 ### Linux
 
 **Ubuntu o Debian (`.deb`):**
 
 ```bash
-sudo apt install ./Nexium_1.0.0_amd64.deb
+sudo apt install ./Nexium_x.y.z_amd64.deb
 ```
 
 **Cualquier distribución (`.AppImage`):**
 
 ```bash
-chmod +x Nexium_1.0.0_amd64.AppImage
-./Nexium_1.0.0_amd64.AppImage
+chmod +x Nexium_x.y.z_amd64.AppImage
+./Nexium_x.y.z_amd64.AppImage
 ```
 
 ### Primeros pasos
@@ -195,7 +208,9 @@ npm run tauri build
 
 whisper.cpp se compila optimizado también en distribución gracias a la característica `force-debug` de `whisper-rs-sys`: sin ella, con MSVC quedaba sin optimizar y cada transcripción tardaba unos 13 s. Ver [`docs/RENDIMIENTO.md`](docs/RENDIMIENTO.md).
 
-Cada envío a `main` compila los instaladores de prueba en GitHub Actions. Al subir una etiqueta `v*`, el flujo **Publicación** compila los instaladores firmados para el actualizador y los publica en una Release, con el `latest.json` que consulta Nexium. La clave privada de firma llega como secreto del repositorio (`TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) y nunca está en el código.
+Cada envío a `main` compila los instaladores de prueba en GitHub Actions. Al subir una etiqueta `v*`, el flujo **Publicación** compila los instaladores firmados en un borrador de Release, con el `latest.json` que consulta Nexium, comprueba cada compilación y solo entonces la publica. Las notas se generan con `scripts/release-notes.mjs` a partir de `.github/release-notes.md` (tabla de descarga e instalación) y `.github/changes/<versión>.md` (novedades), que debe existir antes de crear la etiqueta.
+
+whisper.cpp se compila para procesadores x86-64 comunes (AVX2, sin las instrucciones del servidor que compila: ver `src-tauri/.cargo/config.toml`), y la CI falla si su parte de CPU contiene instrucciones AVX-512 (`scripts/check-cpu-baseline.sh`). Nexium comprueba en ejecución que el procesador tiene esas instrucciones antes de usar la voz. La clave privada de firma llega como secreto del repositorio (`TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) y nunca está en el código.
 
 ## Pruebas
 
