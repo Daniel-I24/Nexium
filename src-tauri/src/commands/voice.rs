@@ -22,15 +22,17 @@ pub fn voice_start<R: Runtime>(app: AppHandle<R>, state: State<'_, AppState>) ->
         .ready_model(model)
         .map_err(|error| AppError::Operation(error.to_string()))?;
     let (level_app, limit_app) = (app.clone(), app.clone());
-    let recording = speech::start_recording(
-        settings.microphone.clone(),
-        Arc::new(move |level| {
-            let _ = level_app.emit("voice://level", level);
-        }),
-        Arc::new(move || {
-            let _ = limit_app.emit("voice://limit", ());
-        }),
-    )
+    let recording = speech::contained(|| {
+        speech::start_recording(
+            settings.microphone.clone(),
+            Arc::new(move |level| {
+                let _ = level_app.emit("voice://level", level);
+            }),
+            Arc::new(move || {
+                let _ = limit_app.emit("voice://limit", ());
+            }),
+        )
+    })
     .map_err(|error| AppError::Operation(error.to_string()))?;
     *state
         .recording
@@ -87,7 +89,7 @@ pub async fn voice_stop<R: Runtime>(
     let settings = state.settings.get()?;
     let model = speech::resolve_model(&settings.speech_model, speech::Hardware::detect())
         .ok_or_else(|| AppError::Validation("Ese modelo de voz no existe.".into()))?;
-    speech::check_audible(&samples, &device)
+    speech::contained(|| speech::check_audible(&samples, &device))
         .and_then(|()| state.ready_model(model))
         .map_err(|error| AppError::Operation(error.to_string()))?;
     // Sin el silencio de los extremos y a volumen útil: menos que transcribir y menos texto inventado.

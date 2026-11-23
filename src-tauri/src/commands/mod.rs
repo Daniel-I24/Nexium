@@ -60,6 +60,11 @@ impl AppState {
         &self,
         model: &speech::SpeechModel,
     ) -> Result<(), speech::SpeechError> {
+        // Antes que nada: sin las instrucciones que necesita whisper.cpp, cargarlo cerraría Nexium.
+        let missing = speech::missing_cpu_features();
+        if !missing.is_empty() {
+            return Err(speech::SpeechError::UnsupportedCpu(missing));
+        }
         if self
             .downloading
             .lock()

@@ -2,6 +2,7 @@
 
 mod audio;
 mod catalog;
+mod cpu;
 mod microphone;
 mod whisper;
 
@@ -15,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 
 pub use audio::*;
 pub use catalog::*;
+pub use cpu::*;
 pub use microphone::*;
 pub use whisper::*;
 
@@ -37,6 +39,8 @@ pub enum SpeechError {
         device: String,
     },
     Failed(String),
+    /// Al procesador le faltan instrucciones que necesita whisper.cpp (ver `cpu.rs`).
+    UnsupportedCpu(Vec<&'static str>),
     Cancelled,
 }
 
@@ -50,6 +54,11 @@ impl std::fmt::Display for SpeechError {
             Self::NoAudio => f.write_str("La grabación quedó vacía. Pulsa Hablar, di tu solicitud y después pulsa Terminar."),
             Self::Silent { device } => write!(f, "El micrófono «{device}» no captó ningún sonido. Comprueba que no esté silenciado y que sea el que usas."),
             Self::NoMicrophone(reason) | Self::Failed(reason) => f.write_str(reason),
+            Self::UnsupportedCpu(missing) => write!(
+                f,
+                "La voz no está disponible en este equipo: a su procesador le faltan instrucciones que necesita el reconocimiento de voz ({}). Suelen tenerlas los procesadores de 2013 en adelante. Mientras tanto puedes escribir tus solicitudes.",
+                missing.iter().map(|feature| feature.to_uppercase()).collect::<Vec<_>>().join(", ")
+            ),
             Self::Cancelled => f.write_str("Operación cancelada."),
         }
     }

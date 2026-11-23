@@ -64,6 +64,9 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          # Cargo no recompila whisper.cpp al cambiar las variables GGML_ de .cargo/config.toml: una caché
+          # anterior lo dejaría compilado para el procesador del servidor. Cambiar esta clave la descarta.
+          key: ggml-x86-64-avx2
 
       - run: npm ci
       - run: npm run lint
@@ -116,6 +119,13 @@ jobs:
         working-directory: src-tauri
         shell: bash
         run: cargo tree -p whisper-rs-sys -e features -f "{p} [{f}]" --depth 0 | grep -F "[force-debug]"
+
+      # Regresión: la 1.0.0 se cerraba al pulsar Hablar en procesadores sin AVX-512 (whisper.cpp compilado con
+      # GGML_NATIVE en el servidor de la CI). Falla si ggml-cpu contiene instrucciones AVX-512.
+      - name: whisper.cpp sin instrucciones del procesador del servidor
+        working-directory: src-tauri
+        shell: bash
+        run: ../scripts/check-cpu-baseline.sh
 
       - uses: actions/upload-artifact@v4
         with:

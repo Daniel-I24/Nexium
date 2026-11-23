@@ -3,3 +3,19 @@ rustflags = ["-lc++", "-l", "framework=Accelerate"]
 
 [target.x86_64-apple-darwin]
 rustflags = ["-lc++", "-l", "framework=Accelerate"]
+
+# whisper.cpp (ggml) para procesadores comunes, nunca para el que compila. Por defecto ggml usa GGML_NATIVE: en la
+# CI de GitHub el servidor tiene AVX-512 y la 1.0.0 se cerraba con 0xc000001d (instrucción ilegal) al pulsar
+# Hablar en equipos sin AVX-512. La base es x86-64 con AVX2, FMA, F16C y BMI2 (Intel desde 2013, AMD desde 2015);
+# Nexium comprueba en ejecución que el procesador las tiene (providers/speech/cpu.rs) y, si no, explica que la
+# voz no está disponible en lugar de cerrarse. En ARM (Mac con Apple Silicon), sin GGML_NATIVE se compila para
+# la base del sistema (M1), no para el procesador del servidor. whisper-rs-sys pasa estas variables a CMake.
+[env]
+GGML_NATIVE = "OFF"
+GGML_SSE42 = "ON"
+GGML_AVX = "ON"
+GGML_AVX2 = "ON"
+GGML_FMA = "ON"
+GGML_F16C = "ON"
+GGML_BMI2 = "ON"
+GGML_AVX512 = "OFF"

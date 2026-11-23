@@ -253,10 +253,11 @@ impl SpeechProvider for WhisperSpeech {
         let task = tokio::task::spawn_blocking(move || {
             let started = Instant::now();
             // Si la precarga sigue en curso, aquí se espera a que termine: esa espera es la carga que se nota.
-            let context =
-                models.get_or_load(&model_path, Instant::now(), || load_whisper(&model_path))?;
+            let context = models.get_or_load(&model_path, Instant::now(), || {
+                super::contained(|| load_whisper(&model_path))
+            })?;
             let loaded = Instant::now();
-            let text = run_whisper(&samples, &context, flag)?;
+            let text = super::contained(|| run_whisper(&samples, &context, flag))?;
             models.touch(Instant::now());
             let text = clean_transcript(&text);
             Ok(Transcript {
@@ -285,7 +286,9 @@ impl SpeechProvider for WhisperSpeech {
             return Err(SpeechError::ModelMissing);
         }
         self.models
-            .get_or_load(model_path, Instant::now(), || load_whisper(model_path))
+            .get_or_load(model_path, Instant::now(), || {
+                super::contained(|| load_whisper(model_path))
+            })
             .map(|_| ())
     }
 
