@@ -31,8 +31,14 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Nexium $GITHUB_REF_NAME" \
             --notes "Borrador en preparación: las notas se añaden al publicarla."
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\" and .draft) | .id" | head -1)
-          test -n "$id"
+          # La Release recién creada puede tardar unos segundos en aparecer en la API.
+          id=""
+          for attempt in 1 2 3 4 5; do
+            id=$(gh release view "$GITHUB_REF_NAME" --json databaseId --jq .databaseId 2>/dev/null || true)
+            [ -n "$id" ] && break
+            sleep 3
+          done
+          test -n "$id" || { echo "::error::No se encontró el borrador de la Release."; exit 1; }
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
   publicar:
