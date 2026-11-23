@@ -19,3 +19,9 @@ GGML_FMA = "ON"
 GGML_F16C = "ON"
 GGML_BMI2 = "ON"
 GGML_AVX512 = "OFF"
+# En Windows, el runtime de C++ de whisper.cpp va dentro del ejecutable (/MT). Si no, Nexium necesita
+# MSVCP140.dll, que no viene con Windows: sin el «Visual C++ Redistributable» ni siquiera abriría. Rust y Tauri
+# ya enlazan su parte de forma estática; el runtime universal de C (api-ms-win-crt) viene con Windows 10 y 11.
+# En Linux y macOS estas variables no tienen efecto.
+CMAKE_MSVC_RUNTIME_LIBRARY = "MultiThreaded"
+CMAKE_POLICY_DEFAULT_CMP0091 = "NEW"

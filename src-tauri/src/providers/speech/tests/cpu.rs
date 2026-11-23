@@ -30,6 +30,15 @@ fn the_build_never_targets_the_build_machine_and_matches_the_runtime_check() {
 }
 
 #[test]
+fn the_cpp_runtime_of_whisper_is_linked_into_the_windows_executable() {
+    let config =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/.cargo/config.toml"))
+            .unwrap();
+    assert!(config.contains("CMAKE_MSVC_RUNTIME_LIBRARY = \"MultiThreaded\""));
+    assert!(config.contains("CMAKE_POLICY_DEFAULT_CMP0091 = \"NEW\""));
+}
+
+#[test]
 fn this_machine_can_run_the_voice_build() {
     // La CI y el equipo de desarrollo tienen AVX2: si fallara aquí, la compilación no serviría ni en ellos.
     assert!(

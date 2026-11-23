@@ -66,7 +66,7 @@ jobs:
           workspaces: src-tauri
           # Cargo no recompila whisper.cpp al cambiar las variables GGML_ de .cargo/config.toml: una caché
           # anterior lo dejaría compilado para el procesador del servidor. Cambiar esta clave la descarta.
-          key: ggml-x86-64-avx2
+          key: ggml-x86-64-avx2-mt
 
       - run: npm ci
       - run: npm run lint
@@ -126,6 +126,11 @@ jobs:
         working-directory: src-tauri
         shell: bash
         run: ../scripts/check-cpu-baseline.sh
+
+      - name: Sin DLL de Visual C++ en el ejecutable de Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: scripts/check-windows-dependencies.sh src-tauri/target/release/nexium.exe
 
       - uses: actions/upload-artifact@v4
         with:

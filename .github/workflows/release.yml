@@ -95,6 +95,11 @@ jobs:
         shell: bash
         run: ../scripts/check-cpu-baseline.sh ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
 
+      - name: Sin DLL de Visual C++ en el ejecutable de Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: scripts/check-windows-dependencies.sh src-tauri/target/release/nexium.exe
+
   publicar-notas:
     name: Notas y publicación
     needs: publicar
