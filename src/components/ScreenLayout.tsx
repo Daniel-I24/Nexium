@@ -15,7 +15,10 @@ interface ScreenLayoutProps {
 export function ScreenLayout({ children, footer, ref }: ScreenLayoutProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={ref} data-scroll-area className="scrollbar-stable min-h-0 flex-1 overflow-y-auto px-4 py-6 short:py-3 sm:px-6 sm:py-8 sm:short:py-3 wide:px-12">
+      {/* «relative»: lo que se posiciona de forma absoluta dentro (por ejemplo, el texto solo para lectores de
+          pantalla, sr-only) queda contenido aquí y se desplaza con el contenido; si no, se mediría contra la ventana
+          y podría hacerla desplazarse entera. */}
+      <div ref={ref} data-scroll-area className="scrollbar-stable relative min-h-0 flex-1 overflow-y-auto px-4 py-6 short:py-3 sm:px-6 sm:py-8 sm:short:py-3 wide:px-12">
         {/* Contenedor común: centrado, con el mismo ancho máximo y el mismo margen en todas las pantallas. */}
         <div className="mx-auto w-full max-w-content">{children}</div>
       </div>
