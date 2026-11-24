@@ -179,7 +179,7 @@ Fuentes oficiales consultadas hoy: [modelos](https://aistudio.google.com/docs/mo
 | Tarea | Modelo por defecto | Por qué |
 |---|---|---|
 | Interpretar | `gemini-3.5-flash-lite` | Estable, en capa gratuita, el más rápido y económico de la familia 3.5. Clasificar y extraer no necesita más. Pensamiento bajo |
-| Analizar pantalla | `gemini-3.6-flash` | Estable, en capa gratuita y multimodal, para leer texto pequeño y errores en una interfaz |
+| Analizar pantalla | `gemini-3.5-flash-lite`, con `gemini-3.6-flash` de respaldo (desde la 1.0.2) | Multimodal y en capa gratuita. El principal fue `gemini-3.6-flash` hasta la 1.0.1, pero en noviembre de 2026 respondió 2 veces de 11 (503 o más de 25 s); `gemini-3.5-flash-lite` respondió siempre, en 0,8 a 4 s. Ver `docs/RENDIMIENTO.md` |
 
 **Por qué dos modelos:** una consulta de intención debe ser rápida y gastar poco, y una captura debe leerse con precisión. Son dos ajustes independientes.
 

@@ -1,8 +1,19 @@
 # Nexium: estado del proyecto
 
-Última actualización: 22 de noviembre de 2026 (versión 1.0.1).
+Última actualización: 23 de noviembre de 2026 (versión 1.0.2).
 
 **Etapa actual:** versión 1.0.0 publicada (lista de verificación abajo); falta la prueba de instalación del propietario desde la Release. **Fases A (IA mediante servidor) y B (rendimiento y calidad) cerradas, revisión final del 13 de noviembre y correcciones de la prueba manual del 15 de noviembre** (abajo). No queda nada pendiente de código para una fase posterior. Falta la prueba manual final del propietario con la app instalada: `docs/PLAN_PRUEBAS_MANUALES.md`.
+
+## Versión 1.0.2: lista de verificación
+
+- [x] **Varias solicitudes en una petición** («¿A qué red Wi-Fi estoy conectado? Y dame el clima de la ciudad en la que me encuentro» solo respondía el clima)
+  - [x] Las reglas locales dividen por signos y conectores cuando cada parte es una orden reconocible; si no, la IA devuelve una lista de 1 a 4 acciones (esquema y validación nuevos en el Worker, compatibles con la 1.0.1)
+  - [x] Cada parte en su bloque, en orden, dentro de una sola entrada de la conversación; una sola entrada en el Historial con el resultado de cada parte
+  - [x] Una parte que falla no impide las demás y dice por qué; una que espera confirmación (recordatorio, documento, captura, carpetas, ciudad) no bloquea las demás
+  - [x] Pruebas: 24 combinaciones de división local, casos que no se dividen o van a la IA, por texto y por voz, continuación de cada parte, historial y contratos; comprobado con la IA real (batería + recordatorio, y «¿Y en Cali?»)
+- [x] **«Reintentar» repetía otra operación:** tras fallar el análisis de pantalla abría el micrófono, porque solo se recordaba la última solicitud escrita. Ahora repite exactamente la última operación (la captura vuelve a pedir permiso), con pruebas de cada caso
+- [x] **Análisis de pantalla:** causa en Google (503 y respuestas lentas del modelo principal) y un solo reintento en el Worker; corrección y 15 mediciones en `docs/RENDIMIENTO.md`
+- [ ] **Publicación:** etiqueta v1.0.2, Release comprobada y actualización real desde la 1.0.1
 
 ## Versión 1.0.1: lista de verificación
 

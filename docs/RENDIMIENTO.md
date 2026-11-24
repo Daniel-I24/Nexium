@@ -152,6 +152,29 @@ Cuatro órdenes dichas por el propietario con su micrófono (Microphone Array, R
 
 **Objetivos en este equipo, con esta voz:** transcripción de una orden corta por debajo de 2 s (1,07 s de mediana y 1,17 s como máximo) y orden local completa por debajo de 3 s (transcripción más respuesta, como mucho 1,19 s).
 
+## Análisis de pantalla: 23 de noviembre de 2026
+
+**Problema:** con Nexium maximizado, de tres análisis fallaron dos: «El servidor de IA no responde» y «La IA tardó demasiado en responder».
+
+**Método:** 15 análisis reales (el máximo fijado para no gastar cuota), con la app 1.0.1 instalada y el Worker observado en directo con `wrangler tail`, que registra por cada solicitud el estado, el tiempo de CPU, la duración, el tamaño y la respuesta de Google, sin el contenido. Las pantallas eran ventanas propias a pantalla completa con contenido ficticio: una simple (un cuadro de error) y una densa (un registro técnico de 170 líneas en letra pequeña). Nexium, en ventana normal y maximizado. Los registros anteriores del panel de Cloudflare no se pudieron leer: la sesión de `wrangler` no tiene permiso de observabilidad.
+
+**Causa:** no era la ventana maximizada ni el Worker, sino Google:
+
+- El modelo principal de visión, `gemini-3.6-flash`, respondió 2 veces de 11: las demás devolvió 503 (saturado) o no respondió en el tiempo de espera, también con el razonamiento en «bajo».
+- El Worker solo probaba una vez el modelo de respaldo, y solo tras un 503. Si el respaldo también daba 503, la app mostraba «El servidor de IA no responde»; si el principal tardaba más de 40 s, el Worker se rendía sin probar el respaldo, y la app mostraba «La IA tardó demasiado».
+- El Worker no rozaba sus límites: de 2 a 10 ms de CPU y 509 KB la pantalla más densa. El límite de 10 s de la IA solo se aplica a interpretar órdenes: el análisis ya tenía el suyo.
+- Nexium se ocultó y volvió a mostrarse bien en los 15 análisis, en unos 0,55 s, tanto en ventana normal como maximizado, y conservó el maximizado.
+
+| Configuración | Análisis | Correctos | Tiempo total en la app |
+|---|---|---|---|
+| 1.0.1: principal `gemini-3.6-flash`, un respaldo solo tras 503 | 4 | 3 | 3,8 a 8,0 s; el fallido, 503 de los dos modelos |
+| Reintentos nuevos, principal `gemini-3.6-flash` | 7 | 7 | 5,9 a 29,4 s (el principal agotaba 25 s antes del respaldo) |
+| **1.0.2: principal `gemini-3.5-flash-lite`, respaldo `gemini-3.6-flash`** | **4** | **4** | **1,6 a 4,8 s** |
+
+En el último, un análisis recibió 503 de los dos modelos y respondió al tercer intento en 3,7 s.
+
+**Corrección:** hasta cuatro intentos alternando modelos (principal, respaldo, principal tras una pausa de 1 s, respaldo), 25 s por intento y 70 s en total; un 429 o un 4xx no se repiten. El modelo rápido es el principal. La app espera 80 s, siempre más que el servidor. Una pantalla densa se codifica hasta 350 KB bajando la calidad JPEG (sin reducir la resolución, para que el texto pequeño siga legible), y el Worker prepara la imagen una sola vez para todos los intentos.
+
 ## Medición final de la 1.0.0: 22 de noviembre de 2026
 
 Ejecutable de distribución sin instalar, mismo método que la línea base, **conectado a la corriente** como la línea base (la medición del 21 de noviembre fue con batería). Equipo de 12 núcleos lógicos (6 físicos).
