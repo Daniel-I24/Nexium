@@ -7,7 +7,7 @@ use tauri::{AppHandle, Emitter, Runtime, State};
 use super::AppState;
 use crate::{
     error::AppResult,
-    models::{HistoryEntry, InteractionStatus, Reminder},
+    models::{Category, HistoryEntry, InteractionStatus, PartSummary, Reminder},
 };
 
 #[tauri::command]
@@ -22,12 +22,25 @@ pub fn reminders_create<R: Runtime>(
     content: String,
     due_at: String,
     history_id: Option<i64>,
+    part: Option<usize>,
 ) -> AppResult<Reminder> {
     let reminder = state.reminders.create(&content, &due_at, Utc::now())?;
-    if let Some(id) = history_id {
-        state
-            .history
-            .complete(id, &format!("Guardado: {}", reminder.content))?;
+    let summary = format!("Guardado: {}", reminder.content);
+    match (history_id, part) {
+        (Some(id), Some(part)) => {
+            state.history.update_part(
+                id,
+                part,
+                PartSummary {
+                    request: String::new(),
+                    category: Category::Reminders,
+                    status: InteractionStatus::Completed,
+                    summary,
+                },
+            )?;
+        }
+        (Some(id), None) => state.history.complete(id, &summary)?,
+        _ => {}
     }
     let _ = app.emit("reminders://changed", ());
     Ok(reminder)
@@ -91,13 +104,30 @@ pub fn history_record_failure(
 /// «Cancelar» en un permiso o una aclaración de la conversación: la solicitud termina como cancelada,
 /// en su misma entrada.
 #[tauri::command]
-pub fn history_cancel(state: State<'_, AppState>, id: i64) -> AppResult<()> {
-    state.history.update(
-        id,
-        crate::models::Category::General,
-        InteractionStatus::Cancelled,
-        "Cancelada",
-    )?;
+pub fn history_cancel(state: State<'_, AppState>, id: i64, part: Option<usize>) -> AppResult<()> {
+    match part {
+        // Cancelar una parte no cancela las demás.
+        Some(part) => {
+            state.history.update_part(
+                id,
+                part,
+                PartSummary {
+                    request: String::new(),
+                    category: Category::General,
+                    status: InteractionStatus::Cancelled,
+                    summary: "Cancelada".into(),
+                },
+            )?;
+        }
+        None => {
+            state.history.update(
+                id,
+                Category::General,
+                InteractionStatus::Cancelled,
+                "Cancelada",
+            )?;
+        }
+    }
     Ok(())
 }
 

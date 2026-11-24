@@ -172,6 +172,34 @@ pub enum ResponseBody {
         message: String,
         hint: Option<String>,
     },
+    /// Varias solicitudes en una misma petición, cada una con su propia respuesta y en el orden pedido.
+    Multiple {
+        parts: Vec<PartResponse>,
+    },
+}
+
+/// Una parte de una petición con varias solicitudes. Se continúa por separado (un permiso, una confirmación)
+/// sin bloquear las demás.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PartResponse {
+    /// El fragmento de la petición que responde.
+    pub request: String,
+    pub category: Category,
+    pub status: InteractionStatus,
+    pub origin_label: String,
+    pub summary: String,
+    pub body: ResponseBody,
+}
+
+/// Lo que el historial guarda de cada parte: sin cuerpo, como el resto del historial.
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PartSummary {
+    pub request: String,
+    pub category: Category,
+    pub status: InteractionStatus,
+    pub summary: String,
 }
 
 /// Análisis de una captura, ya validado y en texto plano.
@@ -193,6 +221,9 @@ pub struct AssistantResponse {
     pub origin_label: String,
     pub summary: String,
     pub body: ResponseBody,
+    /// Si responde a una parte de una petición con varias, su posición: la interfaz actualiza solo esa parte.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub part: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -204,6 +235,8 @@ pub struct HistoryEntry {
     pub category: Category,
     pub status: InteractionStatus,
     pub response: String,
+    /// Las partes de una petición con varias solicitudes, con su estado y su resultado.
+    pub parts: Option<Vec<PartSummary>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

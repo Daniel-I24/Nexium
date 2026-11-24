@@ -54,7 +54,10 @@ async fn interprets_and_never_stores_the_interaction() {
         .await;
     let answer = provider(&server).interpret(request()).await.unwrap();
     assert_eq!(answer.tokens, 42);
-    assert!(matches!(answer.value, Intent::SearchFiles(_)));
+    assert!(matches!(
+        answer.value[0].intent,
+        crate::models::Intent::SearchFiles(_)
+    ));
 }
 
 #[tokio::test]

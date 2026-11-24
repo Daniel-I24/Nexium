@@ -17,7 +17,7 @@ fn the_origin_names_an_external_source() {
 use crate::{
     core::handlers::{
         ClarifyHandler, FilesHandler, ReminderIntentHandler, ScreenHandler, SystemHandler,
-        TimeHandler,
+        TimeHandler, WeatherHandler,
     },
     database::Database,
     error::AiError,
@@ -27,6 +27,7 @@ use crate::{
         capture::CaptureError,
         files::{AuthorizedFolder, LocalFileSearch},
         system::SystemProvider,
+        weather::{DayForecast, WeatherError, WeatherProvider, WeatherReport},
     },
     services::reminders::ReminderService,
 };
@@ -39,8 +40,35 @@ use std::sync::{
 
 struct FakeAi {
     calls: Arc<AtomicUsize>,
-    answer: Mutex<Option<Result<Intent, AiError>>>,
+    answer: Mutex<Option<Result<Vec<Action>, AiError>>>,
     configured: bool,
+}
+
+/// Clima fijo: «Pasto», la ciudad de Ajustes en las pruebas, y cualquier otra que se nombre.
+struct FakeWeather;
+
+#[async_trait]
+impl WeatherProvider for FakeWeather {
+    async fn report(&self, city: &str) -> Result<WeatherReport, WeatherError> {
+        if city == "Nolugar" {
+            return Err(WeatherError::CityNotFound);
+        }
+        let day = DayForecast {
+            condition: "nublado".into(),
+            min_c: 10.0,
+            max_c: 20.0,
+        };
+        Ok(WeatherReport {
+            place: city.into(),
+            temperature_c: 15.0,
+            condition: "nublado".into(),
+            today: day.clone(),
+            tomorrow: day,
+        })
+    }
+    async fn find_city(&self, city: &str) -> Result<String, WeatherError> {
+        Ok(city.into())
+    }
 }
 
 #[async_trait]
@@ -57,14 +85,25 @@ impl AiProvider for FakeAi {
     fn quota_message(&self) -> String {
         "Cuota agotada de prueba".into()
     }
-    async fn interpret(&self, _: InterpretRequest) -> Result<AiAnswer<Intent>, AiError> {
+    async fn interpret(&self, request: InterpretRequest) -> Result<AiAnswer<Vec<Action>>, AiError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.answer
             .lock()
             .unwrap()
             .take()
-            .unwrap_or(Ok(Intent::Unknown))
-            .map(|value| AiAnswer { value, tokens: 7 })
+            .unwrap_or_else(|| {
+                Ok(vec![Action {
+                    request: request.text.clone(),
+                    intent: Intent::Unknown,
+                }])
+            })
+            // Como el analizador real: una sola acción responde a todo el texto.
+            .map(|mut value| {
+                if let [only] = value.as_mut_slice() {
+                    only.request = request.text.clone();
+                }
+                AiAnswer { value, tokens: 7 }
+            })
     }
     async fn analyze_image(
         &self,
@@ -161,6 +200,26 @@ fn harness(
     configured: bool,
     capture_fails: bool,
 ) -> Harness {
+    harness_with_actions(
+        answer.map(|result| {
+            result.map(|intent| {
+                vec![Action {
+                    request: "solicitud".into(),
+                    intent,
+                }]
+            })
+        }),
+        configured,
+        capture_fails,
+    )
+}
+
+/// Como `harness`, con la lista de acciones que devolverá la IA.
+fn harness_with_actions(
+    answer: Option<Result<Vec<Action>, AiError>>,
+    configured: bool,
+    capture_fails: bool,
+) -> Harness {
     let db = Database::in_memory().unwrap();
     let settings = SettingsService::new(db.clone());
     let ai_calls = Arc::new(AtomicUsize::new(0));
@@ -194,6 +253,10 @@ fn harness(
         }),
         Box::new(ScreenHandler),
         Box::new(ClarifyHandler),
+        Box::new(WeatherHandler {
+            weather: Arc::new(FakeWeather),
+            settings: settings.clone(),
+        }),
     ];
     let assistant = Assistant {
         ai: Arc::new(FakeAi {
@@ -239,4 +302,5 @@ fn authorize(harness: &Harness) {
 mod ai;
 mod files;
 mod flow;
+mod multi;
 mod screen;

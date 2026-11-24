@@ -12,7 +12,7 @@ use serde_json::json;
 use super::{schema, AiAnswer, AiProvider, DocumentRequest, InterpretRequest, VisionRequest};
 use crate::{
     error::AiError,
-    models::{DocumentSummary, Intent, ScreenAnalysis},
+    models::{Action, DocumentSummary, ScreenAnalysis},
 };
 
 /// Mayores que los del servidor, que puede reintentar una vez: quien corta primero es él.
@@ -146,11 +146,11 @@ impl AiProvider for NexiumServer {
         self.base_url.is_some()
     }
 
-    async fn interpret(&self, request: InterpretRequest) -> Result<AiAnswer<Intent>, AiError> {
+    async fn interpret(&self, request: InterpretRequest) -> Result<AiAnswer<Vec<Action>>, AiError> {
         let now = request.now.format("%Y-%m-%dT%H:%M:%S%:z").to_string();
         let reply = Self::send(
             self.request("/v1/interpret", INTERPRET_TIMEOUT)?
-                .json(&json!({ "text": request.text, "now": now })),
+                .json(&json!({ "text": request.text, "now": now, "actions": true })),
         )
         .await?;
         let value = schema::parse_interpretation(&reply.output, &request.text)?;

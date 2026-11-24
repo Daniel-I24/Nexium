@@ -2,7 +2,7 @@
 
 use nexium_lib::models::{
     AssistantResponse, Attribution, Category, DataRow, DocumentCandidate, DocumentTask, FileResult,
-    InteractionStatus, ReminderOption, ResponseBody, Section,
+    InteractionStatus, PartResponse, ReminderOption, ResponseBody, Section, WeatherWhen,
 };
 use serde_json::Value;
 
@@ -32,6 +32,7 @@ fn response(
         origin_label: origin.into(),
         summary: summary.into(),
         body,
+        part: None,
     }
 }
 
@@ -277,4 +278,66 @@ fn document_analysis() {
             },
         ),
     );
+}
+
+#[test]
+fn multiple() {
+    let part = |request: &str, category, status, summary: &str, body| PartResponse {
+        request: request.into(),
+        category,
+        status,
+        origin_label: "lectura directa del equipo, sin IA".into(),
+        summary: summary.into(),
+        body,
+    };
+    assert_matches(
+        "multiple",
+        &response(
+            11,
+            "¿A qué red Wi-Fi estoy conectado? Y dame el clima",
+            Category::General,
+            InteractionStatus::Pending,
+            "cada solicitud indica el suyo",
+            "Conectado a CasaNexium · Falta la ciudad (pendiente)",
+            ResponseBody::Multiple {
+                parts: vec![
+                    part(
+                        "A qué red Wi-Fi estoy conectado",
+                        Category::System,
+                        InteractionStatus::Completed,
+                        "Conectado a CasaNexium",
+                        ResponseBody::Text {
+                            text: "Conectado a CasaNexium.".into(),
+                        },
+                    ),
+                    part(
+                        "dame el clima",
+                        Category::Weather,
+                        InteractionStatus::Pending,
+                        "Falta la ciudad",
+                        ResponseBody::WeatherCityQuestion {
+                            when: WeatherWhen::Now,
+                        },
+                    ),
+                ],
+            },
+        ),
+    );
+}
+
+#[test]
+fn part() {
+    let mut continued = response(
+        11,
+        "dame el clima",
+        Category::Weather,
+        InteractionStatus::Completed,
+        "Open-Meteo, sin IA",
+        "22 °C",
+        ResponseBody::Text {
+            text: "22 °C".into(),
+        },
+    );
+    continued.part = Some(1);
+    assert_matches("part", &continued);
 }

@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use super::{schema, AiAnswer, AiProvider, DocumentRequest, InterpretRequest, VisionRequest};
 use crate::{
     error::AiError,
-    models::{DocumentSummary, Intent, ScreenAnalysis},
+    models::{Action, DocumentSummary, ScreenAnalysis},
 };
 
 pub const DEV_KEY_VARIABLE: &str = "GEMINI_API_KEY";
@@ -20,6 +20,20 @@ static CONTRACT: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../../server/src/ai-contract.json"))
         .expect("contrato de IA válido")
 });
+
+/// La misma lista de acciones que pide el servidor (ver `server/src/gemini.ts`).
+fn actions_schema(item: &Value) -> Value {
+    let mut item = item.clone();
+    item["properties"]["request"] = json!({ "type": "string" });
+    if let Some(required) = item["required"].as_array_mut() {
+        required.push(json!("request"));
+    }
+    json!({
+        "type": "object",
+        "properties": { "actions": { "type": "array", "minItems": 1, "maxItems": 4, "items": item } },
+        "required": ["actions"]
+    })
+}
 
 /// Clave de `.env`. Nunca se muestra ni se guarda.
 pub fn dev_key() -> Option<String> {
@@ -199,7 +213,7 @@ impl AiProvider for GeminiProvider {
         true
     }
 
-    async fn interpret(&self, request: InterpretRequest) -> Result<AiAnswer<Intent>, AiError> {
+    async fn interpret(&self, request: InterpretRequest) -> Result<AiAnswer<Vec<Action>>, AiError> {
         let now = request
             .now
             .format("%A %Y-%m-%d %H:%M, zona %:z")
@@ -208,10 +222,14 @@ impl AiProvider for GeminiProvider {
         let body = json!({
             "model": contract["model"],
             "store": false,
-            "system_instruction": contract["systemInstruction"].as_str().unwrap_or_default().replace("{now}", &now),
+            "system_instruction": format!(
+                "{}\n{}",
+                contract["systemInstruction"].as_str().unwrap_or_default().replace("{now}", &now),
+                contract["multiInstruction"].as_str().unwrap_or_default()
+            ),
             "input": request.text,
             "generation_config": { "max_output_tokens": contract["maxOutputTokens"], "thinking_level": contract["thinkingLevel"] },
-            "response_format": { "type": "text", "mime_type": "application/json", "schema": contract["responseSchema"] }
+            "response_format": { "type": "text", "mime_type": "application/json", "schema": actions_schema(&contract["responseSchema"]) }
         });
         let response = self.send(body, timeout_of(contract)).await?;
         let value = schema::parse_interpretation(&Self::output_text(&response)?, &request.text)?;

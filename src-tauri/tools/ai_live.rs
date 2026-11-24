@@ -200,7 +200,11 @@ async fn phrases(provider: &dyn AiProvider) {
         let elapsed = start.elapsed().as_millis();
         match answer {
             Ok(answer) => {
-                let ok = check(&answer.value, expected, *when, today);
+                // Las frases de esta prueba piden una sola cosa: cuenta la primera acción.
+                let ok = answer
+                    .value
+                    .first()
+                    .is_some_and(|action| check(&action.intent, expected, *when, today));
                 passed += usize::from(ok);
                 total_ms += elapsed;
                 tokens += answer.tokens;

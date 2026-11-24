@@ -136,6 +136,7 @@ pub async fn voice_stop<R: Runtime>(
                 message: "No oí ninguna solicitud.".into(),
                 hint: Some("Acércate al micrófono o escribe tu solicitud.".into()),
             },
+            part: None,
         }));
     }
     // Lo transcrito cumple el mismo límite que lo escrito.

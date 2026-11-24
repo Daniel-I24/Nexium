@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::{
     error::AiError,
     models::{
-        DocumentSummary, FileQuery, Intent, ReminderRequest, ScreenAnalysis, SystemMetric,
+        Action, DocumentSummary, FileQuery, Intent, ReminderRequest, ScreenAnalysis, SystemMetric,
         WeatherWhen,
     },
 };
@@ -163,9 +163,53 @@ pub fn valid_file_name(name: &str) -> bool {
         && !name.contains("..")
 }
 
-pub fn parse_interpretation(text: &str, fallback_question: &str) -> Result<Intent, AiError> {
+/// Como mucho cuatro acciones por petición (el servidor ya lo exige).
+pub const MAX_ACTIONS: usize = 4;
+
+#[derive(Deserialize)]
+struct RawAction {
+    request: String,
+    #[serde(flatten)]
+    interpretation: RawInterpretation,
+}
+
+#[derive(Deserialize)]
+struct RawActions {
+    actions: Vec<RawAction>,
+}
+
+/// Las acciones de una petición, en el orden pedido. Acepta también una sola acción sin lista (la forma
+/// anterior): entonces responde a todo el texto. Si una acción no es válida, se rechaza la respuesta entera.
+pub fn parse_interpretation(text: &str, whole_request: &str) -> Result<Vec<Action>, AiError> {
+    if let Ok(list) = serde_json::from_str::<RawActions>(text.trim()) {
+        if list.actions.is_empty() {
+            return Err(AiError::InvalidResponse);
+        }
+        let single = list.actions.len() == 1;
+        return list
+            .actions
+            .into_iter()
+            .take(MAX_ACTIONS)
+            .map(|action| {
+                let request = if single {
+                    whole_request.trim().to_owned()
+                } else {
+                    prose(Some(action.request), MAX_TEXT).ok_or(AiError::InvalidResponse)?
+                };
+                let intent = intent_from(action.interpretation, &request)?;
+                Ok(Action { request, intent })
+            })
+            .collect();
+    }
     let raw: RawInterpretation =
         serde_json::from_str(text.trim()).map_err(|_| AiError::InvalidResponse)?;
+    Ok(vec![Action {
+        request: whole_request.trim().to_owned(),
+        intent: intent_from(raw, whole_request)?,
+    }])
+}
+
+fn intent_from(raw: RawInterpretation, fallback_question: &str) -> Result<Intent, AiError> {
     Ok(match raw.intent.as_str() {
         "time" => Intent::Time,
         "system" => Intent::System(match raw.metric.as_deref() {

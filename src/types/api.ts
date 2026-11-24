@@ -74,7 +74,27 @@ export type ResponseBody =
   | { kind: "documentAnalysis"; fileName: string; task: DocumentTask; summary: string; points: string[]; details: string[]; truncated: boolean }
   | { kind: "weatherCityQuestion"; when: WeatherWhen }
   | { kind: "navigate"; section: Section }
-  | { kind: "error"; code: string; message: string; hint: string | null };
+  | { kind: "error"; code: string; message: string; hint: string | null }
+  | { kind: "multiple"; parts: PartResponse[] };
+
+/** Una parte de una petición con varias solicitudes: se responde y se continúa por separado. */
+export interface PartResponse {
+  /** El fragmento de la petición que responde. */
+  request: string;
+  category: Category;
+  status: InteractionStatus;
+  originLabel: string;
+  summary: string;
+  body: ResponseBody;
+}
+
+/** Lo que el historial guarda de cada parte. */
+export interface PartSummary {
+  request: string;
+  category: Category;
+  status: InteractionStatus;
+  summary: string;
+}
 
 export interface AssistantResponse {
   id: number;
@@ -85,6 +105,8 @@ export interface AssistantResponse {
   originLabel: string;
   summary: string;
   body: ResponseBody;
+  /** Si responde a una parte de una petición con varias, su posición: solo cambia ese bloque. */
+  part?: number;
 }
 
 export type Stage =
@@ -118,6 +140,8 @@ export interface HistoryEntry {
   category: Category;
   status: InteractionStatus;
   response: string;
+  /** Las partes de una petición con varias solicitudes. */
+  parts: PartSummary[] | null;
 }
 
 export interface ProviderInfo {

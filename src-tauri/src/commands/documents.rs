@@ -20,6 +20,7 @@ pub async fn document_analyze<R: Runtime>(
     token: String,
     task: DocumentTask,
     continues: Option<i64>,
+    part: Option<usize>,
 ) -> AppResult<AssistantResponse> {
     let path = state.offers.path(&token).ok_or_else(|| {
         AppError::Validation("Ese archivo ya no está disponible. Vuelve a pedirlo.".into())
@@ -29,7 +30,10 @@ pub async fn document_analyze<R: Runtime>(
         .analyze_document(
             &path,
             task,
-            continues,
+            crate::core::assistant::Continues {
+                id: continues,
+                part,
+            },
             state.fresh_cancel(),
             stage_sink(&app),
         )

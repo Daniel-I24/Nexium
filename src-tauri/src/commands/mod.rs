@@ -18,7 +18,7 @@ use tauri::{AppHandle, Emitter, Runtime, State};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    core::assistant::{Assistant, StageSink, MAX_REQUEST_LENGTH},
+    core::assistant::{Assistant, Continues, StageSink, MAX_REQUEST_LENGTH},
     error::{AppError, AppResult},
     models::{AssistantResponse, Stage},
     providers::{
@@ -128,13 +128,17 @@ pub async fn assistant_submit<R: Runtime>(
     state: State<'_, AppState>,
     text: String,
     continues: Option<i64>,
+    part: Option<usize>,
 ) -> AppResult<AssistantResponse> {
     let text = validate_text(&text)?;
     let response = state
         .assistant
         .process_timed(
             text,
-            continues,
+            Continues {
+                id: continues,
+                part,
+            },
             state.fresh_cancel(),
             stage_sink(&app),
             Timings::new("texto"),
@@ -164,11 +168,20 @@ pub async fn screen_analyze<R: Runtime>(
     state: State<'_, AppState>,
     question: String,
     continues: Option<i64>,
+    part: Option<usize>,
 ) -> AppResult<AssistantResponse> {
     let question = validate_text(&question)?;
     let response = state
         .assistant
-        .analyze_screen(question, continues, state.fresh_cancel(), stage_sink(&app))
+        .analyze_screen(
+            question,
+            Continues {
+                id: continues,
+                part,
+            },
+            state.fresh_cancel(),
+            stage_sink(&app),
+        )
         .await;
     present_stage(&app).await;
     Ok(response)

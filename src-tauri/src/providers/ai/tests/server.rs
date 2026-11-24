@@ -62,7 +62,7 @@ async fn sends_only_the_text_the_time_and_the_anonymous_id() {
     Mock::given(method("POST"))
         .and(path("/v1/interpret"))
         .and(header(INSTALL_HEADER, INSTALL))
-        .and(body_json(json!({ "text": "Busca mi informe", "now": expected })))
+        .and(body_json(json!({ "text": "Busca mi informe", "now": expected, "actions": true })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "output": r#"{"intent":"search_files","search_terms":["informe"]}"#, "tokens": 42 })))
         .expect(1)
         .mount(&server)
@@ -75,7 +75,10 @@ async fn sends_only_the_text_the_time_and_the_anonymous_id() {
         .await
         .unwrap();
     assert_eq!(answer.tokens, 42);
-    assert!(matches!(answer.value, Intent::SearchFiles(_)));
+    assert!(matches!(
+        answer.value[0].intent,
+        crate::models::Intent::SearchFiles(_)
+    ));
 }
 
 #[tokio::test]

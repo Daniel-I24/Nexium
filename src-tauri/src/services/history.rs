@@ -1,10 +1,10 @@
 use chrono::Local;
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 
 use crate::{
     database::Database,
     error::{AppError, AppResult},
-    models::{Category, HistoryEntry, InteractionStatus},
+    models::{Category, HistoryEntry, InteractionStatus, PartSummary},
     providers::ai::schema::plain_text,
 };
 
@@ -16,6 +16,43 @@ pub const MAX_FAILURE_CAUSE: usize = 600;
 #[derive(Clone)]
 pub struct HistoryService {
     db: Database,
+}
+
+/// Estado, categoría y resumen de una petición con varias partes. Pendiente si alguna espera un permiso o una
+/// confirmación; fallida solo si fallaron todas; si no, completada, y el resumen dice cuál falló.
+pub fn combine_parts(parts: &[PartSummary]) -> (Category, InteractionStatus, String) {
+    let all = |status: InteractionStatus| parts.iter().all(|part| part.status == status);
+    let status = if parts
+        .iter()
+        .any(|part| part.status == InteractionStatus::Pending)
+    {
+        InteractionStatus::Pending
+    } else if all(InteractionStatus::Failed) {
+        InteractionStatus::Failed
+    } else if all(InteractionStatus::Cancelled) {
+        InteractionStatus::Cancelled
+    } else {
+        InteractionStatus::Completed
+    };
+    let category = match parts.first() {
+        Some(first) if parts.iter().all(|part| part.category == first.category) => first.category,
+        _ => Category::General,
+    };
+    // Sin números delante: el historial muestra el texto sin formato, y «1. » parecería una lista.
+    let summary = parts
+        .iter()
+        .map(|part| {
+            let marker = match part.status {
+                InteractionStatus::Failed => " (falló)",
+                InteractionStatus::Pending => " (pendiente)",
+                InteractionStatus::Cancelled => " (cancelada)",
+                InteractionStatus::Completed => "",
+            };
+            format!("{}{marker}", part.summary)
+        })
+        .collect::<Vec<_>>()
+        .join(" · ");
+    (category, status, summary)
 }
 
 impl HistoryService {
@@ -77,10 +114,76 @@ impl HistoryService {
         )?))
     }
 
+    /// Una petición con varias solicitudes: una sola entrada, con el estado y el resultado de cada parte.
+    pub fn record_parts(&self, request: &str, parts: &[PartSummary]) -> AppResult<(i64, String)> {
+        let (category, status, summary) = combine_parts(parts);
+        let (id, created_at) = self.record(request, category, status, &summary)?;
+        self.db.lock()?.execute(
+            "UPDATE history SET parts = ?1 WHERE id = ?2",
+            params![serde_json::to_string(parts).unwrap_or_default(), id],
+        )?;
+        Ok((id, created_at))
+    }
+
+    /// Una entrada que ya existía (una solicitud que esperaba un permiso) pasa a tener varias partes.
+    pub fn set_parts(&self, id: i64, parts: &[PartSummary]) -> AppResult<Option<(String, String)>> {
+        let (category, status, summary) = combine_parts(parts);
+        let Some(found) = self.update(id, category, status, &summary)? else {
+            return Ok(None);
+        };
+        self.db.lock()?.execute(
+            "UPDATE history SET parts = ?1 WHERE id = ?2",
+            params![serde_json::to_string(parts).unwrap_or_default(), id],
+        )?;
+        Ok(Some(found))
+    }
+
+    /// Lleva una parte a su nuevo estado (tras un permiso o una confirmación) y recalcula la entrada. Devuelve
+    /// la solicitud completa y su fecha, o `None` si la entrada o la parte ya no existen.
+    pub fn update_part(
+        &self,
+        id: i64,
+        index: usize,
+        part: PartSummary,
+    ) -> AppResult<Option<(String, String)>> {
+        let connection = self.db.lock()?;
+        let stored: Option<(String, String, Option<String>)> = connection
+            .query_row(
+                "SELECT request, created_at, parts FROM history WHERE id = ?1",
+                params![id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()?;
+        let Some((request, created_at, Some(json))) = stored else {
+            return Ok(None);
+        };
+        let mut parts: Vec<PartSummary> = serde_json::from_str(&json).unwrap_or_default();
+        let Some(slot) = parts.get_mut(index) else {
+            return Ok(None);
+        };
+        // El fragmento de la petición no cambia: solo su estado y su resultado.
+        *slot = PartSummary {
+            request: std::mem::take(&mut slot.request),
+            ..part
+        };
+        let (category, status, summary) = combine_parts(&parts);
+        connection.execute(
+            "UPDATE history SET category = ?1, status = ?2, response = ?3, parts = ?4 WHERE id = ?5",
+            params![
+                category.as_str(),
+                status.as_str(),
+                summary,
+                serde_json::to_string(&parts).unwrap_or_default(),
+                id
+            ],
+        )?;
+        Ok(Some((request, created_at)))
+    }
+
     pub fn list(&self, status: Option<InteractionStatus>) -> AppResult<Vec<HistoryEntry>> {
         let connection = self.db.lock()?;
         let mut statement = connection.prepare(
-            "SELECT id, request, created_at, category, status, response FROM history
+            "SELECT id, request, created_at, category, status, response, parts FROM history
              WHERE (?1 IS NULL OR status = ?1) ORDER BY id DESC",
         )?;
         let rows = statement.query_map(params![status.map(InteractionStatus::as_str)], |row| {
@@ -93,6 +196,9 @@ impl HistoryService {
                 // Las entradas de versiones anteriores pueden traer Markdown de la IA: se limpia al mostrarlas,
                 // sin tocar la base de datos.
                 response: plain_text(&row.get::<_, String>(5)?),
+                parts: row
+                    .get::<_, Option<String>>(6)?
+                    .and_then(|json| serde_json::from_str(&json).ok()),
             })
         })?;
         rows.collect::<Result<_, _>>().map_err(AppError::from)
@@ -227,6 +333,61 @@ mod tests {
         assert!(history
             .record_failure(&"a".repeat(MAX_FAILURE_REQUEST + 1), "causa")
             .is_err());
+    }
+
+    fn part(request: &str, status: InteractionStatus) -> PartSummary {
+        PartSummary {
+            request: request.into(),
+            category: Category::System,
+            status,
+            summary: format!("resultado de {request}"),
+        }
+    }
+
+    #[test]
+    fn a_request_with_several_parts_is_one_entry_with_each_result() {
+        let history = service();
+        let (id, _) = history
+            .record_parts(
+                "¿Qué hora es y cuánta batería tengo?",
+                &[
+                    part("hora", InteractionStatus::Completed),
+                    part("batería", InteractionStatus::Pending),
+                ],
+            )
+            .unwrap();
+        let entry = &history.list(None).unwrap()[0];
+        assert_eq!(entry.status, InteractionStatus::Pending);
+        assert_eq!(
+            entry.response,
+            "resultado de hora · resultado de batería (pendiente)"
+        );
+        // Completar una parte conserva su fragmento y recalcula la entrada.
+        history
+            .update_part(id, 1, part("otro texto", InteractionStatus::Completed))
+            .unwrap()
+            .unwrap();
+        let entry = &history.list(None).unwrap()[0];
+        assert_eq!(entry.status, InteractionStatus::Completed);
+        assert_eq!(entry.parts.as_ref().unwrap()[1].request, "batería");
+        assert!(history
+            .update_part(id, 7, part("x", InteractionStatus::Completed))
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn the_status_of_several_parts() {
+        use InteractionStatus::{Cancelled, Completed, Failed, Pending};
+        let status = |statuses: &[InteractionStatus]| {
+            let parts: Vec<_> = statuses.iter().map(|status| part("p", *status)).collect();
+            combine_parts(&parts).1
+        };
+        assert_eq!(status(&[Completed, Pending]), Pending);
+        assert_eq!(status(&[Completed, Failed]), Completed);
+        assert_eq!(status(&[Failed, Failed]), Failed);
+        assert_eq!(status(&[Cancelled, Cancelled]), Cancelled);
+        assert_eq!(status(&[Cancelled, Completed]), Completed);
     }
 
     #[test]

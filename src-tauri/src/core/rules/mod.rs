@@ -4,10 +4,12 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+mod compound;
 mod dates;
 mod places;
 mod text;
 
+pub use compound::{split_compound, Compound, MAX_PARTS};
 pub use dates::ambiguous_date_question;
 pub use places::is_place_name;
 pub use text::{normalize, prepare};
@@ -97,7 +99,7 @@ static BATTERY: LazyLock<Regex> =
     LazyLock::new(|| regex(r"\b(bateria|pila|carga del equipo|cuanta carga)\b"));
 static WIFI: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(wifi|red inalambrica|a que red)\b"));
 /// "Recuérdame" y lo que suele salir al transcribirlo ("Recuerda mi").
-static REMINDER_START: LazyLock<Regex> = LazyLock::new(|| {
+pub(super) static REMINDER_START: LazyLock<Regex> = LazyLock::new(|| {
     regex(r"^(recuerdame|recuerda me|recuerda mi|recordame|recuerdeme|recordarme|acuerdame)\b")
 });
 /// "Resume mi documento de bases de datos", "Analiza este archivo".

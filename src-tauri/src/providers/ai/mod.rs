@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::{
     error::AiError,
-    models::{DocumentSummary, DocumentTask, Intent, ScreenAnalysis},
+    models::{Action, DocumentSummary, DocumentTask, ScreenAnalysis},
 };
 
 pub struct InterpretRequest {
@@ -48,7 +48,8 @@ pub trait AiProvider: Send + Sync {
     /// Mensaje en español para un error de cuota de este proveedor.
     fn quota_message(&self) -> String;
     fn is_configured(&self) -> bool;
-    async fn interpret(&self, request: InterpretRequest) -> Result<AiAnswer<Intent>, AiError>;
+    /// Las acciones que pide el texto, de 1 a 4 y en orden.
+    async fn interpret(&self, request: InterpretRequest) -> Result<AiAnswer<Vec<Action>>, AiError>;
     async fn analyze_image(
         &self,
         request: VisionRequest,

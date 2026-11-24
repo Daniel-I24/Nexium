@@ -155,6 +155,13 @@ pub struct ReminderRequest {
     pub ambiguity: Option<String>,
 }
 
+/// Una operación con el fragmento de la petición que la pidió. Una petición puede traer varias.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Action {
+    pub request: String,
+    pub intent: Intent,
+}
+
 /// Toda operación que Nexium puede ejecutar. Ni reglas ni IA pueden pedir otra cosa.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Intent {

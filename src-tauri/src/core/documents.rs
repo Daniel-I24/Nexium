@@ -34,10 +34,11 @@ impl Assistant {
         &self,
         path: &Path,
         task: DocumentTask,
-        continues: Option<i64>,
+        continues: impl Into<super::assistant::Continues>,
         cancel: CancellationToken,
         stage: StageSink,
     ) -> AssistantResponse {
+        let continues = continues.into();
         let mut timings = Timings::new("documento");
         let file_name = path
             .file_name()

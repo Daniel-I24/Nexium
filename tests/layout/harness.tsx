@@ -39,6 +39,42 @@ const responses: Record<string, () => AssistantResponse> = {
       ],
       attribution: null,
     }),
+  varias: () => ({
+    ...response(
+      "¿A qué red Wi-Fi estoy conectado? Y dame el clima de la ciudad en la que me encuentro, y recuérdame tomar agua",
+      {
+        kind: "multiple",
+        parts: [
+          {
+            request: "¿A qué red Wi-Fi estoy conectado?",
+            category: "system",
+            status: "completed",
+            originLabel: "lectura directa del equipo, sin IA",
+            summary: "Conectado a RedDeLaCasa",
+            body: { kind: "rows", rows: [{ label: "Red Wi-Fi", value: "RedDeLaCasaConUnNombreBastanteLargo_5GHz", mono: true, unavailable: false }], note: null, attribution: null },
+          },
+          {
+            request: "dame el clima de la ciudad en la que me encuentro",
+            category: "weather",
+            status: "failed",
+            originLabel: "sin datos",
+            summary: "No encontré la ciudad «Nolugar».",
+            body: { kind: "error", code: "cityNotFound", message: "No encontré la ciudad «Nolugar».", hint: "Revisa cómo está escrita y vuelve a pedirlo." },
+          },
+          {
+            request: "recuérdame tomar agua",
+            category: "reminders",
+            status: "pending",
+            originLabel: "solicitud interpretada con IA (Google Gemini)",
+            summary: "Por confirmar: tomar agua",
+            body: { kind: "reminderDraft", content: "tomar agua", dueAt: null, question: null, options: [] },
+          },
+        ],
+      },
+      "pending",
+    ),
+    originLabel: "cada solicitud indica el suyo",
+  }),
   clima: () => ({
     ...response("¿Cómo está el clima hoy en San José de las Lajas del Río Grande?", {
       kind: "reading",
@@ -152,6 +188,15 @@ const history: HistoryEntry[] = Array.from({ length: 12 }, (_, index) => ({
   category: (["screen", "system", "files", "weather"] as const)[index % 4] ?? "general",
   status: (["completed", "failed", "pending", "cancelled"] as const)[index % 4] ?? "completed",
   response: index === 0 ? `Error 0x80070002: falta el archivo ${longPath}` : "Respuesta breve.",
+  // Una petición con varias solicitudes: cada parte con su resultado y su estado.
+  parts:
+    index === 1
+      ? [
+          { request: "¿A qué red Wi-Fi estoy conectado?", category: "system" as const, status: "completed" as const, summary: "Conectado a la red RedDeLaCasaConUnNombreBastanteLargo" },
+          { request: "dame el clima de la ciudad en la que me encuentro", category: "weather" as const, status: "failed" as const, summary: "No encontré la ciudad «Nolugar»." },
+          { request: "recuérdame tomar agua", category: "reminders" as const, status: "pending" as const, summary: "Por confirmar: tomar agua" },
+        ]
+      : null,
 }));
 
 const reminders: Reminder[] = [

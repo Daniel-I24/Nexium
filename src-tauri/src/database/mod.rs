@@ -51,6 +51,10 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE reminders_v2 RENAME TO reminders;
     CREATE INDEX reminders_due ON reminders (status, due_at);
 ",
+    r"
+    -- 1.0.2: una petición con varias solicitudes guarda el estado y el resultado de cada parte (JSON, sin cuerpo).
+    ALTER TABLE history ADD COLUMN parts TEXT;
+",
 ];
 
 /// Conexión única compartida: las consultas son breves y locales.

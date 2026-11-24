@@ -33,7 +33,7 @@ fn a_document_summary_keeps_its_ideas_and_data_and_rejects_too_many() {
 }
 
 fn parse(text: &str) -> Result<Intent, AiError> {
-    parse_interpretation(text, "pregunta")
+    parse_interpretation(text, "pregunta").map(|mut actions| actions.remove(0).intent)
 }
 
 #[test]

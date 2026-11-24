@@ -382,3 +382,148 @@ fn local_terms_drop_empty_words() {
 fn normalize_removes_accents_and_signs() {
     assert_eq!(normalize("¿Cuánta   BATERÍA?"), "cuanta bateria");
 }
+
+/// Qué intención reconoce cada parte, en orden. `None`: la petición no se divide en local.
+fn compound_kinds(text: &str) -> Option<Vec<&'static str>> {
+    match split_compound(text) {
+        Compound::Local { actions, .. } => Some(
+            actions
+                .iter()
+                .map(|action| match action.intent {
+                    Intent::Time => "hora",
+                    Intent::System(SystemMetric::Wifi) => "wifi",
+                    Intent::System(SystemMetric::Battery) => "batería",
+                    Intent::System(SystemMetric::Ram) => "ram",
+                    Intent::System(SystemMetric::Cpu) => "cpu",
+                    Intent::System(SystemMetric::Internet) => "internet",
+                    Intent::System(SystemMetric::DarkMode) => "modo oscuro",
+                    Intent::System(_) => "sistema",
+                    Intent::Weather { .. } => "clima",
+                    Intent::ListReminders => "recordatorios",
+                    Intent::AnalyzeScreen { .. } => "pantalla",
+                    Intent::OpenSection(_) => "sección",
+                    Intent::Document { .. } => "documento",
+                    _ => "otra",
+                })
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
+#[test]
+fn several_requests_in_one_are_split_in_order() {
+    for (text, expected) in [
+        (
+            "¿A qué red Wi-Fi estoy conectado? Y dame el clima de la ciudad en la que me encuentro",
+            vec!["wifi", "clima"],
+        ),
+        (
+            "¿Qué hora es y cuánta batería tengo?",
+            vec!["hora", "batería"],
+        ),
+        (
+            "Qué hora es y cuánta batería tengo.",
+            vec!["hora", "batería"],
+        ),
+        ("¿Cuánta RAM estoy usando? ¿Y la CPU?", vec!["ram", "cpu"]),
+        (
+            "dime la hora, la batería y la RAM",
+            vec!["hora", "batería", "ram"],
+        ),
+        (
+            "¿Estoy conectado a internet? Además, ¿qué hora es?",
+            vec!["internet", "hora"],
+        ),
+        (
+            "¿Cuánta batería tengo? También dime la hora",
+            vec!["batería", "hora"],
+        ),
+        ("clima en Bogotá y qué hora es", vec!["clima", "hora"]),
+        ("clima de Pasto y clima de Bogotá", vec!["clima", "clima"]),
+        (
+            "¿qué recordatorios tengo? y ¿qué hora es?",
+            vec!["recordatorios", "hora"],
+        ),
+        (
+            "¿Está activado el modo oscuro y cuánta batería me queda?",
+            vec!["modo oscuro", "batería"],
+        ),
+        (
+            "¿Qué hora es? ¿Cuánta batería tengo? ¿Cuánta RAM uso?",
+            vec!["hora", "batería", "ram"],
+        ),
+        (
+            "Uso de CPU, uso de RAM y nivel de batería",
+            vec!["cpu", "ram", "batería"],
+        ),
+        (
+            "¿Qué red wifi tengo y estoy conectado a internet?",
+            vec!["wifi", "internet"],
+        ),
+        (
+            "Dime la hora y el clima en Cartagena",
+            vec!["hora", "clima"],
+        ),
+        (
+            "¿Qué aparece en mi pantalla? Y dime la hora",
+            vec!["pantalla", "hora"],
+        ),
+        (
+            "Abre los recordatorios y dime la hora",
+            vec!["sección", "hora"],
+        ),
+        (
+            "Resume mi documento de bases de datos y dime la hora",
+            vec!["documento", "hora"],
+        ),
+        (
+            "¿Qué hora es, cuánta batería tengo, cuánta RAM uso y qué red wifi tengo?",
+            vec!["hora", "batería", "ram", "wifi"],
+        ),
+    ] {
+        assert_eq!(compound_kinds(text), Some(expected), "{text}");
+    }
+}
+
+#[test]
+fn a_single_request_is_never_split() {
+    for text in [
+        "¿Qué hora es?",
+        "Recuérdame comprar pan y leche mañana a las 8",
+        "Recuérdame revisar la batería y el clima mañana",
+        "clima en Trinidad y Tobago",
+        "¿Cuánta batería tengo? gracias",
+        "Busca mi informe de clima y batería",
+        "dame el clima de la ciudad en la que me encuentro",
+    ] {
+        assert!(
+            !matches!(split_compound(text), Compound::Local { .. }),
+            "{text}: {:?}",
+            compound_kinds(text)
+        );
+    }
+}
+
+#[test]
+fn a_request_with_a_part_the_rules_do_not_know_goes_to_the_ai() {
+    for text in [
+        "¿Qué hora es y busca mi informe de programación?",
+        "Dime la batería y busca mi informe de redes",
+        // Una parte elíptica necesita el contexto de la anterior: la entiende la IA.
+        "¿Cómo está el clima en Medellín? ¿Y en Cali?",
+    ] {
+        assert_eq!(split_compound(text), Compound::NeedsAi, "{text}");
+    }
+}
+
+#[test]
+fn more_than_four_requests_keep_the_first_four() {
+    let Compound::Local { actions, extra } =
+        split_compound("¿Qué hora es? ¿Batería? ¿RAM? ¿CPU? ¿Internet? ¿Modo oscuro?")
+    else {
+        panic!()
+    };
+    assert_eq!(actions.len(), MAX_PARTS);
+    assert_eq!(extra, 2);
+}

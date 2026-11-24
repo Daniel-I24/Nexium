@@ -13,7 +13,14 @@
       "unit": "GB",
       "context": "en uso de 16,0 GB",
       "percent": 71.0,
-      "rows": [{ "label": "Disponible", "value": "4,6 GB", "mono": true, "unavailable": false }],
+      "rows": [
+        {
+          "label": "Disponible",
+          "value": "4,6 GB",
+          "mono": true,
+          "unavailable": false
+        }
+      ],
       "attribution": null
     }
   },
@@ -27,7 +34,14 @@
     "summary": "Batería: no disponible",
     "body": {
       "kind": "rows",
-      "rows": [{ "label": "Batería", "value": "No disponible", "mono": false, "unavailable": true }],
+      "rows": [
+        {
+          "label": "Batería",
+          "value": "No disponible",
+          "mono": false,
+          "unavailable": true
+        }
+      ],
       "note": "Este equipo no tiene batería.",
       "attribution": null
     }
@@ -43,7 +57,16 @@
     "body": {
       "kind": "files",
       "summary": "1 coincidencia en Documentos",
-      "files": [{ "name": "Informe", "extension": ".pdf", "location": "Documentos", "path": "C:\\a\\Informe.pdf", "exists": true, "matchedInContent": false }],
+      "files": [
+        {
+          "name": "Informe",
+          "extension": ".pdf",
+          "location": "Documentos",
+          "path": "C:\\a\\Informe.pdf",
+          "exists": true,
+          "matchedInContent": false
+        }
+      ],
       "note": null
     }
   },
@@ -60,7 +83,12 @@
       "content": "Entregar",
       "dueAt": null,
       "question": "¿A qué hora quieres el aviso?",
-      "options": [{ "label": "08:00", "dueAt": "2026-11-12T08:00:00-05:00" }]
+      "options": [
+        {
+          "label": "08:00",
+          "dueAt": "2026-11-12T08:00:00-05:00"
+        }
+      ]
     }
   },
   "quota": {
@@ -86,7 +114,10 @@
     "status": "pending",
     "originLabel": "lectura directa del equipo, sin IA",
     "summary": "Pendiente de tu permiso para capturar",
-    "body": { "kind": "captureRequest", "question": "Explícame este error" }
+    "body": {
+      "kind": "captureRequest",
+      "question": "Explícame este error"
+    }
   },
   "weather": {
     "id": 7,
@@ -102,8 +133,18 @@
       "unit": "°C",
       "context": "nublado, ahora en Bogotá, Colombia",
       "percent": null,
-      "rows": [{ "label": "Pronóstico de hoy", "value": "9 °C a 19 °C · lluvia", "mono": true, "unavailable": false }],
-      "attribution": { "text": "Datos meteorológicos de Open-Meteo (CC BY 4.0)", "url": "https://open-meteo.com/" }
+      "rows": [
+        {
+          "label": "Pronóstico de hoy",
+          "value": "9 °C a 19 °C · lluvia",
+          "mono": true,
+          "unavailable": false
+        }
+      ],
+      "attribution": {
+        "text": "Datos meteorológicos de Open-Meteo (CC BY 4.0)",
+        "url": "https://open-meteo.com/"
+      }
     }
   },
   "navigate": {
@@ -114,7 +155,10 @@
     "status": "completed",
     "originLabel": "lectura directa del equipo, sin IA",
     "summary": "Abrí Recordatorios",
-    "body": { "kind": "navigate", "section": "reminders" }
+    "body": {
+      "kind": "navigate",
+      "section": "reminders"
+    }
   },
   "documentConsent": {
     "id": 9,
@@ -128,7 +172,14 @@
       "kind": "documentConsent",
       "task": "summarize",
       "provider": "Google Gemini",
-      "candidates": [{ "token": "t-1", "name": "Bases de datos", "extension": ".pdf", "location": "Documentos" }],
+      "candidates": [
+        {
+          "token": "t-1",
+          "name": "Bases de datos",
+          "extension": ".pdf",
+          "location": "Documentos"
+        }
+      ],
       "maxCharacters": 30000,
       "note": null,
       "preselected": "t-1"
@@ -147,9 +198,64 @@
       "fileName": "Bases de datos.pdf",
       "task": "summarize",
       "summary": "Guía de la asignatura.",
-      "points": ["Tres unidades.", "Dos parciales y un proyecto."],
-      "details": ["Parcial 1: 30 %."],
+      "points": [
+        "Tres unidades.",
+        "Dos parciales y un proyecto."
+      ],
+      "details": [
+        "Parcial 1: 30 %."
+      ],
       "truncated": true
     }
+  },
+  "multiple": {
+    "id": 11,
+    "request": "¿A qué red Wi-Fi estoy conectado? Y dame el clima",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "general",
+    "status": "pending",
+    "originLabel": "cada solicitud indica el suyo",
+    "summary": "Conectado a CasaNexium · Falta la ciudad (pendiente)",
+    "body": {
+      "kind": "multiple",
+      "parts": [
+        {
+          "request": "A qué red Wi-Fi estoy conectado",
+          "category": "system",
+          "status": "completed",
+          "originLabel": "lectura directa del equipo, sin IA",
+          "summary": "Conectado a CasaNexium",
+          "body": {
+            "kind": "text",
+            "text": "Conectado a CasaNexium."
+          }
+        },
+        {
+          "request": "dame el clima",
+          "category": "weather",
+          "status": "pending",
+          "originLabel": "lectura directa del equipo, sin IA",
+          "summary": "Falta la ciudad",
+          "body": {
+            "kind": "weatherCityQuestion",
+            "when": "now"
+          }
+        }
+      ]
+    }
+  },
+  "part": {
+    "id": 11,
+    "request": "dame el clima",
+    "createdAt": "2026-11-05T14:05:00-05:00",
+    "category": "weather",
+    "status": "completed",
+    "originLabel": "Open-Meteo, sin IA",
+    "summary": "22 °C",
+    "body": {
+      "kind": "text",
+      "text": "22 °C"
+    },
+    "part": 1
   }
 }

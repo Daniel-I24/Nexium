@@ -16,6 +16,7 @@ const entry = (id: number, status: HistoryEntry["status"], response = "ok"): His
   category: "general",
   status,
   response,
+  parts: null,
 });
 
 function backend(entries: HistoryEntry[]) {
