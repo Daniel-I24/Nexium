@@ -15,16 +15,24 @@ import type {
 } from "@/types/api";
 
 /** Único punto de contacto con el backend: ningún componente llama a invoke directamente. */
+/** Solo se envía la parte si la hay: sin ella, el núcleo continúa la entrada completa. */
+function withPart(part: number | null): { part?: number } {
+  return part === null ? {} : { part };
+}
+
 export const api = {
   /** `continues`: la entrada del historial que esta solicitud completa (tras un permiso o una aclaración). */
-  submitRequest: (text: string, continues: number | null = null) => invoke<AssistantResponse>("assistant_submit", { text, continues }),
+  /** `part`: la parte de una petición con varias solicitudes que se continúa. */
+  submitRequest: (text: string, continues: number | null = null, part: number | null = null) =>
+    invoke<AssistantResponse>("assistant_submit", { text, continues, ...withPart(part) }),
   cancel: () => invoke<undefined>("assistant_cancel"),
   allowKnownFolders: () => invoke<string[]>("folders_allow_known"),
   /** Abre el selector de carpetas del sistema. `null` si se cerró sin elegir. */
   pickFolder: () => invoke<string[] | null>("folders_pick"),
   removeFolder: (folder: string) => invoke<string[]>("folders_remove", { folder }),
 
-  analyzeDocument: (token: string, task: DocumentTask, continues: number | null = null) => invoke<AssistantResponse>("document_analyze", { token, task, continues }),
+  analyzeDocument: (token: string, task: DocumentTask, continues: number | null = null, part: number | null = null) =>
+    invoke<AssistantResponse>("document_analyze", { token, task, continues, ...withPart(part) }),
   /** Abre el selector de archivos del sistema. `null` si se cerró sin elegir. */
   pickDocument: () => invoke<DocumentCandidate | null>("document_pick"),
   openAttribution: () => invoke<undefined>("open_attribution"),
@@ -36,11 +44,12 @@ export const api = {
   cancelVoice: () => invoke<undefined>("voice_cancel"),
   downloadSpeechModel: (modelId: string) => invoke<undefined>("speech_model_download", { modelId }),
 
-  analyzeScreen: (question: string, continues: number | null = null) => invoke<AssistantResponse>("screen_analyze", { question, continues }),
+  analyzeScreen: (question: string, continues: number | null = null, part: number | null = null) =>
+    invoke<AssistantResponse>("screen_analyze", { question, continues, ...withPart(part) }),
 
   listReminders: () => invoke<Reminder[]>("reminders_list"),
-  createReminder: (content: string, dueAt: string, historyId: number | null) =>
-    invoke<Reminder>("reminders_create", { content, dueAt, historyId }),
+  createReminder: (content: string, dueAt: string, historyId: number | null, part: number | null = null) =>
+    invoke<Reminder>("reminders_create", { content, dueAt, historyId, ...withPart(part) }),
   updateReminder: (id: number, content: string, dueAt: string) => invoke<Reminder>("reminders_update", { id, content, dueAt }),
   deleteReminder: (id: number) => invoke<undefined>("reminders_delete", { id }),
 
@@ -48,7 +57,7 @@ export const api = {
   deleteHistory: (id: number) => invoke<undefined>("history_delete", { id }),
   clearHistory: () => invoke<undefined>("history_clear"),
   /** Una solicitud pendiente que se cancela termina como cancelada en su misma entrada. */
-  cancelEntry: (id: number) => invoke<undefined>("history_cancel", { id }),
+  cancelEntry: (id: number, part: number | null = null) => invoke<undefined>("history_cancel", { id, ...withPart(part) }),
   recordFailure: (request: string, cause: string) => invoke<{ id: number; createdAt: string }>("history_record_failure", { request, cause }),
 
   /** Solo cuando la persona lo pide en Ajustes. */

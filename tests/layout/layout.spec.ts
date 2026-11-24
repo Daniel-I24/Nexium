@@ -64,6 +64,7 @@ const views: Record<string, (page: Page) => Promise<void>> = {
     await expect(page.getByRole("button", { name: "Buscar un archivo" })).toBeVisible();
   },
   "asistente-carpetas": (page) => submit(page, "carpetas"),
+  "asistente-varias": (page) => submit(page, "varias"),
   "asistente-documento": async (page) => {
     await submit(page, "documento");
     await expect(page.getByRole("radio", { name: /Apuntes de bases de datos/ })).toBeVisible();

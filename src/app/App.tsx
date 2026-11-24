@@ -65,12 +65,15 @@ export function App() {
           current={assistant.current}
           tape={assistant.tape}
           onPickExample={(text) => void assistant.submit(text)}
-          onSaveReminder={(content, dueAt) => void assistant.saveReminder(content, dueAt)}
-          onAuthorizeFolders={(choice, pendingRequest) => void assistant.authorizeFolders(choice, pendingRequest)}
-          onAnalyzeDocument={(candidate, task) => void assistant.analyzeDocument(candidate, task)}
-          onDismiss={assistant.dismissCurrent}
-          onChooseReminderOption={assistant.chooseReminderOption}
-          onChooseSuggestion={assistant.chooseSuggestion}
+          onSaveReminder={(content, dueAt, part) => void assistant.saveReminder(content, dueAt, part ?? null)}
+          onAuthorizeFolders={(choice, pendingRequest, part) => void assistant.authorizeFolders(choice, pendingRequest, part ?? null)}
+          onAnalyzeDocument={(candidate, task, part) =>
+            // Una parte continúa la petición que se muestra; sin parte, la solicitud pendiente.
+            void (part === undefined ? assistant.analyzeDocument(candidate, task) : assistant.analyzeDocument(candidate, task, assistant.current?.id ?? null, part))
+          }
+          onDismiss={(message, part) => assistant.dismissCurrent(message, part ?? null)}
+          onChooseReminderOption={(option, part) => assistant.chooseReminderOption(option, part ?? null)}
+          onChooseSuggestion={(suggestion, part) => assistant.chooseSuggestion(suggestion, part ?? null)}
         />
       )}
       {screen === "reminders" && <RemindersScreen highlight={highlight} onPickExample={(text) => goToAssistant(() => void assistant.submit(text))} />}

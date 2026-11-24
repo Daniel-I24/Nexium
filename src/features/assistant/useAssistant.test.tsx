@@ -307,3 +307,90 @@ describe("Reintentar repite exactamente la operación que falló", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 });
+
+describe("Varias solicitudes en una petición", () => {
+  beforeEach(() => invoke.mockReset());
+  const settings = { provider: { displayName: "Google Gemini", dataNotice: "Aviso." } };
+  const part = (request: string, body: ResponseBody, status: AssistantResponse["status"] = "completed") => ({
+    request,
+    category: "general" as const,
+    status,
+    originLabel: "o",
+    summary: request,
+    body,
+  });
+  const multiple = (parts: ReturnType<typeof part>[], status: AssistantResponse["status"] = "pending"): AssistantResponse => ({
+    ...reply({ kind: "multiple", parts }, status),
+    id: 9,
+  });
+
+  it("muestra todas las partes en una sola respuesta, sin bloquear la barra por una pregunta", async () => {
+    invoke.mockResolvedValueOnce(
+      multiple([part("¿Qué red tengo?", { kind: "text", text: "Casa" }), part("dame el clima", { kind: "weatherCityQuestion", when: "now" }, "pending")]),
+    );
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("¿Qué red tengo? Y dame el clima"));
+    expect(result.current.current?.body.kind).toBe("multiple");
+    expect(result.current.bar).toEqual({ kind: "idle" });
+  });
+
+  it("una parte que pide captura pide permiso y captura solo para esa parte", async () => {
+    invoke.mockImplementation((command: string) =>
+      Promise.resolve(
+        command === "settings_get" ? settings : multiple([part("hora", { kind: "text", text: "10:00" }), part("mi pantalla", { kind: "captureRequest", question: "¿Qué hay?" }, "pending")]),
+      ),
+    );
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("Dime la hora y qué hay en mi pantalla"));
+    await waitFor(() => expect(result.current.bar.kind).toBe("captureConsent"));
+    invoke.mockResolvedValueOnce({ ...reply({ kind: "text", text: "Una ventana." }), id: 9, part: 1 });
+    await act(() => result.current.confirmCapture());
+    expect(invoke).toHaveBeenLastCalledWith("screen_analyze", { question: "¿Qué hay?", continues: 9, part: 1 });
+    const body = result.current.current?.body;
+    expect(body?.kind === "multiple" && body.parts.map((entry) => entry.status)).toEqual(["completed", "completed"]);
+    expect(result.current.current?.status).toBe("completed");
+  });
+
+  it("continuar una parte actualiza solo su bloque", async () => {
+    invoke.mockResolvedValueOnce(
+      multiple([part("red", { kind: "text", text: "Casa" }), part("clima", { kind: "weatherCityQuestion", when: "now" }, "pending")]),
+    );
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("¿Qué red tengo? Y dame el clima"));
+    invoke.mockResolvedValueOnce({ ...reply({ kind: "text", text: "22 °C en Pasto" }), id: 9, part: 1 });
+    await act(() => result.current.chooseSuggestion({ label: "Pasto", request: "clima en Pasto" }, 1));
+    expect(invoke).toHaveBeenLastCalledWith("assistant_submit", { text: "clima en Pasto", continues: 9, part: 1 });
+    const body = result.current.current?.body;
+    expect(body?.kind === "multiple" && body.parts[0]?.body).toEqual({ kind: "text", text: "Casa" });
+    expect(body?.kind === "multiple" && body.parts[1]?.body).toEqual({ kind: "text", text: "22 °C en Pasto" });
+    expect(result.current.tape).toEqual([]);
+  });
+
+  it("guardar el recordatorio de una parte lo marca guardado en su bloque", async () => {
+    invoke.mockResolvedValueOnce(
+      multiple([part("hora", { kind: "text", text: "10:00" }), part("agua", { kind: "reminderDraft", content: "Tomar agua", dueAt: null, question: null, options: [] }, "pending")]),
+    );
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("Dime la hora y recuérdame tomar agua"));
+    invoke.mockResolvedValueOnce({ id: 3, content: "Tomar agua", dueAt: "2026-12-01T10:00:00-05:00", status: "pending" });
+    await act(() => result.current.saveReminder("Tomar agua", "2026-12-01T10:00:00-05:00", 1));
+    expect(invoke).toHaveBeenLastCalledWith("reminders_create", { content: "Tomar agua", dueAt: "2026-12-01T10:00:00-05:00", historyId: 9, part: 1 });
+    const body = result.current.current?.body;
+    expect(body?.kind === "multiple" && body.parts[1]?.body.kind).toBe("reminderSaved");
+    expect(result.current.current?.status).toBe("completed");
+  });
+
+  it("cancelar el permiso de una parte no cancela las demás", async () => {
+    invoke.mockResolvedValue(
+      multiple([part("hora", { kind: "text", text: "10:00" }), part("informe", { kind: "folderConsent", folders: [], pendingRequest: "Busca mi informe" }, "pending")]),
+    );
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("Dime la hora y busca mi informe"));
+    invoke.mockResolvedValue(undefined);
+    act(() => result.current.dismissCurrent("Cancelado.", 1));
+    expect(invoke).toHaveBeenLastCalledWith("history_cancel", { id: 9, part: 1 });
+    const body = result.current.current?.body;
+    expect(body?.kind === "multiple" && body.parts.map((entry) => entry.status)).toEqual(["completed", "cancelled"]);
+    expect(result.current.current?.status).toBe("completed");
+  });
+});

@@ -85,3 +85,40 @@ describe("aclaraciones", () => {
     expect(actions.onChooseSuggestion).toHaveBeenCalledWith(suggestion);
   });
 });
+
+describe("ResponseView: varias solicitudes", () => {
+  it("muestra cada parte en su bloque, con su estado, y la que falló dice por qué", () => {
+    const actions = { onSaveReminder: vi.fn(), onAuthorizeFolders: vi.fn(), onAnalyzeDocument: vi.fn(), onDismiss: vi.fn(), onChooseReminderOption: vi.fn(), onChooseSuggestion: vi.fn() };
+    render(
+      <ResponseView
+        actions={actions}
+        response={{
+          id: 9,
+          request: "¿Qué red tengo? Y dame el clima en Nolugar",
+          createdAt: "2026-11-23T10:00:00-05:00",
+          category: "general",
+          status: "completed",
+          originLabel: "cada solicitud indica el suyo",
+          summary: "s",
+          body: {
+            kind: "multiple",
+            parts: [
+              { request: "¿Qué red tengo?", category: "system", status: "completed", originLabel: "lectura directa del equipo, sin IA", summary: "Casa", body: { kind: "text", text: "Conectado a Casa." } },
+              { request: "dame el clima en Nolugar", category: "weather", status: "failed", originLabel: "sin datos", summary: "No", body: { kind: "error", code: "cityNotFound", message: "No encontré la ciudad «Nolugar».", hint: null } },
+            ],
+          },
+        }}
+      />,
+    );
+    const parts = within(screen.getByRole("list", { name: "Solicitudes de esta petición" })).getAllByRole("listitem");
+    expect(parts).toHaveLength(2);
+    const [network, weather] = parts as [HTMLElement, HTMLElement];
+    expect(within(network).getByRole("heading", { name: /¿Qué red tengo\?$/ })).toBeInTheDocument();
+    expect(within(network).getByText("Completada")).toBeInTheDocument();
+    expect(within(network).getByText("Conectado a Casa.")).toBeInTheDocument();
+    expect(within(weather).getByText("Falló")).toBeInTheDocument();
+    expect(within(weather).getByText("No encontré la ciudad «Nolugar».")).toBeInTheDocument();
+    // El origen va en cada parte, no en la petición entera.
+    expect(screen.queryByText(/cada solicitud indica el suyo/)).toBeNull();
+  });
+});

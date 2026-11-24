@@ -116,7 +116,21 @@ export function HistoryScreen({ onCleared }: { onCleared: () => void }) {
                 >
                   <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
                     <strong className="wrap-anywhere font-medium">{entry.request}</strong>
-                    <span className="whitespace-pre-line wrap-anywhere text-sm">{entry.response}</span>
+                    {entry.parts ? (
+                      // Una petición con varias solicitudes: el resultado y el estado de cada una.
+                      <ol aria-label={`Partes de: ${entry.request}`} className="m-0 flex list-none flex-col gap-1 p-0 text-sm">
+                        {entry.parts.map((part, partIndex) => (
+                          <li key={partIndex} className="flex flex-wrap items-baseline gap-x-2">
+                            <span className="wrap-anywhere">
+                              {part.request}: {part.summary}
+                            </span>
+                            <StatusLabel status={statusLabels[part.status].status}>{statusLabels[part.status].label}</StatusLabel>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <span className="whitespace-pre-line wrap-anywhere text-sm">{entry.response}</span>
+                    )}
                     <span className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
                       <span className="font-mono">{new Date(entry.createdAt).toLocaleString("es", { dateStyle: "short", timeStyle: "short" })}</span>
                       <span aria-hidden="true">·</span>

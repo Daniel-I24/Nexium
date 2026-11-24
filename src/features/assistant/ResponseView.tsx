@@ -7,7 +7,8 @@ import { Icon } from "@/components/Icon";
 import { Scale } from "@/components/Scale";
 import { StatusLabel } from "@/components/StatusLabel";
 import { api } from "@/services/api";
-import type { Attribution, AssistantResponse, DocumentCandidate, DocumentTask, ReminderOption, ResponseBody, Section, SuggestedRequest } from "@/types/api";
+import type { Status } from "@/components/StatusLabel";
+import type { Attribution, AssistantResponse, DocumentCandidate, DocumentTask, InteractionStatus, PartResponse, ReminderOption, ResponseBody, Section, SuggestedRequest } from "@/types/api";
 
 import { isCompleteLocal, toLocalInput } from "@/utils/dates";
 
@@ -19,13 +20,53 @@ import type { FolderChoice } from "./useAssistant";
 
 const sectionLabels: Record<Section, string> = { assistant: "Asistente", reminders: "Recordatorios", history: "Historial", settings: "Ajustes" };
 
+/** Lo que se puede hacer desde una respuesta. `part`: la parte de una petición con varias solicitudes. */
 export interface ResponseActions {
-  onSaveReminder: (content: string, dueAt: string) => void;
-  onAuthorizeFolders: (choice: FolderChoice, pendingRequest: string) => void;
-  onAnalyzeDocument: (candidate: DocumentCandidate, task: DocumentTask) => void;
-  onDismiss: (message: string) => void;
-  onChooseReminderOption: (option: ReminderOption) => void;
-  onChooseSuggestion: (suggestion: SuggestedRequest) => void;
+  onSaveReminder: (content: string, dueAt: string, part?: number) => void;
+  onAuthorizeFolders: (choice: FolderChoice, pendingRequest: string, part?: number) => void;
+  onAnalyzeDocument: (candidate: DocumentCandidate, task: DocumentTask, part?: number) => void;
+  onDismiss: (message: string, part?: number) => void;
+  onChooseReminderOption: (option: ReminderOption, part?: number) => void;
+  onChooseSuggestion: (suggestion: SuggestedRequest, part?: number) => void;
+}
+
+/** Las acciones de una parte: cada una continúa solo esa parte. */
+function actionsFor(actions: ResponseActions, part: number): ResponseActions {
+  return {
+    onSaveReminder: (content, dueAt) => actions.onSaveReminder(content, dueAt, part),
+    onAuthorizeFolders: (choice, pendingRequest) => actions.onAuthorizeFolders(choice, pendingRequest, part),
+    onAnalyzeDocument: (candidate, task) => actions.onAnalyzeDocument(candidate, task, part),
+    onDismiss: (message) => actions.onDismiss(message, part),
+    onChooseReminderOption: (option) => actions.onChooseReminderOption(option, part),
+    onChooseSuggestion: (suggestion) => actions.onChooseSuggestion(suggestion, part),
+  };
+}
+
+const partStatus: Record<InteractionStatus, { status: Status; label: string }> = {
+  completed: { status: "completed", label: "Completada" },
+  pending: { status: "pending", label: "Pendiente" },
+  failed: { status: "failed", label: "Falló" },
+  cancelled: { status: "cancelled", label: "Cancelada" },
+};
+
+/** Una parte de una petición con varias solicitudes, en su propio bloque: qué se pidió, cómo acabó y su respuesta. */
+function Part({ part, index, actions }: { part: PartResponse; index: number; actions: ResponseActions }) {
+  const status = partStatus[part.status];
+  return (
+    <li className="flex flex-col gap-4 border-t border-hairline pt-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 className="m-0 min-w-0 text-md font-medium wrap-anywhere">
+          <span className="font-mono text-sm text-muted">{index + 1}. </span>
+          {part.request}
+        </h2>
+        <span className="text-sm">
+          <StatusLabel status={status.status}>{status.label}</StatusLabel>
+        </span>
+      </div>
+      <Body body={part.body} actions={actionsFor(actions, index)} />
+      {part.body.kind !== "error" && <p className="m-0 text-sm text-muted">Origen: {originSentence(part.originLabel)}</p>}
+    </li>
+  );
 }
 
 /** Pregunta de Nexium y sus respuestas posibles, juntas en la conversación. La primera recibe el foco. */
@@ -211,6 +252,14 @@ function Body({ body, actions }: { body: ResponseBody; actions: ResponseActions 
       return <p className="m-0 text-lg">Abrí {sectionLabels[body.section]}.</p>;
     case "captureRequest":
       return <p className="m-0 text-lg">Necesito tu permiso para tomar una captura.</p>;
+    case "multiple":
+      return (
+        <ol aria-label="Solicitudes de esta petición" className="m-0 flex list-none flex-col gap-8 p-0">
+          {body.parts.map((part, index) => (
+            <Part key={index} part={part} index={index} actions={actions} />
+          ))}
+        </ol>
+      );
     case "error":
       return (
         <div className="flex max-w-reading flex-col gap-1 border-t-2 border-error pt-3">
@@ -244,7 +293,7 @@ export function ResponseView({ response, actions }: { response: AssistantRespons
         <span className="font-mono text-sm text-muted">{time}</span>
       </div>
       <Body body={response.body} actions={actions} />
-      {response.body.kind !== "error" && <p className="m-0 text-sm text-muted">Origen: {originSentence(response.originLabel)}</p>}
+      {response.body.kind !== "error" && response.body.kind !== "multiple" && <p className="m-0 text-sm text-muted">Origen: {originSentence(response.originLabel)}</p>}
     </article>
   );
 }

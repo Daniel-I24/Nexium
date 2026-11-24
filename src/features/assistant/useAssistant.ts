@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { barStateFromStage, type BarState } from "@/features/voice/barState";
 import { TRACE_BARS } from "@/features/voice/LevelTrace";
 import { api, errorMessage, events } from "@/services/api";
-import type { AssistantResponse, DocumentCandidate, DocumentTask, ReminderOption, Section, SuggestedRequest } from "@/types/api";
+import type { AssistantResponse, DocumentCandidate, DocumentTask, InteractionStatus, PartResponse, ReminderOption, ResponseBody, Section, SuggestedRequest } from "@/types/api";
 
 export type FolderChoice = "known" | "pick";
 
@@ -17,12 +17,28 @@ let nextLocalId = -1;
 
 /** La última operación, con lo necesario para repetirla tal cual. */
 type Operation =
-  | { kind: "text"; text: string; continues: number | null }
+  | { kind: "text"; text: string; continues: number | null; part: number | null }
   | { kind: "voice" }
-  | { kind: "capture"; question: string; continues: number | null }
-  | { kind: "document"; candidate: DocumentCandidate; task: DocumentTask; continues: number | null }
-  | { kind: "reminder"; content: string; dueAt: string }
-  | { kind: "folders"; choice: FolderChoice; request: string };
+  | { kind: "capture"; question: string; continues: number | null; part: number | null }
+  | { kind: "document"; candidate: DocumentCandidate; task: DocumentTask; continues: number | null; part: number | null }
+  | { kind: "reminder"; content: string; dueAt: string; part: number | null }
+  | { kind: "folders"; choice: FolderChoice; request: string; part: number | null };
+
+/** El estado de una petición con varias partes, como lo calcula el núcleo (`combine_parts`). */
+export function combinedStatus(parts: PartResponse[]): InteractionStatus {
+  const all = (status: InteractionStatus) => parts.every((part) => part.status === status);
+  if (parts.some((part) => part.status === "pending")) return "pending";
+  if (all("failed")) return "failed";
+  if (all("cancelled")) return "cancelled";
+  return "completed";
+}
+
+/** Cambia una parte de la respuesta actual, si sigue siendo la misma petición. */
+function withPart(current: AssistantResponse | null, id: number, index: number, change: Partial<PartResponse>): AssistantResponse | null {
+  if (!current || current.id !== id || current.body.kind !== "multiple") return current;
+  const parts = current.body.parts.map((part, position) => (position === index ? { ...part, ...change } : part));
+  return { ...current, status: combinedStatus(parts), body: { kind: "multiple", parts } };
+}
 
 /** Lo que se intentó y por qué falló, para que no desaparezca de la conversación. */
 function failedAttempt(request: string, error: unknown): AssistantResponse {
@@ -75,6 +91,10 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   const pendingId = useRef<number | null>(null);
   /** La entrada que continúa la captura, si la pidió una solicitud ("¿qué hay en mi pantalla?"). */
   const captureContinues = useRef<number | null>(null);
+  /** Y la parte, si la pidió una parte de una petición con varias solicitudes. */
+  const capturePart = useRef<number | null>(null);
+  /** La petición que se muestra, para las operaciones que no dependen de su contenido. */
+  const currentIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     navigateRef.current = onNavigate;
@@ -88,39 +108,76 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     return () => subscriptions.forEach((subscription) => void subscription.then((unlisten) => unlisten()));
   }, []);
 
-  const present = useCallback((response: AssistantResponse) => {
-    if (response.status === "cancelled") {
-      setBar({ kind: "idle" });
-      return;
-    }
-    pendingId.current = response.status === "pending" && response.id > 0 ? response.id : null;
-    // Si completa la solicitud en curso, la sustituye: una solicitud, una sola respuesta.
-    setSession(({ current: previous, tape: entries }) => ({
-      current: response,
-      tape: previous && previous.id !== response.id ? [...entries, previous].slice(-TAPE_LENGTH) : entries,
-    }));
-    const { body } = response;
+  /** La barra según lo que pide una respuesta: una aclaración, un permiso para capturar, un error… */
+  const barFor = useCallback((body: ResponseBody, id: number, part: number | null) => {
     if (body.kind === "reminderDraft" && body.question) {
       setBar({ kind: "clarify" });
     } else if (body.kind === "clarification") {
       setBar({ kind: "clarify" });
     } else if (body.kind === "captureRequest") {
-      captureContinues.current = response.id > 0 ? response.id : null;
+      captureContinues.current = id > 0 ? id : null;
+      capturePart.current = part;
       void requestCaptureRef.current(body.question);
     } else if (body.kind === "navigate") {
       setBar({ kind: "idle" });
       navigateRef.current?.(body.section);
     } else if (body.kind === "error") {
       setBar({ kind: "error", message: null, retryable: !notRetryable.has(body.code) });
+    } else if (body.kind === "multiple") {
+      // Cada parte muestra su resultado, su error o su pregunta en su bloque. Solo la captura necesita la barra.
+      const capture = body.parts.findIndex((candidate) => candidate.body.kind === "captureRequest");
+      const captureBody = body.parts[capture]?.body;
+      const navigation = body.parts.find((candidate) => candidate.body.kind === "navigate")?.body;
+      setBar({ kind: "idle" });
+      if (captureBody?.kind === "captureRequest") {
+        captureContinues.current = id > 0 ? id : null;
+        capturePart.current = capture;
+        void requestCaptureRef.current(captureBody.question);
+      }
+      if (navigation?.kind === "navigate") navigateRef.current?.(navigation.section);
     } else {
       setBar({ kind: "idle" });
     }
   }, []);
 
+  const present = useCallback(
+    (response: AssistantResponse) => {
+      // La continuación de una parte solo cambia su bloque.
+      if (response.part !== undefined) {
+        const index = response.part;
+        const { category, status, originLabel, summary, body } = response;
+        setSession((session) => ({ ...session, current: withPart(session.current, response.id, index, { category, status, originLabel, summary, body }) }));
+        if (status === "cancelled") setBar({ kind: "idle" });
+        else barFor(body, response.id, index);
+        return;
+      }
+      if (response.status === "cancelled") {
+        setBar({ kind: "idle" });
+        return;
+      }
+      pendingId.current = response.status === "pending" && response.id > 0 ? response.id : null;
+      // Si completa la solicitud en curso, la sustituye: una solicitud, una sola respuesta.
+      setSession(({ current: previous, tape: entries }) => ({
+        current: response,
+        tape: previous && previous.id !== response.id ? [...entries, previous].slice(-TAPE_LENGTH) : entries,
+      }));
+      barFor(response.body, response.id, null);
+    },
+    [barFor],
+  );
+
   /** Sin solicitud, el error solo cabe en la barra. Con ella, queda en la conversación junto a lo que se intentó. */
   const fail = useCallback(
-    (error: unknown, request?: string) => {
-      if (request) {
+    (error: unknown, request?: string, part: { id: number; index: number } | null = null) => {
+      if (part) {
+        // Una parte que falla queda en su bloque, con el motivo; las demás no cambian.
+        const message = errorMessage(error);
+        setSession((session) => ({
+          ...session,
+          current: withPart(session.current, part.id, part.index, { status: "failed", summary: message, body: { kind: "error", code: "failed", message, hint: null } }),
+        }));
+        setBar({ kind: "error", message: null, retryable: true });
+      } else if (request) {
         const attempt = failedAttempt(request, error);
         present(attempt);
         void recordFailure(request, attempt.summary);
@@ -130,12 +187,12 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   );
 
   const submit = useCallback(
-    async (text: string, continues: number | null = null) => {
-      lastOperation.current = { kind: "text", text, continues };
+    async (text: string, continues: number | null = null, part: number | null = null) => {
+      lastOperation.current = { kind: "text", text, continues, part };
       try {
-        present(await api.submitRequest(text, continues));
+        present(await api.submitRequest(text, continues, part));
       } catch (error) {
-        fail(error, text);
+        fail(error, text, part !== null && continues !== null ? { id: continues, index: part } : null);
       }
     },
     [fail, present],
@@ -167,7 +224,18 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   }, [stopListening]);
 
   /** "Cancelar" en un permiso de la conversación: no se hizo ni se envió nada. */
-  const dismissCurrent = useCallback((message: string) => {
+  const dismissCurrent = useCallback((message: string, part: number | null = null) => {
+    if (part !== null) {
+      // Cancelar el permiso de una parte no cancela las demás.
+      const id = currentIdRef.current;
+      if (id !== null) void api.cancelEntry(id, part).catch(() => undefined);
+      setSession((session) => ({
+        ...session,
+        current: session.current && withPart(session.current, session.current.id, part, { status: "cancelled", summary: message, body: { kind: "text", text: message } }),
+      }));
+      setBar({ kind: "idle" });
+      return;
+    }
     if (pendingId.current !== null) void api.cancelEntry(pendingId.current).catch(() => undefined);
     pendingId.current = null;
     setSession((session) =>
@@ -181,6 +249,8 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     setBar({ kind: "idle" });
     if (kind === "listening") await api.cancelVoice().catch(fail);
     else if (kind === "processing" || kind === "responding") await api.cancel().catch(fail);
+    // Cancelar el permiso de captura de una parte cierra solo esa parte.
+    else if (kind === "captureConsent" && capturePart.current !== null) dismissCurrent("Cancelado.", capturePart.current);
     // Cancelar una pregunta o un permiso pendiente cierra su solicitud como cancelada.
     else if ((kind === "clarify" || kind === "captureConsent") && pendingId.current !== null) dismissCurrent("Cancelado.");
   }, [bar.kind, fail, dismissCurrent]);
@@ -188,6 +258,7 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   /** Desde el botón Analizar pantalla no continúa ninguna solicitud; desde la conversación, sí (ver present). */
   const analyzeScreenButton = useCallback(() => {
     captureContinues.current = null;
+    capturePart.current = null;
     void requestCaptureRef.current(CAPTURE_REQUEST);
   }, []);
 
@@ -195,7 +266,7 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     async (question: string = CAPTURE_REQUEST) => {
       captureQuestion.current = question;
       // Una captura nunca se repite sola: el reintento vuelve a pedir permiso, para la misma pregunta y entrada.
-      lastOperation.current = { kind: "capture", question, continues: captureContinues.current };
+      lastOperation.current = { kind: "capture", question, continues: captureContinues.current, part: capturePart.current };
       try {
         const { provider } = await api.getSettings();
         setBar({ kind: "captureConsent", provider: provider.displayName, notice: provider.dataNotice });
@@ -213,23 +284,29 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   const confirmCapture = useCallback(async () => {
     setBar({ kind: "processing", step: "Tomando una sola captura…" });
     try {
-      present(await api.analyzeScreen(captureQuestion.current, captureContinues.current));
+      present(await api.analyzeScreen(captureQuestion.current, captureContinues.current, capturePart.current));
     } catch (error) {
-      fail(error, captureQuestion.current);
+      const id = captureContinues.current;
+      fail(error, captureQuestion.current, capturePart.current !== null && id !== null ? { id, index: capturePart.current } : null);
     }
   }, [fail, present]);
 
 
   const currentId = current?.id ?? null;
 
+  useEffect(() => {
+    currentIdRef.current = currentId;
+  }, [currentId]);
+
   const saveReminder = useCallback(
-    async (content: string, dueAt: string) => {
-      lastOperation.current = { kind: "reminder", content, dueAt };
+    async (content: string, dueAt: string, part: number | null = null) => {
+      lastOperation.current = { kind: "reminder", content, dueAt, part };
       try {
-        const reminder = await api.createReminder(content, dueAt, currentId);
+        const reminder = await api.createReminder(content, dueAt, currentId, part);
+        const saved = { status: "completed", summary: `Guardado: ${reminder.content}`, body: { kind: "reminderSaved", reminder } } as const;
         setSession((session) => ({
           ...session,
-          current: session.current ? { ...session.current, status: "completed", summary: `Guardado: ${reminder.content}`, body: { kind: "reminderSaved", reminder } } : null,
+          current: part !== null && session.current ? withPart(session.current, session.current.id, part, saved) : session.current ? { ...session.current, ...saved } : null,
         }));
         setBar({ kind: "idle" });
       } catch (error) {
@@ -240,38 +317,45 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   );
 
   const chooseReminderOption = useCallback(
-    (option: ReminderOption) => {
-      if (current?.body.kind === "reminderDraft") void saveReminder(current.body.content, option.dueAt);
+    (option: ReminderOption, part: number | null = null) => {
+      const body = part !== null && current?.body.kind === "multiple" ? current.body.parts[part]?.body : current?.body;
+      if (body?.kind === "reminderDraft") void saveReminder(body.content, option.dueAt, part);
     },
     [current, saveReminder],
   );
 
-  const chooseSuggestion = useCallback((suggestion: SuggestedRequest) => void submit(suggestion.request, pendingId.current), [submit]);
+  /** Una sugerencia, una ciudad o un permiso continúan la solicitud pendiente, o la parte en la que se eligió. */
+  const continuationOf = useCallback((part: number | null) => (part !== null ? currentId : pendingId.current), [currentId]);
+
+  const chooseSuggestion = useCallback(
+    (suggestion: SuggestedRequest, part: number | null = null) => void submit(suggestion.request, continuationOf(part), part),
+    [continuationOf, submit],
+  );
 
   /** Da permiso (Documentos y Escritorio, u otra carpeta elegida en el sistema) y continúa la solicitud sola. */
   const authorizeFolders = useCallback(
-    async (choice: FolderChoice, pendingRequest: string) => {
-      lastOperation.current = { kind: "folders", choice, request: pendingRequest };
+    async (choice: FolderChoice, pendingRequest: string, part: number | null = null) => {
+      lastOperation.current = { kind: "folders", choice, request: pendingRequest, part };
       try {
         const folders = choice === "known" ? await api.allowKnownFolders() : await api.pickFolder();
-        if (folders) await submit(pendingRequest, pendingId.current);
+        if (folders) await submit(pendingRequest, continuationOf(part), part);
       } catch (error) {
         fail(error);
       }
     },
-    [fail, submit],
+    [continuationOf, fail, submit],
   );
 
   /** Lee el archivo confirmado y lo envía a resumir o analizar. */
   const analyzeDocument = useCallback(
-    async (candidate: DocumentCandidate, task: DocumentTask, continues: number | null = pendingId.current) => {
+    async (candidate: DocumentCandidate, task: DocumentTask, continues: number | null = pendingId.current, part: number | null = null) => {
       // El archivo ya está confirmado: el reintento lo vuelve a leer y enviar, en la misma entrada.
-      lastOperation.current = { kind: "document", candidate, task, continues };
+      lastOperation.current = { kind: "document", candidate, task, continues, part };
       setBar(barStateFromStage("reading"));
       try {
-        present(await api.analyzeDocument(candidate.token, task, continues));
+        present(await api.analyzeDocument(candidate.token, task, continues, part));
       } catch (error) {
-        fail(error, `${task === "summarize" ? "Resumen" : "Análisis"} de «${candidate.name}${candidate.extension}»`);
+        fail(error, `${task === "summarize" ? "Resumen" : "Análisis"} de «${candidate.name}${candidate.extension}»`, part !== null && continues !== null ? { id: continues, index: part } : null);
       }
     },
     [fail, present],
@@ -288,14 +372,15 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   const retry = useCallback(() => {
     const operation = lastOperation.current;
     if (!operation) return;
-    if (operation.kind === "text") void submit(operation.text, operation.continues);
+    if (operation.kind === "text") void submit(operation.text, operation.continues, operation.part);
     else if (operation.kind === "voice") void speak();
     else if (operation.kind === "capture") {
       captureContinues.current = operation.continues;
+      capturePart.current = operation.part;
       void requestCapture(operation.question);
-    } else if (operation.kind === "document") void analyzeDocument(operation.candidate, operation.task, operation.continues);
-    else if (operation.kind === "reminder") void saveReminder(operation.content, operation.dueAt);
-    else void authorizeFolders(operation.choice, operation.request);
+    } else if (operation.kind === "document") void analyzeDocument(operation.candidate, operation.task, operation.continues, operation.part);
+    else if (operation.kind === "reminder") void saveReminder(operation.content, operation.dueAt, operation.part);
+    else void authorizeFolders(operation.choice, operation.request, operation.part);
   }, [analyzeDocument, authorizeFolders, requestCapture, saveReminder, speak, submit]);
 
   return {
