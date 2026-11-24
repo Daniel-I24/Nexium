@@ -69,7 +69,10 @@ jobs:
           echo 'Acquire::http::Timeout "30"; Acquire::https::Timeout "30"; Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/99nexium-reintentos
           # El espejo de EC2 que a veces asigna GitHub llegó a servir los paquetes a 10-20 s cada uno; el de Azure,
           # donde se ejecutan los servidores de GitHub, es el habitual y responde bien.
-          sudo sed -i -E 's#https?://[a-z0-9.-]*archive\.ubuntu\.com/ubuntu#http://azure.archive.ubuntu.com/ubuntu#g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true
+          # Los servidores de GitHub toman los espejos de /etc/apt/apt-mirrors.txt: se deja solo el de Azure.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then echo "http://azure.archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt; fi
+          sudo sed -i -E 's#https?://[a-z0-9.-]*ec2\.archive\.ubuntu\.com/ubuntu#http://azure.archive.ubuntu.com/ubuntu#g' /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
+          grep -rh "^URIs\|^deb " /etc/apt/sources.list.d/ /etc/apt/sources.list 2>/dev/null | sort -u
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev \
             libayatana-appindicator3-dev librsvg2-dev libasound2-dev cmake pkg-config libclang-dev libxcb1-dev \
