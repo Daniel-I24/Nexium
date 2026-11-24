@@ -46,6 +46,9 @@ jobs:
         run: |
           # Un espejo de Ubuntu llegó a quedarse colgado a mitad de un paquete: sin respuesta en 30 s, se reintenta.
           echo 'Acquire::http::Timeout "30"; Acquire::https::Timeout "30"; Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/99nexium-reintentos
+          # El espejo de EC2 que a veces asigna GitHub llegó a servir los paquetes a 10-20 s cada uno; el de Azure,
+          # donde se ejecutan los servidores de GitHub, es el habitual y responde bien.
+          sudo sed -i -E 's#https?://[a-z0-9.-]*archive\.ubuntu\.com/ubuntu#http://azure.archive.ubuntu.com/ubuntu#g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev \
             libayatana-appindicator3-dev librsvg2-dev libasound2-dev cmake pkg-config libclang-dev libxcb1-dev \
