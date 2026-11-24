@@ -13,7 +13,13 @@
   - [x] Pruebas: 24 combinaciones de división local, casos que no se dividen o van a la IA, por texto y por voz, continuación de cada parte, historial y contratos; comprobado con la IA real (batería + recordatorio, y «¿Y en Cali?»)
 - [x] **«Reintentar» repetía otra operación:** tras fallar el análisis de pantalla abría el micrófono, porque solo se recordaba la última solicitud escrita. Ahora repite exactamente la última operación (la captura vuelve a pedir permiso), con pruebas de cada caso
 - [x] **Análisis de pantalla:** causa en Google (503 y respuestas lentas del modelo principal) y un solo reintento en el Worker; corrección y 15 mediciones en `docs/RENDIMIENTO.md`
-- [ ] **Publicación:** etiqueta v1.0.2, Release comprobada y actualización real desde la 1.0.1
+- [x] **Publicación:** [Release v1.0.2](https://github.com/Daniel-I24/Nexium/releases/tag/v1.0.2)
+  - [x] CI en verde en Windows, macOS, Linux y el servidor; Worker desplegado (compatible con la 1.0.1)
+  - [x] Release con los cinco instaladores, sus `.sig`, los `.app.tar.gz` y `latest.json` (1.0.2, nueve entradas firmadas); notas con la tabla de descarga y las novedades; ggml-cpu sin AVX-512 en los cuatro sistemas
+  - [x] Actualización real: la 1.0.1 instalada encontró la 1.0.2, la instaló y se reinició en la 1.0.2 («Tienes la última versión, la 1.0.2.»)
+  - [x] En la ventana real de la 1.0.2: «¿A qué red Wi-Fi estoy conectado? Y dame el clima de la ciudad en la que me encuentro» responde las dos partes (red y clima de Pasto); tres órdenes en una frase, en local; el Historial muestra cada parte con su estado; «Reintentar» tras un error repite la misma solicitud escrita. Las entradas de estas pruebas y de las 15 mediciones se borraron del historial
+  - [ ] Prueba final del propietario
+- **CI:** el paso de dependencias de Linux se colgaba con el espejo de Ubuntu de EC2 (más de 25 minutos); ahora usa el de Azure y tarda unos 40 s.
 
 ## Versión 1.0.1: lista de verificación
 
