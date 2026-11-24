@@ -15,6 +15,15 @@ const notRetryable = new Set(["quotaExhausted", "notConfigured", "regionUnavaila
 /** Identificadores negativos: un intento fallido en la interfaz nunca coincide con uno del historial. */
 let nextLocalId = -1;
 
+/** La última operación, con lo necesario para repetirla tal cual. */
+type Operation =
+  | { kind: "text"; text: string; continues: number | null }
+  | { kind: "voice" }
+  | { kind: "capture"; question: string; continues: number | null }
+  | { kind: "document"; candidate: DocumentCandidate; task: DocumentTask; continues: number | null }
+  | { kind: "reminder"; content: string; dueAt: string }
+  | { kind: "folders"; choice: FolderChoice; request: string };
+
 /** Lo que se intentó y por qué falló, para que no desaparezca de la conversación. */
 function failedAttempt(request: string, error: unknown): AssistantResponse {
   const message = errorMessage(error);
@@ -54,7 +63,11 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   const [bar, setBar] = useState<BarState>({ kind: "idle" });
   const [levels, setLevels] = useState<number[]>([]);
   const [{ current, tape }, setSession] = useState<Session>({ current: null, tape: [] });
-  const lastRequest = useRef<string | null>(null);
+  /**
+   * Cómo repetir exactamente la última operación, para «Reintentar»: la solicitud escrita, la grabación, la
+   * captura (que vuelve a pedir permiso), el documento confirmado, el recordatorio o el permiso de carpetas.
+   */
+  const lastOperation = useRef<Operation | null>(null);
   const captureQuestion = useRef(CAPTURE_REQUEST);
   const requestCaptureRef = useRef<(question: string) => Promise<void>>(() => Promise.resolve());
   const navigateRef = useRef(onNavigate);
@@ -118,7 +131,7 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
 
   const submit = useCallback(
     async (text: string, continues: number | null = null) => {
-      lastRequest.current = text;
+      lastOperation.current = { kind: "text", text, continues };
       try {
         present(await api.submitRequest(text, continues));
       } catch (error) {
@@ -130,7 +143,7 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
 
   const speak = useCallback(async () => {
     setLevels([]);
-    lastRequest.current = null;
+    lastOperation.current = { kind: "voice" };
     try {
       await api.startVoice();
     } catch (error) {
@@ -181,6 +194,8 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   const requestCapture = useCallback(
     async (question: string = CAPTURE_REQUEST) => {
       captureQuestion.current = question;
+      // Una captura nunca se repite sola: el reintento vuelve a pedir permiso, para la misma pregunta y entrada.
+      lastOperation.current = { kind: "capture", question, continues: captureContinues.current };
       try {
         const { provider } = await api.getSettings();
         setBar({ kind: "captureConsent", provider: provider.displayName, notice: provider.dataNotice });
@@ -204,15 +219,12 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
     }
   }, [fail, present]);
 
-  const retry = useCallback(() => {
-    if (lastRequest.current) void submit(lastRequest.current);
-    else void speak();
-  }, [speak, submit]);
 
   const currentId = current?.id ?? null;
 
   const saveReminder = useCallback(
     async (content: string, dueAt: string) => {
+      lastOperation.current = { kind: "reminder", content, dueAt };
       try {
         const reminder = await api.createReminder(content, dueAt, currentId);
         setSession((session) => ({
@@ -239,6 +251,7 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   /** Da permiso (Documentos y Escritorio, u otra carpeta elegida en el sistema) y continúa la solicitud sola. */
   const authorizeFolders = useCallback(
     async (choice: FolderChoice, pendingRequest: string) => {
+      lastOperation.current = { kind: "folders", choice, request: pendingRequest };
       try {
         const folders = choice === "known" ? await api.allowKnownFolders() : await api.pickFolder();
         if (folders) await submit(pendingRequest, pendingId.current);
@@ -251,10 +264,12 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
 
   /** Lee el archivo confirmado y lo envía a resumir o analizar. */
   const analyzeDocument = useCallback(
-    async (candidate: DocumentCandidate, task: DocumentTask) => {
+    async (candidate: DocumentCandidate, task: DocumentTask, continues: number | null = pendingId.current) => {
+      // El archivo ya está confirmado: el reintento lo vuelve a leer y enviar, en la misma entrada.
+      lastOperation.current = { kind: "document", candidate, task, continues };
       setBar(barStateFromStage("reading"));
       try {
-        present(await api.analyzeDocument(candidate.token, task, pendingId.current));
+        present(await api.analyzeDocument(candidate.token, task, continues));
       } catch (error) {
         fail(error, `${task === "summarize" ? "Resumen" : "Análisis"} de «${candidate.name}${candidate.extension}»`);
       }
@@ -265,9 +280,23 @@ export function useAssistant({ onNavigate }: AssistantOptions = {}) {
   /** Borrar todo el historial vacía también la conversación visible. */
   const clearConversation = useCallback(() => {
     setSession({ current: null, tape: [] });
-    lastRequest.current = null;
+    lastOperation.current = null;
   }, []);
 
+
+  /** «Reintentar» repite exactamente la última operación. Una captura vuelve a pedir permiso. */
+  const retry = useCallback(() => {
+    const operation = lastOperation.current;
+    if (!operation) return;
+    if (operation.kind === "text") void submit(operation.text, operation.continues);
+    else if (operation.kind === "voice") void speak();
+    else if (operation.kind === "capture") {
+      captureContinues.current = operation.continues;
+      void requestCapture(operation.question);
+    } else if (operation.kind === "document") void analyzeDocument(operation.candidate, operation.task, operation.continues);
+    else if (operation.kind === "reminder") void saveReminder(operation.content, operation.dueAt);
+    else void authorizeFolders(operation.choice, operation.request);
+  }, [analyzeDocument, authorizeFolders, requestCapture, saveReminder, speak, submit]);
 
   return {
     bar,

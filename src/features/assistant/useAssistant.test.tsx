@@ -220,3 +220,90 @@ describe("useAssistant", () => {
     expect(ids.every((id) => id !== undefined && id < 0)).toBe(true);
   });
 });
+
+describe("Reintentar repite exactamente la operación que falló", () => {
+  beforeEach(() => invoke.mockReset());
+  const settings = { provider: { displayName: "Google Gemini", dataNotice: "Aviso." } };
+  const unavailable = reply({ kind: "error", code: "unavailable", message: "El servidor de IA no responde.", hint: null }, "failed");
+
+  it("tras fallar el análisis de pantalla, vuelve a pedir permiso para capturar y nunca abre el micrófono", async () => {
+    invoke.mockImplementation((command: string) => Promise.resolve(command === "settings_get" ? settings : unavailable));
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("hola"));
+    act(() => result.current.analyzeScreenButton());
+    await waitFor(() => expect(result.current.bar.kind).toBe("captureConsent"));
+    await act(() => result.current.confirmCapture());
+    expect(result.current.bar).toMatchObject({ kind: "error", retryable: true });
+    invoke.mockClear();
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.bar.kind).toBe("captureConsent"));
+    expect(invoke).not.toHaveBeenCalledWith("voice_start");
+    expect(invoke).not.toHaveBeenCalledWith("screen_analyze", expect.anything());
+    await act(() => result.current.confirmCapture());
+    expect(invoke).toHaveBeenCalledWith("screen_analyze", { question: "Analiza lo que aparece en mi pantalla", continues: null });
+  });
+
+  it("una captura pedida en la conversación se reintenta para la misma pregunta y la misma entrada", async () => {
+    invoke.mockImplementation((command: string) =>
+      Promise.resolve(command === "settings_get" ? settings : command === "screen_analyze" ? unavailable : { ...reply({ kind: "captureRequest", question: "¿Qué es este error?" }, "pending"), id: 7 }),
+    );
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("Explícame este error"));
+    await waitFor(() => expect(result.current.bar.kind).toBe("captureConsent"));
+    await act(() => result.current.confirmCapture());
+    invoke.mockClear();
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.bar.kind).toBe("captureConsent"));
+    await act(() => result.current.confirmCapture());
+    expect(invoke).toHaveBeenCalledWith("screen_analyze", { question: "¿Qué es este error?", continues: 7 });
+  });
+
+  it("una solicitud escrita se repite con el mismo texto", async () => {
+    invoke.mockResolvedValue(unavailable);
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("¿Qué tiempo hace en Cali?"));
+    invoke.mockClear();
+    act(() => result.current.retry());
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("assistant_submit", { text: "¿Qué tiempo hace en Cali?", continues: null }));
+    expect(invoke).not.toHaveBeenCalledWith("voice_start");
+  });
+
+  it("una orden por voz vuelve a abrir el micrófono", async () => {
+    invoke.mockRejectedValueOnce("Falta el modelo de voz.");
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.speak());
+    invoke.mockClear().mockResolvedValue(undefined);
+    act(() => result.current.retry());
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("voice_start"));
+  });
+
+  it("un documento confirmado se vuelve a enviar, el mismo y en la misma entrada", async () => {
+    invoke.mockResolvedValue(unavailable);
+    const { result } = renderHook(() => useAssistant());
+    const candidate = { token: "t-1", name: "informe", extension: ".pdf", location: "Documentos", sizeBytes: 10, modified: null, matchedBy: "name" } as never;
+    await act(() => result.current.analyzeDocument(candidate, "summarize"));
+    invoke.mockClear();
+    act(() => result.current.retry());
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("document_analyze", { token: "t-1", task: "summarize", continues: null }));
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("un recordatorio que no se pudo guardar se vuelve a guardar con los mismos datos", async () => {
+    invoke.mockRejectedValueOnce("La base de datos local quedó bloqueada.");
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.saveReminder("Tomar agua", "2026-12-01T10:00:00-05:00"));
+    invoke.mockClear().mockResolvedValue({ id: 1, content: "Tomar agua", dueAt: "2026-12-01T10:00:00-05:00", status: "pending" });
+    act(() => result.current.retry());
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith("reminders_create", { content: "Tomar agua", dueAt: "2026-12-01T10:00:00-05:00", historyId: null }));
+  });
+
+  it("tras vaciar la conversación, Reintentar no repite nada", async () => {
+    invoke.mockResolvedValue(unavailable);
+    const { result } = renderHook(() => useAssistant());
+    await act(() => result.current.submit("hola"));
+    act(() => result.current.clearConversation());
+    invoke.mockClear();
+    act(() => result.current.retry());
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});

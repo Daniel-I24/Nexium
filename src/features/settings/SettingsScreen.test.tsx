@@ -49,6 +49,13 @@ describe("Ajustes: modelos de voz", () => {
     expect(screen.getByRole("radio", { name: /^Preciso/ })).toBeDisabled();
   });
 
+  it("«Volver a descargar» repite la descarga de ese mismo modelo", async () => {
+    invoke.mockResolvedValue(view({ speechModels: [model({ id: "base", displayName: "Rápido", damaged: true })] }));
+    render(<SettingsScreen />);
+    await userEvent.click(await screen.findByRole("button", { name: "Volver a descargar" }));
+    expect(invoke).toHaveBeenCalledWith("speech_model_download", { modelId: "base" });
+  });
+
   it("ofrece el modo automático y explica qué eligió y por qué", async () => {
     invoke.mockResolvedValue(view({ speechModels: [model({ downloaded: true }), model({ id: "base", displayName: "Rápido", description: "Responde antes.", sizeMb: 57, downloaded: true, isActive: false })] }));
     render(<SettingsScreen />);
