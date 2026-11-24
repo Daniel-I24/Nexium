@@ -23,10 +23,11 @@ export interface Attempt {
 }
 
 /**
- * Orden de los intentos del análisis. El modelo principal de visión a veces está saturado (503) o tarda: entonces
- * se pasa al de respaldo, que se repite una vez tras una pausa, y se vuelve al principal si aún queda tiempo.
+ * Orden de los intentos del análisis: principal, respaldo, principal tras una pausa y respaldo. El principal es el
+ * modelo rápido (gemini-3.5-flash-lite): en 8 análisis medidos respondió bien 7 veces, en 0,8 a 4 s, mientras que
+ * gemini-3.6-flash dio 503 o no respondió en 25 s las 8 veces. Este queda de respaldo.
  */
-const ANALYZE_PLAN = ["model", "fallback", "fallback", "model"] as const;
+const ANALYZE_PLAN = ["model", "fallback", "model", "fallback"] as const;
 
 export interface Upstream {
   model: string;

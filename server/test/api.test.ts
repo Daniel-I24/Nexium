@@ -100,7 +100,7 @@ describe("operaciones", () => {
     const response = await handleRequest(capture(JPEG, 'Dime "qué" es \\ esto'), testEnv());
     expect(await response.json()).toEqual({ output: "Un error de ruta.", tokens: 42 });
     const sent = JSON.parse(await ((spy.mock.calls[0] as [string, RequestInit])[1].body as Blob).text());
-    expect(sent.model).toBe("gemini-3.6-flash");
+    expect(sent.model).toBe("gemini-3.5-flash-lite");
     expect(sent.response_format).toMatchObject({ mime_type: "application/json", schema: { required: ["summary", "cause", "steps"] } });
     expect(sent.system_instruction).toContain("sin formato Markdown");
     expect(sent.system_instruction).toContain("Describe únicamente lo que se ve en la imagen");
@@ -450,25 +450,25 @@ describe("errores de Google", () => {
     expect(text).not.toContain("detalle interno");
   });
 
-  it("en el análisis, un 503 pasa al modelo de respaldo con la imagen completa", async () => {
+  it("en el análisis, un 503 del modelo rápido pasa al de respaldo con la imagen completa", async () => {
     const log = vi.spyOn(console, "log");
     const spy = geminiReplies(failure(503, "service_unavailable"), success("ok"));
     const response = await handleRequest(capture(), testEnv());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ output: "ok", tokens: 42 });
     const sent = await Promise.all(spy.mock.calls.map(([, init]) => ((init as RequestInit).body as Blob).text().then((text) => JSON.parse(text))));
-    expect(sent.map((body) => body.model)).toEqual(["gemini-3.6-flash", "gemini-3.5-flash-lite"]);
+    expect(sent.map((body) => body.model)).toEqual(["gemini-3.5-flash-lite", "gemini-3.6-flash"]);
     expect(sent[1].input[1].data).toBe(JPEG);
-    expect(JSON.parse(log.mock.calls.flat().join(" "))).toMatchObject({ operation: "analyze", code: "ok", model: "gemini-3.5-flash-lite" });
+    expect(JSON.parse(log.mock.calls.flat().join(" "))).toMatchObject({ operation: "analyze", code: "ok", model: "gemini-3.6-flash" });
   });
 
-  it("en el análisis, si los dos modelos dan 503, se reintenta tras una pausa y puede salir bien", async () => {
+  it("en el análisis, si los dos modelos dan 503, se vuelve al principal tras una pausa y puede salir bien", async () => {
     const log = vi.spyOn(console, "log");
     const spy = geminiReplies(failure(503, "service_unavailable"), failure(503, "service_unavailable"), success("ok"));
     const response = await handleRequest(capture(), testEnv());
     expect(response.status).toBe(200);
     const sent = await Promise.all(spy.mock.calls.map(([, init]) => ((init as RequestInit).body as Blob).text().then((text) => JSON.parse(text))));
-    expect(sent.map((body) => body.model)).toEqual(["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash-lite"]);
+    expect(sent.map((body) => body.model)).toEqual(["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash-lite"]);
     const metric = JSON.parse(log.mock.calls.flat().join(" "));
     expect(metric.attempts.map((attempt: { result: unknown }) => attempt.result)).toEqual([503, 503, 200]);
   });
@@ -482,7 +482,7 @@ describe("errores de Google", () => {
     expect(await errorOf(response)).toBe("unavailable");
     expect(spy).toHaveBeenCalledTimes(4);
     const metric = JSON.parse(log.mock.calls.flat().join(" "));
-    expect(metric.attempts.map((attempt: { model: string }) => attempt.model)).toEqual(["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash-lite", "gemini-3.6-flash"]);
+    expect(metric.attempts.map((attempt: { model: string }) => attempt.model)).toEqual(["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]);
     expect(metric.bytes).toBeGreaterThan(0);
     expect(JSON.stringify(metric)).not.toContain(JPEG);
   }, 10_000);

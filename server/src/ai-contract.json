@@ -132,8 +132,8 @@
     }
   },
   "analyze": {
-    "model": "gemini-3.6-flash",
-    "fallbackModel": "gemini-3.5-flash-lite",
+    "model": "gemini-3.5-flash-lite",
+    "fallbackModel": "gemini-3.6-flash",
     "timeoutMs": 25000,
     "totalTimeoutMs": 70000,
     "maxOutputTokens": 2048,
