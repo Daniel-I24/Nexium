@@ -113,6 +113,47 @@ describe("operaciones", () => {
   });
 });
 
+describe("varias acciones en una petición", () => {
+  const multi = (text: string) => post("/v1/interpret", { text, now: NOW, actions: true });
+  const actions = (list: unknown[]) => success(JSON.stringify({ actions: list }));
+
+  it("con actions pide una lista de 1 a 4 acciones, cada una con su fragmento", async () => {
+    const spy = geminiReplies(actions([{ intent: "system", request: "¿A qué red Wi-Fi estoy conectado?" }, { intent: "weather", request: "dame el clima" }]));
+    const response = await handleRequest(multi("¿A qué red Wi-Fi estoy conectado? Y dame el clima"), testEnv());
+    expect(response.status).toBe(200);
+    const sent = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(sent.response_format.schema.properties.actions).toMatchObject({ type: "array", minItems: 1, maxItems: 4 });
+    expect(sent.response_format.schema.properties.actions.items.required).toContain("request");
+    expect(sent.response_format.schema.properties.actions.items.required).toContain("intent");
+    expect(sent.system_instruction).toContain("una acción por cada una, en el orden en que se piden");
+  });
+
+  it("sin actions, como la 1.0.1, sigue pidiendo una sola acción", async () => {
+    const spy = geminiReplies(success('{"intent":"time"}'));
+    expect((await handleRequest(interpret(), testEnv())).status).toBe(200);
+    const sent = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(sent.response_format.schema.properties.intent).toBeDefined();
+    expect(sent.response_format.schema.properties.actions).toBeUndefined();
+    expect(sent.system_instruction).not.toContain("una acción por cada una");
+  });
+
+  it.each([
+    ["sin lista", '{"intent":"time"}'],
+    ["lista vacía", '{"actions":[]}'],
+    ["más de cuatro", JSON.stringify({ actions: Array.from({ length: 5 }, () => ({ intent: "time", request: "hora" })) })],
+    ["acción sin fragmento", '{"actions":[{"intent":"time"}]}'],
+    ["texto que no es JSON", "No entendí"],
+  ])("una respuesta %s no se da por buena", async (_name, output) => {
+    geminiReplies(success(output));
+    expect(await errorOf(await handleRequest(multi("¿Qué hora es?"), testEnv()))).toBe("no_output");
+  });
+
+  it("actions solo admite verdadero o falso", async () => {
+    const response = await handleRequest(post("/v1/interpret", { text: "hola", now: NOW, actions: "sí" }), testEnv());
+    expect(response.status).toBe(400);
+  });
+});
+
 describe("tiempos", () => {
   it("interpretar una orden nunca hace esperar más de 9 s, con reintento incluido", () => {
     expect(contract.interpret.totalTimeoutMs).toBeLessThanOrEqual(9_000);

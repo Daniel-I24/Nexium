@@ -35,6 +35,8 @@ export interface Upstream {
   fallbackModel?: string;
   /** El cuerpo depende del modelo, que va dentro. */
   body: (model: string) => string | Blob;
+  /** Comprueba la respuesta del modelo antes de darla por buena. */
+  validate?: (output: string) => void;
   /** Espera máxima de cada intento. */
   timeoutMs: number;
   /** Espera máxima sumando el segundo intento: la aplicación sigue mostrando que procesa. */
@@ -55,20 +57,58 @@ interface InteractionResponse {
   usage?: { total_tokens?: number };
 }
 
-export function interpretRequest({ text, now }: InterpretInput): Upstream {
-  const { model, timeoutMs, totalTimeoutMs, maxOutputTokens, thinkingLevel, systemInstruction, responseSchema } = contract.interpret;
+/** Como mucho cuatro acciones por petición: más se repiten aparte. */
+export const MAX_ACTIONS = 4;
+
+/** Varias acciones: cada una con el esquema de una sola y el fragmento del texto al que responde. */
+function actionsSchema(item: typeof contract.interpret.responseSchema) {
+  return {
+    type: "object",
+    properties: {
+      actions: {
+        type: "array",
+        minItems: 1,
+        maxItems: MAX_ACTIONS,
+        items: { ...item, properties: { ...item.properties, request: { type: "string" } }, required: [...item.required, "request"] },
+      },
+    },
+    required: ["actions"],
+  };
+}
+
+/** La lista que recibe la app: de 1 a 4 acciones, cada una con su intención y su fragmento. Si no, no se da por buena. */
+export function checkActions(output: string): void {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    throw new ApiError("no_output");
+  }
+  const actions = (parsed as { actions?: unknown })?.actions;
+  const valid =
+    Array.isArray(actions) &&
+    actions.length >= 1 &&
+    actions.length <= MAX_ACTIONS &&
+    actions.every((action) => typeof action?.intent === "string" && typeof action?.request === "string");
+  if (!valid) throw new ApiError("no_output");
+}
+
+export function interpretRequest({ text, now, actions }: InterpretInput): Upstream {
+  const { model, timeoutMs, totalTimeoutMs, maxOutputTokens, thinkingLevel, systemInstruction, multiInstruction, responseSchema } = contract.interpret;
+  const instruction = systemInstruction.replace("{now}", now) + (actions ? `\n${multiInstruction}` : "");
   return {
     model,
     timeoutMs,
     totalTimeoutMs,
+    ...(actions ? { validate: checkActions } : {}),
     body: (chosen) =>
       JSON.stringify({
         model: chosen,
         store: false,
-        system_instruction: systemInstruction.replace("{now}", now),
+        system_instruction: instruction,
         input: text,
         generation_config: { max_output_tokens: maxOutputTokens, thinking_level: thinkingLevel },
-        response_format: { type: "text", mime_type: "application/json", schema: responseSchema },
+        response_format: { type: "text", mime_type: "application/json", schema: actions ? actionsSchema(responseSchema) : responseSchema },
       }),
   };
 }
@@ -167,6 +207,7 @@ async function send(upstream: Upstream, model: string, key: string, timeoutMs: n
     .map((part) => part.text ?? "")
     .join("");
   if (!output.trim()) throw new ApiError("no_output");
+  upstream.validate?.(output);
   return { output, tokens: answer.usage?.total_tokens ?? 0, model };
 }
 
