@@ -462,26 +462,54 @@ describe("errores de Google", () => {
     expect(JSON.parse(log.mock.calls.flat().join(" "))).toMatchObject({ operation: "analyze", code: "ok", model: "gemini-3.5-flash-lite" });
   });
 
-  it("en el análisis, si el respaldo también da 503, no hay un tercer intento", async () => {
+  it("en el análisis, si los dos modelos dan 503, se reintenta tras una pausa y puede salir bien", async () => {
     const log = vi.spyOn(console, "log");
     const spy = geminiReplies(failure(503, "service_unavailable"), failure(503, "service_unavailable"), success("ok"));
     const response = await handleRequest(capture(), testEnv());
-    expect(response.status).toBe(503);
-    expect(await errorOf(response)).toBe("unavailable");
-    expect(spy).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(log.mock.calls.flat().join(" "))).toMatchObject({ upstream: { status: 503, model: "gemini-3.5-flash-lite" } });
+    expect(response.status).toBe(200);
+    const sent = await Promise.all(spy.mock.calls.map(([, init]) => ((init as RequestInit).body as Blob).text().then((text) => JSON.parse(text))));
+    expect(sent.map((body) => body.model)).toEqual(["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash-lite"]);
+    const metric = JSON.parse(log.mock.calls.flat().join(" "));
+    expect(metric.attempts.map((attempt: { result: unknown }) => attempt.result)).toEqual([503, 503, 200]);
   });
 
-  it("en el análisis, otros fallos no se repiten con el mismo modelo", async () => {
-    for (const reply of [failure(500, "internal"), failure(429, "rate_limit_exceeded")]) {
-      const spy = geminiReplies(reply, success("ok"));
-      expect((await handleRequest(capture(), testEnv())).status).not.toBe(200);
-      expect(spy).toHaveBeenCalledTimes(1);
+  it("en el análisis, como mucho cuatro intentos, y el fallo registra cada uno sin contenido", async () => {
+    const log = vi.spyOn(console, "log");
+    const reply = failure(503, "service_unavailable");
+    const spy = geminiReplies(reply, reply, reply, reply, success("ok"));
+    const response = await handleRequest(capture(), testEnv());
+    expect(response.status).toBe(503);
+    expect(await errorOf(response)).toBe("unavailable");
+    expect(spy).toHaveBeenCalledTimes(4);
+    const metric = JSON.parse(log.mock.calls.flat().join(" "));
+    expect(metric.attempts.map((attempt: { model: string }) => attempt.model)).toEqual(["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash-lite", "gemini-3.6-flash"]);
+    expect(metric.bytes).toBeGreaterThan(0);
+    expect(JSON.stringify(metric)).not.toContain(JPEG);
+  }, 10_000);
+
+  it("en el análisis, un tiempo agotado o un error 500 del principal pasan al respaldo", async () => {
+    for (const first of [() => Promise.reject(new DOMException("agotado", "TimeoutError")), () => Promise.resolve(failure(500, "internal")())]) {
+      const spy = vi.spyOn(globalThis, "fetch").mockImplementationOnce(first).mockResolvedValueOnce(success("ok")());
+      expect((await handleRequest(capture(), testEnv())).status).toBe(200);
+      expect(spy).toHaveBeenCalledTimes(2);
       spy.mockRestore();
     }
-    const spy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new DOMException("agotado", "TimeoutError"));
-    expect(await errorOf(await handleRequest(capture(), testEnv()))).toBe("timeout");
+  });
+
+  it("en el análisis, un 429 nunca se repite", async () => {
+    const spy = geminiReplies(failure(429, "rate_limit_exceeded"), success("ok"));
+    expect((await handleRequest(capture(), testEnv())).status).toBe(429);
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("el análisis tiene su propio límite: 25 s por intento, 70 s en total y razonamiento bajo", async () => {
+    expect(contract.analyze.timeoutMs).toBe(25_000);
+    expect(contract.analyze.totalTimeoutMs).toBe(70_000);
+    expect(contract.analyze.thinkingLevel).toBe("low");
+    const spy = geminiReplies(success("ok"));
+    await handleRequest(capture(), testEnv());
+    const sent = JSON.parse(await ((spy.mock.calls[0] as [string, RequestInit])[1].body as Blob).text());
+    expect(sent.generation_config.thinking_level).toBe("low");
   });
 
   it("al interpretar, el éxito registra el modelo y un corte se reintenta con el mismo", async () => {

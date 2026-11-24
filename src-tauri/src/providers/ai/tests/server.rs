@@ -244,6 +244,17 @@ fn the_notice_names_the_server_and_the_use_by_google() {
     assert!(provider.data_notice().contains("Google puede usar"));
 }
 
+/// La app espera siempre más que el servidor, que puede intentar el análisis hasta cuatro veces: si no, cortaría
+/// un análisis que el servidor aún podría completar y mostraría «tardó demasiado».
+#[test]
+fn the_app_waits_longer_than_the_server_for_an_analysis() {
+    let contract: Value =
+        serde_json::from_str(include_str!("../../../../../server/src/ai-contract.json")).unwrap();
+    let server_total = contract["analyze"]["totalTimeoutMs"].as_u64().unwrap();
+    assert!(VISION_TIMEOUT.as_millis() >= u128::from(server_total) + 5_000);
+    assert!(VISION_TIMEOUT <= Duration::from_secs(90));
+}
+
 #[tokio::test]
 async fn a_limit_carries_when_it_resets() {
     let server = MockServer::start().await;

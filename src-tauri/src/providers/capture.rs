@@ -8,8 +8,10 @@ use image::{imageops::FilterType, DynamicImage};
 const MAX_SIDE: u32 = 1568;
 const REDUCED_SIDE: u32 = 1024;
 const JPEG_QUALITIES: [u8; 4] = [80, 65, 50, 35];
-/// Por debajo del máximo del servidor, y barato de validar con su límite de CPU.
-pub const MAX_ENCODED_BYTES: usize = 500_000;
+/// Por debajo del máximo del servidor y lejos de su límite de CPU. Una pantalla llena de texto a 1568 px y
+/// calidad 80 ocupa unos 380 KB (510 KB en base64): con 350 KB se codifica a calidad 65, que mantiene legible el
+/// texto pequeño, en lugar de reducir la resolución.
+pub const MAX_ENCODED_BYTES: usize = 350_000;
 /// Cuánto se espera a que el sistema confirme que la ventana ya no se ve.
 const HIDE_TIMEOUT: Duration = Duration::from_millis(1500);
 const HIDE_POLL: Duration = Duration::from_millis(25);
@@ -203,6 +205,31 @@ mod tests {
         let bytes = encode_for_analysis(DynamicImage::ImageRgb8(noise)).unwrap();
         assert!(bytes.len() <= MAX_ENCODED_BYTES, "{}", bytes.len());
         assert_eq!(&bytes[..2], &[0xFF, 0xD8]);
+    }
+
+    /// Una pantalla llena de texto pequeño (como un registro técnico a 1920 × 1080) conserva toda la resolución:
+    /// se ajusta la calidad, no el tamaño, para que el texto siga legible.
+    #[test]
+    fn a_screen_full_of_small_text_keeps_its_resolution_under_the_limit() {
+        let mut seed = 11u32;
+        let mut screen = image::RgbImage::from_pixel(1920, 1080, image::Rgb([255, 255, 255]));
+        for line in 0..70u32 {
+            let y = 20 + line * 15;
+            let mut x = 30u32;
+            while x < 1880 {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let width = 3 + (seed >> 28);
+                for dx in 0..width {
+                    for dy in 0..(6 + (seed >> 30)) {
+                        screen.put_pixel(x + dx, y + dy, image::Rgb([20, 20, 20]));
+                    }
+                }
+                x += width + 2 + ((seed >> 26) & 3) * 3;
+            }
+        }
+        let bytes = encode_for_analysis(DynamicImage::ImageRgb8(screen)).unwrap();
+        assert!(bytes.len() <= MAX_ENCODED_BYTES, "{}", bytes.len());
+        assert_eq!(image::load_from_memory(&bytes).unwrap().width(), MAX_SIDE);
     }
 
     use std::sync::Mutex;

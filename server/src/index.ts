@@ -28,8 +28,21 @@ async function run(operation: Operation, request: Request, env: Env): Promise<Mo
 }
 
 /** Solo métricas: nunca el texto, la imagen, la dirección IP ni el identificador de instalación. */
-function logMetric(operation: Operation | "unknown", code: string, status: number, startedAt: number, tokens: number, extra: { model?: string; upstream?: unknown } = {}): void {
+function logMetric(
+  operation: Operation | "unknown",
+  code: string,
+  status: number,
+  startedAt: number,
+  tokens: number,
+  extra: { model?: string; upstream?: unknown; attempts?: unknown; bytes?: number | undefined } = {},
+): void {
   console.log(JSON.stringify({ operation, code, status, durationMs: Date.now() - startedAt, tokens, ...extra }));
+}
+
+/** El tamaño del cuerpo, para vigilar los límites del Worker. No su contenido. */
+function bodyBytes(request: Request): number | undefined {
+  const length = Number(request.headers.get("Content-Length"));
+  return Number.isFinite(length) && length > 0 ? length : undefined;
 }
 
 export async function handleRequest(request: Request, env: Env): Promise<Response> {
@@ -38,13 +51,14 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   try {
     if (!operation) throw new ApiError("not_found");
     if (request.method !== "POST") throw new ApiError("method_not_allowed");
-    const { output, tokens, model } = await run(operation, request, env);
-    logMetric(operation, "ok", 200, startedAt, tokens, { model });
+    const { output, tokens, model, attempts } = await run(operation, request, env);
+    logMetric(operation, "ok", 200, startedAt, tokens, { model, attempts, bytes: bodyBytes(request) });
     return Response.json({ output, tokens });
   } catch (error) {
     const known = error instanceof ApiError ? error : new ApiError("unavailable");
     const upstream = error instanceof ApiError && "upstream" in error ? error.upstream : undefined;
-    logMetric(operation ?? "unknown", error instanceof ApiError ? known.code : "internal", errorStatus(known.code), startedAt, 0, { upstream });
+    const attempts = error instanceof ApiError && "attempts" in error ? error.attempts : undefined;
+    logMetric(operation ?? "unknown", error instanceof ApiError ? known.code : "internal", errorStatus(known.code), startedAt, 0, { upstream, attempts, bytes: bodyBytes(request) });
     return errorResponse(known);
   }
 }

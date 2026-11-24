@@ -11,7 +11,22 @@ export interface ModelAnswer {
   tokens: number;
   /** Modelo que respondió. Solo se registra: la aplicación no lo recibe. */
   model: string;
+  /** Cada intento del análisis: modelo, resultado y duración. Solo se registra. */
+  attempts?: Attempt[];
 }
+
+export interface Attempt {
+  model: string;
+  /** 200, el estado HTTP de Google, «timeout» o «network». */
+  result: number | "timeout" | "network";
+  ms: number;
+}
+
+/**
+ * Orden de los intentos del análisis. El modelo principal de visión a veces está saturado (503) o tarda: entonces
+ * se pasa al de respaldo, que se repite una vez tras una pausa, y se vuelve al principal si aún queda tiempo.
+ */
+const ANALYZE_PLAN = ["model", "fallback", "fallback", "model"] as const;
 
 export interface Upstream {
   model: string;
@@ -77,9 +92,12 @@ export function documentRequest({ task, format, text }: DocumentInput): Upstream
 }
 
 export function analyzeRequest({ question, image }: AnalyzeInput): Upstream {
-  const { model, fallbackModel, timeoutMs, totalTimeoutMs, maxOutputTokens, systemInstruction, responseSchema } = contract.analyze;
+  const { model, fallbackModel, timeoutMs, totalTimeoutMs, maxOutputTokens, thinkingLevel, systemInstruction, responseSchema } = contract.analyze;
   // La imagen se empalma como bytes. La marca es aleatoria para que la pregunta no pueda coincidir con ella.
   const marker = crypto.randomUUID();
+  // La imagen se prepara una sola vez y se reutiliza en cada intento: copiarla de nuevo gasta CPU, que en el
+  // Worker está limitada.
+  const imageBytes = new Blob([image]);
   const body = (chosen: string) => {
     const [before, after] = JSON.stringify({
       model: chosen,
@@ -89,10 +107,10 @@ export function analyzeRequest({ question, image }: AnalyzeInput): Upstream {
         { type: "text", text: question },
         { type: "image", data: marker, mime_type: "image/jpeg" },
       ],
-      generation_config: { max_output_tokens: maxOutputTokens },
+      generation_config: { max_output_tokens: maxOutputTokens, thinking_level: thinkingLevel },
       response_format: { type: "text", mime_type: "application/json", schema: responseSchema },
     }).split(marker) as [string, string];
-    return new Blob([before, image, after]);
+    return new Blob([before, imageBytes, after]);
   };
   return { model, fallbackModel, timeoutMs, totalTimeoutMs, body };
 }
@@ -151,27 +169,50 @@ async function send(upstream: Upstream, model: string, key: string, timeoutMs: n
   return { output, tokens: answer.usage?.total_tokens ?? 0, model };
 }
 
-function isGoogle503(error: unknown): boolean {
-  return error instanceof ApiError && "upstream" in error && (error.upstream as UpstreamFailure).status === 503;
+function attemptResult(error: unknown): Attempt["result"] {
+  if (error instanceof ApiError && "upstream" in error) return (error.upstream as UpstreamFailure).status;
+  return error instanceof ApiError && error.code === "timeout" ? "timeout" : "network";
 }
 
 /**
- * Como mucho un segundo intento, dentro del tiempo total. Un 429 o un 4xx nunca se repiten.
- * Con modelo de respaldo, solo un 503 de Google lleva al segundo intento, y siempre con el otro modelo.
- * Sin él, un fallo pasajero se reintenta una vez con el mismo modelo.
+ * Análisis de pantalla: hasta cuatro intentos alternando modelos (ANALYZE_PLAN), dentro del tiempo total. Un 503,
+ * otro error 5xx, un tiempo agotado o un fallo de red pasan al siguiente; un 429 o un 4xx se informan enseguida.
+ */
+async function callWithFallback(upstream: Upstream & { fallbackModel: string }, key: string): Promise<ModelAnswer> {
+  const deadline = Date.now() + upstream.totalTimeoutMs;
+  const attempts: Attempt[] = [];
+  let lastError: unknown;
+  for (const [index, which] of ANALYZE_PLAN.entries()) {
+    if (index >= 2) await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    const remaining = deadline - Date.now();
+    if (index > 0 && remaining < MIN_RETRY_MS) break;
+    const model = which === "model" ? upstream.model : upstream.fallbackModel;
+    const started = Date.now();
+    try {
+      const answer = await send(upstream, model, key, Math.min(upstream.timeoutMs, remaining));
+      attempts.push({ model, result: 200, ms: Date.now() - started });
+      return { ...answer, attempts };
+    } catch (error) {
+      attempts.push({ model, result: attemptResult(error), ms: Date.now() - started });
+      if (!isTransient(error)) throw Object.assign(error as object, { attempts });
+      lastError = error;
+    }
+  }
+  throw Object.assign(lastError as object, { attempts });
+}
+
+/**
+ * Interpretar y resumir: como mucho un segundo intento con el mismo modelo, dentro del tiempo total. Un 429 o un
+ * 4xx nunca se repiten. El análisis de pantalla, con modelo de respaldo, sigue su propio plan (callWithFallback).
  */
 export async function callGemini(upstream: Upstream, key: string): Promise<ModelAnswer> {
+  if (upstream.fallbackModel) return callWithFallback({ ...upstream, fallbackModel: upstream.fallbackModel }, key);
   const deadline = Date.now() + upstream.totalTimeoutMs;
   try {
     return await send(upstream, upstream.model, key, upstream.timeoutMs);
   } catch (error) {
     const remaining = deadline - Date.now() - RETRY_DELAY_MS;
-    if (remaining < MIN_RETRY_MS) throw error;
-    if (upstream.fallbackModel) {
-      if (!isGoogle503(error)) throw error;
-      return send(upstream, upstream.fallbackModel, key, Math.min(upstream.timeoutMs, remaining));
-    }
-    if (!isTransient(error)) throw error;
+    if (remaining < MIN_RETRY_MS || !isTransient(error)) throw error;
     await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
     return send(upstream, upstream.model, key, Math.min(upstream.timeoutMs, remaining));
   }

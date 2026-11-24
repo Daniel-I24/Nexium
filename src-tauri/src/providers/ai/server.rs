@@ -19,7 +19,9 @@ use crate::{
 /// Interpretar una orden no puede hacer esperar más: el servidor corta a los 9 s (con un segundo intento
 /// solo si el primero falló pronto) y la app, a los 10 s, con un error claro.
 pub const INTERPRET_TIMEOUT: Duration = Duration::from_secs(10);
-const VISION_TIMEOUT: Duration = Duration::from_secs(130);
+/// El servidor intenta el análisis hasta cuatro veces en 70 s como máximo (ver `server/src/ai-contract.json`); la
+/// app espera 10 s más para recibir su respuesta, también si es un error.
+pub const VISION_TIMEOUT: Duration = Duration::from_secs(80);
 const DOCUMENT_TIMEOUT: Duration = Duration::from_secs(90);
 const INSTALL_HEADER: &str = "X-Nexium-Install";
 const CAPTURE_CONTENT_TYPE: &str = "application/x-nexium-capture";
